@@ -12,6 +12,7 @@ import {
   type WithId,
 } from '@sim/shared';
 import { ImportWizard } from '@/components/ImportWizard';
+import { ClassroomSetupCard } from './ClassroomSetupCard';
 import { Modal } from '@/components/Modal';
 import { Alert, Button, Card, DownloadButton, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
@@ -63,7 +64,8 @@ async function saveImported(values: RoomImport[], existing: Room[]): Promise<str
 function RoomForm({ room, all, onClose }: { room: Room | null; all: Room[]; onClose: () => void }) {
   const [f, setF] = useState({
     name: room?.name ?? '',
-    spaceType: room?.spaceType ?? ('CLASSROOM' as SpaceType),
+    // 새로 추가하는 것은 대부분 특별실 (교실·복도는 학급 수 설정으로 만든다)
+    spaceType: room?.spaceType ?? ('SEPARATE' as SpaceType),
     grade: room?.grade ? String(room.grade) : '',
     classNo: room?.classNo ? String(room.classNo) : '',
     chiefCount: String(room?.chiefCount ?? 1),
@@ -117,7 +119,7 @@ function RoomForm({ room, all, onClose }: { room: Room | null; all: Room[]; onCl
   };
 
   return (
-    <Modal title={room ? '시험실 수정' : '시험실 추가'} onClose={onClose}>
+    <Modal title={room ? '시험실 수정' : '특별실 추가'} onClose={onClose}>
       <form onSubmit={(e) => void submit(e)} className="grid gap-4">
         <Field label="실명" required value={f.name} onChange={(e) => set({ name: e.target.value })} />
         <Select
@@ -174,20 +176,22 @@ export function RoomsPage() {
     <>
       <PageTitle sub={`시험실 ${data.length}개 · 한 교시에 필요한 감독 ${seats}명 (모든 시험실 사용 시)`}>시험실 관리</PageTitle>
 
+      {!loading && !error && <ClassroomSetupCard rooms={data} />}
+
       <div className="mb-4 flex flex-wrap gap-2">
-        <Button onClick={() => setImporting(true)}>엑셀 업로드</Button>
+        <Button onClick={() => setEditing('new')}>+ 특별실 추가</Button>
+        <Button variant="secondary" onClick={() => setImporting(true)}>
+          엑셀 업로드
+        </Button>
         <DownloadButton onDownload={() => downloadRoomTemplate(data)}>
           {data.length ? '현재 목록 양식 다운로드' : '양식 다운로드'}
         </DownloadButton>
-        <Button variant="secondary" onClick={() => setEditing('new')}>
-          + 시험실 추가
-        </Button>
       </div>
 
       <Card>
         {loading && <Spinner />}
         {error && <Alert>{error}</Alert>}
-        {!loading && data.length === 0 && <p className="py-6 text-muted">등록된 시험실이 없습니다. 양식을 내려받아 올려 주세요.</p>}
+        {!loading && data.length === 0 && <p className="py-6 text-muted">등록된 시험실이 없습니다. 위에서 학급 수를 입력해 교실을 만드세요.</p>}
         {rooms.length > 0 && (
           <Table head={['실명', '공간유형', '학년', '반', '정감독', '부감독', '']}>
             {rooms.map((r) => (

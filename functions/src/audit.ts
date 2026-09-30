@@ -1,7 +1,6 @@
-import { FieldValue } from 'firebase-admin/firestore';
 import { onDocumentWritten, type Change, type DocumentSnapshot, type FirestoreEvent } from 'firebase-functions/v2/firestore';
 import { buildAuditLog } from './auditLog';
-import { db } from './common';
+import { db, serverTimestamp } from './common';
 
 // 자기 자신(auditLogs)과 엔진 미리보기·내부 인덱스는 기록하지 않는다.
 const SKIP = new Set(['auditLogs', 'runs', 'busy']);
@@ -16,7 +15,7 @@ async function record(logCollection: string, targetType: string, targetId: strin
   await db()
     .collection(logCollection)
     .doc(event.id)
-    .set({ ...buildAuditLog(targetType, targetId, before, after), createdAt: FieldValue.serverTimestamp() });
+    .set({ ...buildAuditLog(targetType, targetId, before, after), createdAt: serverTimestamp() });
 }
 
 export const auditSession = onDocumentWritten('sessions/{sid}', (event) =>

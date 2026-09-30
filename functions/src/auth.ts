@@ -1,8 +1,6 @@
-import { getAuth } from 'firebase-admin/auth';
-import { FieldValue } from 'firebase-admin/firestore';
 import { defineString } from 'firebase-functions/params';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
-import { db } from './common';
+import { adminAuth, db, serverTimestamp } from './common';
 import { claimsFor, parseEmails, resolveRole, type UserRole } from './roles';
 
 // 최초(기본) 관리자. 앱에서 추가한 관리자는 admins 컬렉션에 저장된다.
@@ -26,7 +24,7 @@ export async function lookupRole(email: string): Promise<{ role: UserRole; teach
       email,
       bootstrap: true,
       updatedBy: 'system',
-      createdAt: FieldValue.serverTimestamp(),
+      createdAt: serverTimestamp(),
     });
   }
 
@@ -42,7 +40,7 @@ export async function applyClaims(
   teacherId: string | null,
 ): Promise<boolean> {
   const changed = (current.role ?? 'NONE') !== role || (current.teacherId ?? null) !== teacherId;
-  if (changed) await getAuth().setCustomUserClaims(uid, claimsFor(role, teacherId));
+  if (changed) await adminAuth().setCustomUserClaims(uid, claimsFor(role, teacherId));
   return changed;
 }
 
@@ -70,7 +68,7 @@ export const syncProfile = onCall(async (req) => {
         role,
         teacherId,
         active: role !== 'NONE',
-        lastLoginAt: FieldValue.serverTimestamp(),
+        lastLoginAt: serverTimestamp(),
       },
       { merge: true },
     );

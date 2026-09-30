@@ -1,7 +1,7 @@
-import { FieldValue, type Transaction } from 'firebase-admin/firestore';
+import type { Transaction } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { findTransition, isSessionStatus, sumLoads, type SessionStatus } from '@sim/shared';
-import { db, requireAdmin } from './common';
+import { db, increment, requireAdmin, serverTimestamp } from './common';
 
 /**
  * 세션 업무점수를 loadLedger에 기록하고 교사 누적 점수를 증감한다.
@@ -26,9 +26,9 @@ async function writeLedger(tx: Transaction, sessionId: string): Promise<void> {
     const delta = Math.round((load - (prev.get(teacherId) ?? 0)) * 1000) / 1000;
     const ledgerRef = firestore.doc(`loadLedger/${sessionId}_${teacherId}`);
     if (load === 0) tx.delete(ledgerRef);
-    else tx.set(ledgerRef, { sessionId, teacherId, load, confirmedAt: FieldValue.serverTimestamp() });
+    else tx.set(ledgerRef, { sessionId, teacherId, load, confirmedAt: serverTimestamp() });
     if (delta !== 0) {
-      tx.update(firestore.doc(`teachers/${teacherId}`), { cumulativeLoad: FieldValue.increment(delta) });
+      tx.update(firestore.doc(`teachers/${teacherId}`), { cumulativeLoad: increment(delta) });
     }
   }
 }
@@ -61,7 +61,7 @@ export const transitionSession = onCall(async (req) => {
     tx.update(ref, {
       status: to,
       updatedBy: uid,
-      updatedAt: FieldValue.serverTimestamp(),
+      updatedAt: serverTimestamp(),
       lastChangeReason: reasonText || null,
     });
   });

@@ -1,13 +1,12 @@
-import { getAuth, type UserRecord } from 'firebase-admin/auth';
-import { FieldValue } from 'firebase-admin/firestore';
+import type { UserRecord } from 'firebase-admin/auth';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { applyClaims, lookupRole } from './auth';
-import { db, requireAdmin } from './common';
+import { adminAuth, db, requireAdmin, serverTimestamp } from './common';
 import { normalizeEmail } from './roles';
 
 async function findUser(email: string): Promise<UserRecord | null> {
   try {
-    return await getAuth().getUserByEmail(email);
+    return await adminAuth().getUserByEmail(email);
   } catch (e) {
     if ((e as { code?: string }).code === 'auth/user-not-found') return null;
     throw e;
@@ -37,7 +36,7 @@ export const addAdmin = onCall(async (req) => {
 
   await db().runTransaction(async (tx) => {
     if ((await tx.get(ref)).exists) throw new HttpsError('already-exists', '이미 관리자입니다.');
-    tx.set(ref, { email, bootstrap: false, updatedBy: uid, createdAt: FieldValue.serverTimestamp() });
+    tx.set(ref, { email, bootstrap: false, updatedBy: uid, createdAt: serverTimestamp() });
   });
 
   const user = await refreshUserRole(email);
@@ -59,11 +58,11 @@ export const removeAdmin = onCall(async (req) => {
   }
 
   // 삭제 직전에 행위자를 남겨 감사 로그의 lastEditor로 기록되게 한다.
-  await ref.update({ updatedBy: uid, updatedAt: FieldValue.serverTimestamp() });
+  await ref.update({ updatedBy: uid, updatedAt: serverTimestamp() });
   await ref.delete();
 
   const user = await refreshUserRole(email);
   // 기존 로그인 세션을 끊어 권한 회수를 앞당긴다 (이미 발급된 토큰은 최대 1시간 유효).
-  if (user) await getAuth().revokeRefreshTokens(user.uid);
+  if (user) await adminAuth().revokeRefreshTokens(user.uid);
   return { email };
 });

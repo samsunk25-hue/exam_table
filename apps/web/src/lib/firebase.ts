@@ -1,0 +1,50 @@
+import { initializeApp } from 'firebase/app';
+import { connectAuthEmulator, getAuth } from 'firebase/auth';
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
+import { connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/functions';
+import type { SessionStatus } from '@sim/shared';
+
+// 웹 앱 설정값은 공개 식별자이며 접근 제어는 보안 규칙이 담당한다.
+const app = initializeApp({
+  apiKey: 'AIzaSyBQohFqN2AdmsAF6vhQ7k4I7SRUSoeK4oc',
+  authDomain: 'smart-invigilation.firebaseapp.com',
+  projectId: 'smart-invigilation',
+  storageBucket: 'smart-invigilation.firebasestorage.app',
+  messagingSenderId: '936568026682',
+  appId: '1:936568026682:web:50af317cae161392542703',
+});
+
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const functions = getFunctions(app, 'asia-northeast3');
+
+export const usingEmulators = import.meta.env.VITE_USE_EMULATORS === 'true';
+if (usingEmulators) {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+}
+
+export type Role = 'ADMIN' | 'TEACHER' | 'NONE';
+
+export const callSyncProfile = httpsCallable<void, { role: Role; teacherId: string | null; refreshed: boolean }>(
+  functions,
+  'syncProfile',
+);
+
+export const callTransitionSession = httpsCallable<
+  { sessionId: string; to: SessionStatus; reason?: string },
+  { status: SessionStatus }
+>(functions, 'transitionSession');
+
+export const callAddAdmin = httpsCallable<{ email: string }, { email: string; applied: boolean }>(functions, 'addAdmin');
+export const callRemoveAdmin = httpsCallable<{ email: string }, { email: string }>(functions, 'removeAdmin');
+
+/** Firebase 오류를 사용자에게 보여줄 한국어 문장으로 */
+export function errorMessage(e: unknown): string {
+  if (e && typeof e === 'object' && 'message' in e && typeof e.message === 'string') {
+    if ('code' in e && e.code === 'permission-denied') return '권한이 없습니다.';
+    return e.message;
+  }
+  return '알 수 없는 오류가 발생했습니다.';
+}

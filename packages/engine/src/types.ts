@@ -90,6 +90,10 @@ export interface Weights {
   softConstraint: number;
   /** 복도전담 교사가 복도 자리를 맡을 때 가점 */
   hallwayMatch: number;
+  /** 시험 과목 담당(출제) 교사가 그 시험의 복도 자리를 맡을 때 가점 (기본 0) */
+  examSubjectHallway: number;
+  /** 시험 과목 담당(출제) 교사가 그 시험의 교실 감독을 맡을 때 가감점 (기본 0) */
+  examSubjectRoom: number;
   lowLoadRatio: number;
   highLoadRatio: number;
 }
@@ -178,6 +182,10 @@ export interface Metrics {
   sessionLoads: Record<string, number>;
   stdDev: number;
   maxMinGap: number;
+  /** 같은 날 연속 교시 배정 쌍의 수 */
+  consecutiveCount: number;
+  /** 과목 담당(출제) 교사가 자기 과목 시험 교실 감독을 맡은 수 */
+  subjectInRoom: number;
 }
 
 export interface EngineResult {

@@ -83,6 +83,86 @@ export interface AvailabilityDoc {
   adminNote?: string | null;
 }
 
+/** sessions/{sid}/constraints/{id} — 배정 예외 규칙 */
+export interface ConstraintDoc {
+  teacherId: string;
+  type: 'HOMEROOM_EXCLUDE' | 'SLOT_EXCLUDE' | 'SUBJECT_EXCLUDE';
+  target?: string;
+  priority: 'HARD' | 'SOFT';
+  penalty?: number;
+}
+
+export type SeatRole = 'CHIEF' | 'ASSISTANT' | 'STUDY' | 'EXTENDED' | 'HALLWAY';
+
+export const SEAT_ROLE_LABEL: Record<SeatRole, string> = {
+  CHIEF: '정감독',
+  ASSISTANT: '부감독',
+  STUDY: '자습감독',
+  EXTENDED: '연장감독',
+  HALLWAY: '복도',
+};
+
+/** sessions/{sid}/assignments/{seatId} — 좌석 1개 = 교사 1명 */
+export interface AssignmentDoc {
+  slotId: string;
+  groupId: string;
+  roomId: string;
+  role: SeatRole;
+  weight: number;
+  teacherId: string;
+  score: number;
+  reason: string;
+  source: 'AUTO' | 'MANUAL';
+  date: string;
+  period: number;
+  runId: string | null;
+}
+
+export interface RunMetrics {
+  seatCount: number;
+  assignedCount: number;
+  successRate: number;
+  stdDev: number;
+  maxMinGap: number;
+  /** 같은 날 연속 교시 배정 쌍 수 */
+  consecutiveCount: number;
+  /** 과목 담당(출제) 교사가 자기 과목 시험 교실 감독을 맡은 수 */
+  subjectInRoom: number;
+}
+
+export interface RunAssignment extends Omit<AssignmentDoc, 'runId'> {
+  seatId: string;
+}
+
+export interface RunUnassigned {
+  seatId: string;
+  slotId: string;
+  roomId: string;
+  role: SeatRole;
+  date: string;
+  period: number;
+  message: string;
+}
+
+/** sessions/{sid}/runs/{runId} — 자동 배정 실행 결과 (적용 전 미리보기) */
+export interface RunDoc {
+  createdBy: string;
+  /** 다중 시나리오: 같은 실행에서 만든 안들은 batchId가 같다 */
+  batchId: string;
+  scenario: string;
+  scenarioLabel: string;
+  scenarioDescription: string;
+  settings: { useBaseTimetable: boolean; keepManual: boolean };
+  metrics: RunMetrics;
+  /** 교사별 [이번 세션 부담, 누적 부담] */
+  loads: Record<string, [number, number]>;
+  assignments: RunAssignment[];
+  unassigned: RunUnassigned[];
+  rejectedPinned: string[];
+  applied: boolean;
+  elapsedMs: number;
+}
+
 export type WithId<T> = T & { id: string };
 
 export function slotIdOf(date: string, period: number, grade: number): string {

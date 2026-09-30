@@ -9,6 +9,7 @@ import { PlaceholderPage } from '@/pages/PlaceholderPage';
 import { AdminsPage } from '@/pages/admin/AdminsPage';
 import { DashboardPage } from '@/pages/admin/DashboardPage';
 import { RoomsPage } from '@/pages/admin/RoomsPage';
+import { SessionAssignPage } from '@/pages/admin/SessionAssignPage';
 import { SessionAvailabilityPage } from '@/pages/admin/SessionAvailabilityPage';
 import { SessionLayout, SessionOverview } from '@/pages/admin/SessionPage';
 import { MyAvailabilityPage } from '@/pages/teacher/MyAvailabilityPage';
@@ -82,9 +83,7 @@ const router = createBrowserRouter([
               },
               {
                 path: 'assign',
-                element: (
-                  <PlaceholderPage title="자동 배정" sprint="Sprint 4" description="배정 엔진 실행, 결과 미리보기(성공률·형평성·미배정 사유), 적용." />
-                ),
+                element: <SessionAssignPage />,
               },
               {
                 path: 'editor',

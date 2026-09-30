@@ -265,6 +265,17 @@ function computeMetrics(ctx: Context, state: State): Metrics {
   const variance = n ? values.reduce((s, v) => s + (v - mean) ** 2, 0) / n : 0;
   const seatCount = ctx.seats.length;
   const assignedCount = state.bySeat.size;
+
+  let consecutiveCount = 0;
+  let subjectInRoom = 0;
+  for (const a of state.bySeat.values()) {
+    const seat = ctx.seatById.get(a.seatId)!;
+    const teacher = ctx.teacherById.get(a.teacherId)!;
+    // 다음 교시와의 쌍만 세서 중복 없이 센다
+    if (state.seatsAt(teacher.id, seat.date, seat.period + 1).length > 0) consecutiveCount++;
+    if (teacher.subject && teacher.subject === seat.subject && seat.role !== 'HALLWAY') subjectInRoom++;
+  }
+
   return {
     seatCount,
     assignedCount,
@@ -273,6 +284,8 @@ function computeMetrics(ctx: Context, state: State): Metrics {
     sessionLoads,
     stdDev: round(Math.sqrt(variance)),
     maxMinGap: n ? round(Math.max(...values) - Math.min(...values)) : 0,
+    consecutiveCount,
+    subjectInRoom,
   };
 }
 

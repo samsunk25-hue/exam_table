@@ -244,5 +244,25 @@ notifications/{notiId}              (V2) 알림
 | 배정 엔진 | `packages/engine` 순수 TypeScript, Vitest 테스트 |
 | 엑셀 | SheetJS |
 | PDF | 인쇄용 CSS (MVP) |
-| 호스팅 | Firebase Hosting / App Hosting |
-| 요금제 | Blaze (Cloud Functions 사용에 필요) |
+| 호스팅 | Vercel (GitHub main 푸시 시 자동 배포, https://exam-table-lemon.vercel.app) |
+| 요금제 | Firebase Blaze (Cloud Functions 사용에 필요) |
+
+---
+
+## 9. AI 연동 고도화 기능 (AI Integration)
+앱의 사용성과 문제 해결력을 극대화하기 위해 다음 3가지 AI 알고리즘을 단계적으로 연동합니다.
+
+### 9.1. 자연어 제약 조건 자동 변환 (NLP)
+* **기능 요약:** 교사가 복잡한 날짜/시간 드롭다운 메뉴를 조작할 필요 없이 텍스트(예: "내일 오전 출장입니다")를 입력하면, LLM API가 이를 분석하여 `Teacher_Availability` 테이블의 하드 조건 데이터로 자동 파싱 및 저장.
+* **사용 기술:** 대형 언어 모델(LLM) API 개체명 인식(NER) 및 JSON 포맷팅.
+
+### 9.2. 다중 시나리오(멀티버스) 창조 엔진
+* **기능 요약:** 알고리즘이 100% 조건 충족에 실패하여 미배정 슬롯이 발생할 경우, 각기 다른 가중치(최적화 목표)를 적용한 3가지 대체 시나리오를 자동 생성하여 관리자에게 제안.
+    * A안: 교사 누적 시수 형평성 극대화
+    * B안: 연속 배정 완전 배제
+    * C안: 출제 교사 복도 대기 우선
+* **사용 기술:** 제약 충족 문제(CSP, Constraint Satisfaction Problem) 최적화 알고리즘.
+
+### 9.3. N각 연쇄 교환 (N-way Swap) 추천
+* **기능 요약:** 교사 간 1:1 교환(Swap)이 스케줄 충돌로 불가능할 때, 전체 교사의 빈 시간 및 누적 점수 DB를 탐색하여 "A ➔ C ➔ D ➔ B" 형태의 다중 교환 경로를 제안.
+* **사용 기술:** 그래프 탐색 알고리즘(Graph Traversal).

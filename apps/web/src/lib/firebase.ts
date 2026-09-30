@@ -2,7 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth } from 'firebase/auth';
 import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/functions';
-import type { SessionStatus } from '@sim/shared';
+import type { RunMetrics, SessionStatus } from '@sim/shared';
 
 // 웹 앱 설정값은 공개 식별자이며 접근 제어는 보안 규칙이 담당한다.
 const app = initializeApp({
@@ -37,7 +37,24 @@ export const callTransitionSession = httpsCallable<
   { status: SessionStatus }
 >(functions, 'transitionSession');
 
-export const callAddAdmin = httpsCallable<{ email: string }, { email: string; applied: boolean }>(functions, 'addAdmin');
+export const callRunAssignment = httpsCallable<
+  { sessionId: string; keepManual: boolean; scenarios: boolean },
+  {
+    runId: string;
+    batchId: string;
+    metrics: RunMetrics;
+    unassigned: number;
+    runs: { runId: string; scenario: string; metrics: RunMetrics; unassigned: number }[];
+  }
+>(functions, 'runAssignment', { timeout: 120_000 });
+
+export const callApplyRun = httpsCallable<{ sessionId: string; runId: string }, { assigned: number; removed: number }>(
+  functions,
+  'applyRun',
+  { timeout: 120_000 },
+);
+
+export const callAddAdmin =httpsCallable<{ email: string }, { email: string; applied: boolean }>(functions, 'addAdmin');
 export const callRemoveAdmin = httpsCallable<{ email: string }, { email: string }>(functions, 'removeAdmin');
 
 /** Firebase 오류를 사용자에게 보여줄 한국어 문장으로 */

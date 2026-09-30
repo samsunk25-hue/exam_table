@@ -22,9 +22,17 @@ export const auditSession = onDocumentWritten('sessions/{sid}', (event) =>
   record(`sessions/${event.params.sid}/auditLogs`, 'sessions', event.params.sid, event),
 );
 
-export const auditSessionChild = onDocumentWritten('sessions/{sid}/{coll}/{docId}', (event) => {
+// 배정은 자동 배정 적용 한 번에 수백 건이 바뀌므로 교사 공개(PUBLISHED) 이후 변경만 기록한다.
+// 공개 전 적용 내역은 세션 문서의 assignmentStats·lastChangeReason 변경으로 남는다.
+const ASSIGNMENT_AUDIT_FROM = new Set(['PUBLISHED', 'SWAP', 'CONFIRMED', 'LOCKED']);
+
+export const auditSessionChild = onDocumentWritten('sessions/{sid}/{coll}/{docId}', async (event) => {
   const { sid, coll, docId } = event.params;
   if (!coll || !docId || SKIP.has(coll)) return;
+  if (coll === 'assignments') {
+    const status = (await db().doc(`sessions/${sid}`).get()).get('status') as string | undefined;
+    if (!status || !ASSIGNMENT_AUDIT_FROM.has(status)) return;
+  }
   return record(`sessions/${sid}/auditLogs`, coll, docId, event);
 });
 

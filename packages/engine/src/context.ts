@@ -17,6 +17,8 @@ export const DEFAULT_WEIGHTS: Weights = {
   consecutive: -30,
   softConstraint: -50,
   hallwayMatch: 20,
+  examSubjectHallway: 0,
+  examSubjectRoom: 0,
   lowLoadRatio: 0.2,
   highLoadRatio: 0.1,
 };

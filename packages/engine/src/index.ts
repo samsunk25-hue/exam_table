@@ -1,5 +1,6 @@
 export * from './types';
 export { runAssignment } from './engine';
+export { SCENARIOS, runScenarios, scenarioInput, type Scenario, type ScenarioKey } from './scenarios';
 export { validateAssignments, seatCandidates, type SeatCandidate } from './validate';
 export {
   DEFAULT_WEIGHTS,

@@ -15,3 +15,5 @@ scripts/e2e/fail-*.png
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
+
+.vercel

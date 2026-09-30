@@ -18,5 +18,10 @@
   },
   "devDependencies": {
     "playwright-core": "^1.63.0"
+  },
+  "allowScripts": {
+    "protobufjs@7.6.6": true,
+    "@firebase/util@1.15.3": true,
+    "esbuild@0.28.2": true
   }
 }

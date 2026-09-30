@@ -33,7 +33,7 @@ for (const [path, uploadTitle] of [
   await dialog.locator('input[type=file]').setInputFiles(file);
   await dialog.getByText(/검증 결과/).waitFor();
   const heading = await dialog.getByText(/검증 결과/).innerText();
-  check(`${path} 재업로드 검증`, heading.includes('오류 0행'), heading.replace(/\s+/g, ' '));
+  check(`${path} 재업로드 검증`, heading.includes('오류 0건'), heading.replace(/\s+/g, ' '));
   await page.screenshot({ path: `${OUT}/upload${path.replaceAll('/', '_')}.png`, fullPage: true });
   const save = dialog.getByRole('button', { name: '저장', exact: true });
   if (await save.isEnabled()) {

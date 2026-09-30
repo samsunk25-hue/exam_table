@@ -18,6 +18,8 @@ export interface ImportWizardProps<T> {
   title: string;
   fields: FieldDef[];
   analyze: (dataRows: Cell[][], mapping: ColumnMapping) => ImportResult<T>;
+  /** 파일 전체를 먼저 살펴 특수 형식(예: 교사별 시간표 격자)이면 결과를, 아니면 null을 돌려준다 */
+  analyzeWorkbook?: (sheets: SheetData[]) => ImportResult<T> | null;
   /** 미리보기 표의 열 */
   previewHead: string[];
   previewRow: (value: T) => ReactNode[];
@@ -31,7 +33,7 @@ export interface ImportWizardProps<T> {
 
 /** 파일 선택 → 시트 선택 → 열 매핑 → 검증 미리보기 → 저장 */
 export function ImportWizard<T>(props: ImportWizardProps<T>) {
-  const { title, fields, analyze, previewHead, previewRow, summary, notice, onSave, onClose } = props;
+  const { title, fields, analyze, analyzeWorkbook, previewHead, previewRow, summary, notice, onSave, onClose } = props;
   const [sheets, setSheets] = useState<SheetData[] | null>(null);
   const [sheetIdx, setSheetIdx] = useState(0);
   const [mapping, setMapping] = useState<ColumnMapping>({});
@@ -46,10 +48,12 @@ export function ImportWizard<T>(props: ImportWizardProps<T>) {
   const dataRows = useMemo(() => (sheet && headerIdx >= 0 ? sheet.rows.slice(headerIdx + 1) : []), [sheet, headerIdx]);
   const missing = missingRequired(mapping, fields);
 
-  const result = useMemo(
-    () => (sheet && missing.length === 0 ? analyze(dataRows, mapping) : null),
-    [sheet, dataRows, mapping, missing.length, analyze],
+  const workbookResult = useMemo(() => (sheets && analyzeWorkbook ? analyzeWorkbook(sheets) : null), [sheets, analyzeWorkbook]);
+  const tableResult = useMemo(
+    () => (!workbookResult && sheet && missing.length === 0 ? analyze(dataRows, mapping) : null),
+    [workbookResult, sheet, dataRows, mapping, missing.length, analyze],
   );
+  const result = workbookResult ?? tableResult;
   const values = result?.rows.flatMap((r) => (r.value ? [r.value] : [])) ?? [];
 
   const selectSheet = (list: SheetData[], idx: number) => {
@@ -109,7 +113,9 @@ export function ImportWizard<T>(props: ImportWizardProps<T>) {
             />
           </label>
 
-          {sheets && sheets.length > 1 && (
+          {workbookResult && <Alert tone="info">교사별 시간표 양식(시트 {sheets?.length}장)으로 읽었습니다.</Alert>}
+
+          {!workbookResult && sheets && sheets.length > 1 && (
             <label className="flex flex-col gap-1.5">
               <span className="font-semibold">시트</span>
               <select
@@ -126,7 +132,7 @@ export function ImportWizard<T>(props: ImportWizardProps<T>) {
             </label>
           )}
 
-          {sheet && (
+          {!workbookResult && sheet && (
             <section>
               <h3 className="mb-2 font-semibold">2. 열 연결 확인</h3>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -165,8 +171,8 @@ export function ImportWizard<T>(props: ImportWizardProps<T>) {
             <section>
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-semibold">
-                  3. 검증 결과 — 전체 {result.rows.length}행 ·{' '}
-                  <span className={result.errorCount ? 'text-alert' : 'text-ink'}>오류 {result.errorCount}행</span>
+                  {workbookResult ? '2' : '3'}. 검증 결과 — 전체 {result.rows.length}건 ·{' '}
+                  <span className={result.errorCount ? 'text-alert' : 'text-ink'}>오류 {result.errorCount}건</span>
                 </h3>
                 {result.errorCount > 0 && (
                   <label className="flex min-h-12 items-center gap-2">
@@ -175,11 +181,16 @@ export function ImportWizard<T>(props: ImportWizardProps<T>) {
                   </label>
                 )}
               </div>
+              {result.fileErrors.length > 0 && (
+                <div className="mb-2">
+                  <Alert>{result.fileErrors.join(' ')}</Alert>
+                </div>
+              )}
               <div className="max-h-96 overflow-auto rounded-xl border border-line">
                 <table className="w-full min-w-max border-collapse text-left text-sm">
                   <thead className="sticky top-0 bg-bg">
                     <tr>
-                      <th className="px-3 py-2">행</th>
+                      <th className="px-3 py-2">위치</th>
                       {previewHead.map((h) => (
                         <th key={h} className="px-3 py-2">
                           {h}
@@ -189,9 +200,9 @@ export function ImportWizard<T>(props: ImportWizardProps<T>) {
                     </tr>
                   </thead>
                   <tbody>
-                    {shownRows.slice(0, 500).map((r) => (
-                      <tr key={r.rowNumber} className={r.errors.length ? 'bg-alert-soft' : ''}>
-                        <td className="border-t border-line px-3 py-2 text-muted">{r.rowNumber}</td>
+                    {shownRows.slice(0, 500).map((r, i) => (
+                      <tr key={i} className={r.errors.length ? 'bg-alert-soft' : ''}>
+                        <td className="border-t border-line px-3 py-2 whitespace-nowrap text-muted">{r.label ?? `${r.rowNumber}행`}</td>
                         {r.value
                           ? previewRow(r.value).map((c, i) => (
                               <td key={i} className="border-t border-line px-3 py-2">
@@ -222,7 +233,7 @@ export function ImportWizard<T>(props: ImportWizardProps<T>) {
           {error && <Alert>{error}</Alert>}
 
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void save()} disabled={busy || !result || result.errorCount > 0 || values.length === 0}>
+            <Button onClick={() => void save()} disabled={busy || !result || result.errorCount > 0 || result.fileErrors.length > 0 || values.length === 0}>
               {busy ? '저장 중…' : result?.errorCount ? '오류를 고친 뒤 다시 올려 주세요' : '저장'}
             </Button>
             <Button variant="secondary" onClick={onClose} disabled={busy}>

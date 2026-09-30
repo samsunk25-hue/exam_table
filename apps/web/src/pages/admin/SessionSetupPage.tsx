@@ -10,10 +10,12 @@ import {
   checkSchedule,
   groupPlacements,
   groupTimetable,
+  isGridSheet,
   isSetupEditable,
   parsePlacements,
   parseSlots,
   parseTimetable,
+  parseTimetableGrid,
   slotIdOf,
   type BaseTimetableDoc,
   type Cell,
@@ -35,7 +37,9 @@ import { Alert, Button, Card, Field, Select, Spinner, Table, Td } from '@/compon
 import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
 import type { ExamSession } from '@/lib/sessions';
-import { downloadTemplate } from '@/lib/xlsx';
+import { TIMETABLE_GUIDE, timetableSheets } from '@/lib/bundle';
+import { downloadTemplate, downloadWorkbook, guideSheet, type SheetData } from '@/lib/xlsx';
+import { BundleCard } from './BundleCard';
 import { useCurrentSession } from './SessionPage';
 import { sortRooms } from './RoomsPage';
 
@@ -625,6 +629,11 @@ function TimetableCard({ sid, editable, session, teachers, timetable }: {
   const [importing, setImporting] = useState(false);
   const teacherList = useMemo(() => teachers.map((t) => ({ id: t.id, name: t.name, email: t.email, active: t.active })), [teachers]);
   const analyze = useCallback((rows: Cell[][], mapping: ColumnMapping) => parseTimetable(rows, mapping, teacherList), [teacherList]);
+  // 교사별 격자 시트가 있으면 학교 양식으로, 없으면 한 줄 목록 형식으로 읽는다
+  const analyzeWorkbook = useCallback(
+    (sheets: SheetData[]) => (sheets.some((s) => isGridSheet(s.rows)) ? parseTimetableGrid(sheets, teacherList) : null),
+    [teacherList],
+  );
   const nameOf = new Map(teachers.map((t) => [t.id, t.name]));
   const total = timetable.reduce((n, d) => n + d.entries.length, 0);
 
@@ -649,20 +658,17 @@ function TimetableCard({ sid, editable, session, teachers, timetable }: {
     return `교사 ${grouped.size}명의 수업 ${values.length}건을 저장했습니다.`;
   };
 
-  const download = () => {
-    const rows = timetable.length
-      ? [...timetable]
-          .sort((a, b) => (nameOf.get(a.id) ?? '').localeCompare(nameOf.get(b.id) ?? '', 'ko'))
-          .flatMap((d) => d.entries.map((e) => [nameOf.get(d.id) ?? d.id, WEEKDAY_LABEL[e.weekday] ?? '', e.period, e.grade, e.classNo, e.subject ?? '']))
-      : [
-          ['김국어', '월', 1, 1, 1, '국어'],
-          ['김국어', '월', 2, 1, 2, '국어'],
-        ];
-    downloadTemplate('기초시간표_양식.xlsx', TIMETABLE_FIELDS, rows, [
-      '* 한 행이 수업 1시간입니다 (교사 · 요일 · 교시 · 학년 · 반).',
-      '* 업로드하면 이 프로젝트의 기초시간표 전체를 파일 내용으로 교체합니다.',
+  // 학교 기초시간표 양식: 교사별 시트 (교시 × 요일)
+  const download = () =>
+    downloadWorkbook('기초시간표_양식.xlsx', [
+      guideSheet('안내', [
+        {
+          title: '기초시간표 양식',
+          lines: [...TIMETABLE_GUIDE, '* 업로드하면 이 프로젝트의 기초시간표 전체를 파일 내용으로 교체합니다.'],
+        },
+      ]),
+      ...timetableSheets(teachers, timetable),
     ]);
-  };
 
   return (
     <Card>
@@ -696,9 +702,15 @@ function TimetableCard({ sid, editable, session, teachers, timetable }: {
           title="기초시간표 업로드"
           fields={TIMETABLE_FIELDS}
           analyze={analyze}
-          notice="이 프로젝트의 기초시간표 전체를 파일 내용으로 교체합니다."
+          analyzeWorkbook={analyzeWorkbook}
+          notice="학교 기초시간표 양식(교사별 시트)과 한 줄 목록 형식을 모두 읽습니다. 이 프로젝트의 기초시간표 전체를 파일 내용으로 교체합니다."
           previewHead={['교사', '요일', '교시', '학년-반', '과목']}
           previewRow={(v) => [v.teacherName, WEEKDAY_LABEL[v.weekday] ?? '', v.period, `${v.grade}-${v.classNo}`, v.subject ?? '']}
+          summary={(vs) => (
+            <Alert tone="info">
+              교사 {new Set(vs.map((v) => v.teacherId)).size}명의 수업 {vs.length}건을 저장합니다.
+            </Alert>
+          )}
           onSave={save}
           onClose={() => setImporting(false)}
         />
@@ -726,6 +738,14 @@ export function SessionSetupPage() {
   return (
     <div className="grid gap-6">
       <Readiness session={session} slots={slots.data} rooms={rooms.data} teachers={teachers.data} timetable={timetable.data} />
+      <BundleCard
+        session={session}
+        editable={editable}
+        teachers={teachers.data}
+        rooms={rooms.data}
+        slots={slots.data}
+        timetable={timetable.data}
+      />
       <ScheduleCard sid={sid} editable={editable} slots={slots.data} rooms={rooms.data} />
       <TimetableCard sid={sid} editable={editable} session={session} teachers={teachers.data} timetable={timetable.data} />
     </div>

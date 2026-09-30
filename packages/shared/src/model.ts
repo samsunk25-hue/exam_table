@@ -93,11 +93,24 @@ export function groupIdOf(slotId: string, roomId: string): string {
   return `${slotId}__${roomId}`;
 }
 
+/**
+ * 감독구분: 배정 전에 정하는 감독 가능 자리 (정·부감독 역할은 배정 엔진이 정한다).
+ * EXCLUDED는 예전 데이터 호환용이며, 새로 입력할 때는 사용여부 N을 쓴다.
+ */
 export const DEFAULT_ROLE_LABEL: Record<DefaultRole, string> = {
   NORMAL: '일반',
-  HALLWAY: '복도대기',
-  EXCLUDED: '제외',
+  HALLWAY: '복도전담',
+  EXCLUDED: '감독제외',
 };
+
+/** 양식·화면에서 고를 수 있는 감독구분 */
+export const SELECTABLE_ROLES: DefaultRole[] = ['NORMAL', 'HALLWAY'];
+
+/** 양식에 내보낼 감독구분·사용여부 (예전 EXCLUDED는 일반 + N) */
+export function teacherRoleCells(t: Pick<TeacherDoc, 'defaultRole' | 'active'>): [string, 'Y' | 'N'] {
+  const excluded = t.defaultRole === 'EXCLUDED';
+  return [DEFAULT_ROLE_LABEL[excluded ? 'NORMAL' : t.defaultRole], t.active && !excluded ? 'Y' : 'N'];
+}
 
 export const SPACE_TYPE_LABEL: Record<SpaceType, string> = {
   CLASSROOM: '교실',

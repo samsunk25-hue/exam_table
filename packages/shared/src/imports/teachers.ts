@@ -8,8 +8,22 @@ export const TEACHER_FIELDS: FieldDef[] = [
   { key: 'subject', label: '담당교과', required: false, synonyms: ['교과', '과목'] },
   { key: 'homeroomGrade', label: '담임학년', required: false, synonyms: ['담임 학년'] },
   { key: 'homeroomClass', label: '담임반', required: false, synonyms: ['담임 반'] },
-  { key: 'defaultRole', label: '기본역할', required: false, synonyms: ['역할'], note: '일반 / 복도대기 / 제외 (비우면 일반)' },
-  { key: 'active', label: '사용여부', required: false, synonyms: ['사용', '재직'], note: 'Y / N (비우면 Y)' },
+  {
+    key: 'defaultRole',
+    label: '감독구분',
+    required: false,
+    synonyms: ['기본역할', '역할', '감독 구분'],
+    note: '일반: 교실·복도 감독 모두 가능 / 복도전담: 복도에만 배정 (비우면 일반). 정·부감독은 자동 배정이 정합니다.',
+    options: ['일반', '복도전담'],
+  },
+  {
+    key: 'active',
+    label: '사용여부',
+    required: false,
+    synonyms: ['사용', '재직', '감독배정'],
+    note: 'Y: 감독 배정 대상 / N: 배정 제외 (관리자·전출·휴직 등, 교사 화면 로그인도 안 됨. 지난 기록은 유지). 비우면 Y',
+    options: ['Y', 'N'],
+  },
 ];
 
 export interface ExistingTeacher {
@@ -29,7 +43,15 @@ export interface TeacherImport {
   active: boolean;
 }
 
-const ROLE_OPTIONS: Record<string, DefaultRole> = { 일반: 'NORMAL', 복도대기: 'HALLWAY', 복도: 'HALLWAY', 제외: 'EXCLUDED' };
+// 예전 양식 값(복도대기, 제외)도 받는다
+const ROLE_OPTIONS: Record<string, DefaultRole> = {
+  일반: 'NORMAL',
+  복도전담: 'HALLWAY',
+  복도대기: 'HALLWAY',
+  복도: 'HALLWAY',
+  감독제외: 'EXCLUDED',
+  제외: 'EXCLUDED',
+};
 const YES_NO: Record<string, 'Y' | 'N'> = { Y: 'Y', 예: 'Y', 사용: 'Y', O: 'Y', N: 'N', 아니오: 'N', 미사용: 'N', X: 'N' };
 
 export function parseTeachers(dataRows: Cell[][], mapping: ColumnMapping, existing: ExistingTeacher[]): ImportResult<TeacherImport> {
@@ -68,14 +90,16 @@ export function parseTeachers(dataRows: Cell[][], mapping: ColumnMapping, existi
     }
 
     if (!name || !defaultRole || !active) return null;
+    // 예전 양식의 "감독제외"는 사용여부 N으로 바꿔 저장한다
+    const excluded = defaultRole === 'EXCLUDED';
     return {
       id,
       name,
       email,
       subject,
       homeroom: hg !== null && hc !== null ? { grade: hg, classNo: hc } : null,
-      defaultRole,
-      active: active === 'Y',
+      defaultRole: excluded ? 'NORMAL' : defaultRole,
+      active: active === 'Y' && !excluded,
     };
   });
 

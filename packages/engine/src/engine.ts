@@ -139,13 +139,15 @@ function greedyMatch(ctx: Context, state: State): void {
 
     const best = rankCandidates(ctx, state, seat)[0];
     if (!best) continue;
-    state.add(makeAssignment(seat, best, 'AUTO'));
 
-    // 배정은 같은 날 인접 교시 좌석의 후보 수에만 영향
-    for (const s of seatsByDate.get(seat.date)!) {
-      if (open.has(s.id) && Math.abs(s.period - seat.period) <= 1) {
-        counts.set(s.id, countCandidates(s));
-      }
+    // 배정은 같은 날 인접 교시 좌석에서 "이 교사"의 가능 여부만 바꾼다
+    const t = best.teacher;
+    const affected = seatsByDate
+      .get(seat.date)!
+      .filter((s) => open.has(s.id) && Math.abs(s.period - seat.period) <= 1 && state.hardReason(t, s) === null);
+    state.add(makeAssignment(seat, best, 'AUTO'));
+    for (const s of affected) {
+      if (state.hardReason(t, s) !== null) counts.set(s.id, counts.get(s.id)! - 1);
     }
   }
 }

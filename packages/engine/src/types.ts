@@ -88,6 +88,8 @@ export interface Weights {
   notHomeroomGrade: number;
   consecutive: number;
   softConstraint: number;
+  /** 복도전담 교사가 복도 자리를 맡을 때 가점 */
+  hallwayMatch: number;
   lowLoadRatio: number;
   highLoadRatio: number;
 }

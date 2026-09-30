@@ -8,7 +8,7 @@ export const SLOT_FIELDS: FieldDef[] = [
   { key: 'endTime', label: '종료시간', required: false, synonyms: ['종료'], note: '예: 09:45' },
   { key: 'grade', label: '학년', required: true },
   { key: 'subject', label: '과목', required: true, synonyms: ['교과', '시험과목'] },
-  { key: 'type', label: '유형', required: false, note: '시험 / 자습 (비우면 시험)' },
+  { key: 'type', label: '유형', required: false, note: '시험 / 자습 (비우면 시험)', options: ['시험', '자습'] },
 ];
 
 export const PLACEMENT_FIELDS: FieldDef[] = [
@@ -18,7 +18,14 @@ export const PLACEMENT_FIELDS: FieldDef[] = [
   { key: 'room', label: '시험실', required: true, synonyms: ['실명', '교실', '장소'], note: '시험실 관리에 등록된 실명' },
   { key: 'classNo', label: '반', required: false, note: '해당 시험실에서 응시하는 반 (혼합이면 비움)' },
   { key: 'headcount', label: '응시인원', required: false, synonyms: ['인원'] },
-  { key: 'roomType', label: '시험실유형', required: false, synonyms: ['유형'], note: '일반 / 연장 / 특수 (비우면 일반)' },
+  {
+    key: 'roomType',
+    label: '시험실유형',
+    required: false,
+    synonyms: ['유형'],
+    note: '일반 / 연장 / 특수 (비우면 일반)',
+    options: ['일반', '연장', '특수'],
+  },
 ];
 
 export interface SlotImport extends Omit<SlotDoc, 'rooms'> {

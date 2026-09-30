@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import {
   DEFAULT_ROLE_LABEL,
+  SELECTABLE_ROLES,
   TEACHER_FIELDS,
   nextId,
   parseTeachers,
+  teacherRoleCells,
   type Cell,
   type ColumnMapping,
   type DefaultRole,
@@ -40,12 +42,11 @@ function downloadTeacherTemplate(teachers: Teacher[]) {
           t.subject ?? '',
           t.homeroom?.grade ?? '',
           t.homeroom?.classNo ?? '',
-          DEFAULT_ROLE_LABEL[t.defaultRole],
-          t.active ? 'Y' : 'N',
+          ...teacherRoleCells(t),
         ])
       : [
           ['', '김국어', 'kim@school.kr', '국어', 1, 1, '일반', 'Y'],
-          ['', '박영어', 'park@school.kr', '영어', '', '', '복도대기', 'Y'],
+          ['', '박영어', 'park@school.kr', '영어', '', '', '복도전담', 'Y'],
         ];
   return downloadTemplate('교사명단_양식.xlsx', TEACHER_FIELDS, rows, [
     '* 교사ID가 있으면 해당 교사를 수정하고, 없으면 이메일 → 이름 순으로 기존 교사를 찾습니다. 못 찾으면 새로 등록합니다.',
@@ -82,8 +83,9 @@ function TeacherForm({ teacher, all, onClose }: { teacher: Teacher | null; all: 
     subject: teacher?.subject ?? '',
     grade: teacher?.homeroom ? String(teacher.homeroom.grade) : '',
     classNo: teacher?.homeroom ? String(teacher.homeroom.classNo) : '',
-    defaultRole: teacher?.defaultRole ?? 'NORMAL',
-    active: teacher?.active ?? true,
+    // 예전 "감독제외"는 일반 + 사용 안 함으로 보여준다
+    defaultRole: teacher?.defaultRole === 'HALLWAY' ? 'HALLWAY' : 'NORMAL',
+    active: (teacher?.active ?? true) && teacher?.defaultRole !== 'EXCLUDED',
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -161,14 +163,20 @@ function TeacherForm({ teacher, all, onClose }: { teacher: Teacher | null; all: 
           <Field label="담임반" type="number" min={1} max={30} value={f.classNo} onChange={(e) => set({ classNo: e.target.value })} />
         </div>
         <Select
-          label="기본역할"
+          label="감독구분 (정·부감독은 자동 배정이 정합니다)"
           value={f.defaultRole}
           onChange={(e) => set({ defaultRole: e.target.value as DefaultRole })}
-          options={Object.entries(DEFAULT_ROLE_LABEL).map(([value, label]) => ({ value, label }))}
+          options={SELECTABLE_ROLES.map((value) => ({
+            value,
+            label: `${DEFAULT_ROLE_LABEL[value]} — ${value === 'HALLWAY' ? '복도에만 배정' : '교실·복도 모두 가능'}`,
+          }))}
         />
-        <label className="flex min-h-12 items-center gap-3">
-          <input type="checkbox" className="size-5 accent-primary" checked={f.active} onChange={(e) => set({ active: e.target.checked })} />
-          <span className="font-semibold">사용 (감독 배정 대상)</span>
+        <label className="flex min-h-12 items-start gap-3">
+          <input type="checkbox" className="mt-1 size-5 accent-primary" checked={f.active} onChange={(e) => set({ active: e.target.checked })} />
+          <span>
+            <span className="font-semibold">사용 (감독 배정 대상)</span>
+            <span className="block text-sm text-muted">끄면 감독 배정과 교사 화면 로그인에서 빠집니다 (관리자·전출·휴직 등). 지난 기록은 남습니다.</span>
+          </span>
         </label>
         {error && <Alert>{error}</Alert>}
         <div className="flex flex-wrap gap-2">
@@ -251,7 +259,7 @@ export function TeachersPage() {
         {error && <Alert>{error}</Alert>}
         {!loading && data.length === 0 && <p className="py-6 text-muted">등록된 교사가 없습니다. 양식을 내려받아 명단을 올려 주세요.</p>}
         {shown.length > 0 && (
-          <Table head={['이름', '이메일', '담당교과', '담임', '기본역할', '누적점수', '']}>
+          <Table head={['이름', '이메일', '담당교과', '담임', '감독구분', '누적점수', '']}>
             {shown.map((t) => (
               <tr key={t.id} className={t.active ? '' : 'text-muted'}>
                 <Td className="font-bold">
@@ -281,7 +289,7 @@ export function TeachersPage() {
           fields={TEACHER_FIELDS}
           analyze={analyze}
           notice="교사ID → 이메일 → 이름 순으로 기존 교사를 찾아 수정하고, 없으면 새로 등록합니다. 업로드로 삭제되는 교사는 없습니다."
-          previewHead={['구분', '이름', '이메일', '교과', '담임', '역할', '사용']}
+          previewHead={['등록', '이름', '이메일', '교과', '담임', '감독구분', '사용']}
           previewRow={(v) => [
             v.id ? `수정 (${v.id})` : '신규',
             v.name,

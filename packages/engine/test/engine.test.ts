@@ -138,6 +138,29 @@ describe('소프트 점수', () => {
   });
 });
 
+describe('감독구분', () => {
+  const hallway = () =>
+    emptyInput({
+      rooms: [{ id: 'H1', name: '1학년 복도', chiefCount: 1, assistantCount: 0, spaceType: 'HALLWAY' }],
+      slots: [{ id: 'S1', date: '2026-10-12', period: 1, grade: 1, subject: '수학', type: 'EXAM' }],
+      groups: [{ id: 'G1', slotId: 'S1', roomId: 'H1', grade: 1, classNo: null, roomType: 'NORMAL' }],
+    });
+
+  it('복도 자리는 복도전담 교사가 우선한다', () => {
+    const input = hallway();
+    input.teachers = [teacher('A'), teacher('B', { defaultRole: 'HALLWAY' })];
+    const [a] = runAssignment(input).assignments;
+    expect(a).toMatchObject({ teacherId: 'B', role: 'HALLWAY' });
+    expect(a!.reason).toContain('+20(복도전담)');
+  });
+
+  it('복도전담 교사가 없으면 일반 교사도 복도를 맡는다', () => {
+    const input = hallway();
+    input.teachers = [teacher('A')];
+    expect(runAssignment(input).assignments.map((a) => a.teacherId)).toEqual(['A']);
+  });
+});
+
 describe('고정 배정(pinned)', () => {
   it('고정 배정은 유지하고, 하드 조건 위반 고정은 거부한다', () => {
     const input = oneRoom({

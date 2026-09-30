@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { Cell, FieldDef } from '@sim/shared';
+import { injectListValidations, type Cell, type FieldDef, type ListValidation } from '@sim/shared';
 import { toast } from '@/components/Toast';
 
 export interface SheetData {
@@ -22,19 +22,51 @@ export interface OutSheet {
   name: string;
   rows: OutCell[][];
   widths?: number[];
+  /** 목록(콤보)에서 고르는 열 */
+  validations?: ListValidation[];
+}
+
+/** 시트 목록 → xlsx 바이트. 목록 선택이 있는 시트는 시트 XML에 유효성 검사를 넣는다. */
+export function buildWorkbook(sheets: OutSheet[]): Uint8Array {
+  const wb = XLSX.utils.book_new();
+  for (const s of sheets) {
+    const ws = XLSX.utils.aoa_to_sheet(s.rows);
+    const widths = s.widths ?? s.rows[0]?.map((_, i) => Math.max(8, ...s.rows.map((r) => String(r[i] ?? '').length * 1.6 + 2)));
+    if (widths) ws['!cols'] = widths.map((wch) => ({ wch: Math.min(wch, 60) }));
+    XLSX.utils.book_append_sheet(wb, ws, s.name);
+  }
+  const data = new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer);
+  if (!sheets.some((s) => s.validations?.length)) return data;
+
+  // SheetJS는 시트를 추가한 순서대로 xl/worksheets/sheet1.xml, sheet2.xml … 로 저장한다
+  const zip = XLSX.CFB.read(data, { type: 'array' });
+  sheets.forEach((s, i) => {
+    if (!s.validations?.length) return;
+    const entry = XLSX.CFB.find(zip, `/xl/worksheets/sheet${i + 1}.xml`);
+    if (!entry?.content) return;
+    const xml = new TextDecoder().decode(entry.content as Uint8Array);
+    entry.content = new TextEncoder().encode(injectListValidations(xml, s.validations, Math.max(1000, s.rows.length + 200)));
+    entry.size = entry.content.length;
+  });
+  return new Uint8Array(XLSX.CFB.write(zip, { fileType: 'zip', type: 'array' }) as ArrayLike<number>);
+}
+
+function saveFile(fileName: string, data: Uint8Array) {
+  const blob = new Blob([data as Uint8Array<ArrayBuffer>], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 /** 엑셀 파일을 만들어 브라우저 다운로드 폴더에 저장하고, 저장 사실을 화면에 알린다. */
 export function downloadWorkbook(fileName: string, sheets: OutSheet[]): boolean {
   try {
-    const wb = XLSX.utils.book_new();
-    for (const s of sheets) {
-      const ws = XLSX.utils.aoa_to_sheet(s.rows);
-      const widths = s.widths ?? s.rows[0]?.map((_, i) => Math.max(8, ...s.rows.map((r) => String(r[i] ?? '').length * 1.6 + 2)));
-      if (widths) ws['!cols'] = widths.map((wch) => ({ wch: Math.min(wch, 60) }));
-      XLSX.utils.book_append_sheet(wb, ws, s.name);
-    }
-    XLSX.writeFile(wb, fileName);
+    saveFile(fileName, buildWorkbook(sheets));
     toast(`"${fileName}" 파일을 다운로드 폴더에 저장했습니다.`);
     return true;
   } catch (e) {
@@ -45,7 +77,11 @@ export function downloadWorkbook(fileName: string, sheets: OutSheet[]): boolean 
 
 /** 표 형식 시트: 첫 행은 제목(필수 열은 * 표시) */
 export function tableSheet(name: string, fields: FieldDef[], rows: OutCell[][]): OutSheet {
-  return { name, rows: [fields.map((f) => (f.required ? `${f.label}*` : f.label)), ...rows] };
+  return {
+    name,
+    rows: [fields.map((f) => (f.required ? `${f.label}*` : f.label)), ...rows],
+    validations: fields.flatMap((f, col) => (f.options ? [{ col, options: f.options }] : [])),
+  };
 }
 
 /** 항목 설명 + 안내 문장 시트 */

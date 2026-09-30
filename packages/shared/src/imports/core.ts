@@ -11,6 +11,8 @@ export interface FieldDef {
   synonyms?: string[];
   /** 양식 안내 시트에 표시 */
   note?: string;
+  /** 양식에서 목록(콤보)으로 고를 수 있는 값 */
+  options?: string[];
 }
 
 /** 필드 key → 열 번호 (없으면 null) */

@@ -118,8 +118,8 @@
    - `HOMEROOM_EXCLUDE`: 본인 담임 반 시험실 감독 불가
    - `SLOT_EXCLUDE`: 지정 슬롯 감독 불가
    - `SUBJECT_EXCLUDE`: 지정 과목 시험 감독 불가 (예: 출제 교사)
-5. 교사 `defaultRole`이 `EXCLUDED`이거나 비활성 교사
-6. 역할 적합성: `defaultRole = HALLWAY` 교사는 복도대기 좌석에만, 그 외 교사는 복도대기 외 좌석에만 배정
+5. 사용여부 N(비활성) 교사 — 관리자·전출·휴직 등 (예전 데이터의 `defaultRole = EXCLUDED`도 동일)
+6. 감독구분: `복도전담`(`HALLWAY`) 교사는 복도 좌석에만 배정. `일반`(`NORMAL`) 교사는 교실·복도 모두 가능 (복도 좌석은 복도전담 교사에게 +20 가점)
 
 ### 5.3. [2단계] 소프트 조건 점수 (기본 가중치, MVP 고정)
 | 항목 | 점수 | 비고 |
@@ -179,7 +179,7 @@ notifications/{notiId}              (V2) 알림
 
 ### 6.2. 문서 필드
 * **`users`**: `teacherId`, `role`(`ADMIN`/`TEACHER`), `email`, `active` — role은 Custom Claims에도 동기화
-* **`teachers`**: `name`, `email`(소문자, 로그인 계정 연결용), `subject`, `homeroom`(`{grade, classNo}` | null), `defaultRole`(`NORMAL`/`HALLWAY`/`EXCLUDED`), `active`, `cumulativeLoad`(파생값, Ledger 합계)
+* **`teachers`**: `name`, `email`(소문자, 로그인 계정 연결용), `subject`, `homeroom`(`{grade, classNo}` | null), `defaultRole`(감독구분: `NORMAL` 일반 / `HALLWAY` 복도전담, `EXCLUDED`는 예전 데이터 호환용), `active`(사용여부: false면 배정·로그인 제외), `cumulativeLoad`(파생값, Ledger 합계)
 * **`rooms`**: `name`, `chiefCount`(필요 정감독 수), `assistantCount`(필요 부감독 수), `spaceType`(`CLASSROOM`/`SEPARATE`/`HALLWAY`), `grade`, `classNo` — 학년·반은 기본 배치 자동 생성에 사용
 * **`loadLedger`**: `teacherId`, `sessionId`, `load`, `confirmedAt`
 * **`sessions`**: `schoolName`, `year`, `semester`, `examName`, `status`(4장 상태 코드), `settings`(`useBaseTimetable`, `weights`), `stats`

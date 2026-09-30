@@ -1,6 +1,5 @@
 import {
   BUNDLE_SHEETS,
-  DEFAULT_ROLE_LABEL,
   PLACEMENT_FIELDS,
   PLACEMENT_ROOM_TYPE_LABEL,
   ROOM_FIELDS,
@@ -11,6 +10,7 @@ import {
   autoPlacements,
   groupPlacements,
   groupTimetable,
+  teacherRoleCells,
   timetableGridRows,
   timetableSheetNames,
   type BaseTimetableDoc,
@@ -68,8 +68,7 @@ export function bundleSheets(opts: {
         t.subject ?? '',
         t.homeroom?.grade ?? '',
         t.homeroom?.classNo ?? '',
-        DEFAULT_ROLE_LABEL[t.defaultRole],
-        t.active ? 'Y' : 'N',
+        ...teacherRoleCells(t),
       ])
     : [['', '김국어', 'kim@school.kr', '국어', 1, 1, '일반', 'Y']];
 

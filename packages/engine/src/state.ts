@@ -123,6 +123,7 @@ export class State {
     };
 
     if (isBaseMatch(this.ctx, teacher, seat)) add(w.baseMatch, '기초일치');
+    if (seat.role === 'HALLWAY' && teacher.defaultRole === 'HALLWAY') add(w.hallwayMatch, '복도전담');
 
     const load = this.totalLoadOf(teacher);
     if (load <= bands.low + EPS) add(w.lowLoad, '부담하위');

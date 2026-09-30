@@ -107,6 +107,19 @@ describe('교사 업로드', () => {
     expect(r.rows[6]!.value?.id).toBe('T001');
   });
 
+  it('예전 양식의 감독제외는 사용여부 N으로 바꾼다', () => {
+    const { header, data } = sheet([
+      ['이름', '기본역할', '사용여부'],
+      ['교장', '감독제외', 'Y'],
+      ['복도', '복도대기', ''],
+    ]);
+    const r = parseTeachers(data, autoMap(header, TEACHER_FIELDS), []);
+    expect(r.rows.map((x) => [x.value?.defaultRole, x.value?.active])).toEqual([
+      ['NORMAL', false],
+      ['HALLWAY', true],
+    ]);
+  });
+
   it('같은 담임 반이 두 번 나오면 오류', () => {
     const { header, data } = sheet([
       ['이름', '담임학년', '담임반'],

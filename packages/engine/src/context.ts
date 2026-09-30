@@ -16,6 +16,7 @@ export const DEFAULT_WEIGHTS: Weights = {
   notHomeroomGrade: 10,
   consecutive: -30,
   softConstraint: -50,
+  hallwayMatch: 20,
   lowLoadRatio: 0.2,
   highLoadRatio: 0.1,
 };
@@ -173,7 +174,8 @@ function constraintApplies(c: Constraint, teacher: Teacher, seat: Seat): boolean
 /** 교사가 담당 가능한 좌석인지 (다른 배정과 무관한 정적 조건만) */
 export function staticHardReason(ctx: Context, teacher: Teacher, seat: Seat): ExclusionReason | null {
   if (!teacher.active || teacher.defaultRole === 'EXCLUDED') return 'INACTIVE';
-  if ((teacher.defaultRole === 'HALLWAY') !== (seat.role === 'HALLWAY')) return 'ROLE_MISMATCH';
+  // 일반 교사는 교실·복도 모두 가능, 복도전담 교사는 복도만
+  if (teacher.defaultRole === 'HALLWAY' && seat.role !== 'HALLWAY') return 'ROLE_MISMATCH';
   if (ctx.unavailable.has(`${teacher.id}|${seat.date}|${seat.period}`)) return 'UNAVAILABLE';
   const cs = ctx.constraintsByTeacher.get(teacher.id);
   if (cs?.some((c) => c.priority === 'HARD' && constraintApplies(c, teacher, seat))) {

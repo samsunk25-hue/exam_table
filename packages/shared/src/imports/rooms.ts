@@ -3,7 +3,14 @@ import { finish, flagDuplicates, readRows, type Cell, type ColumnMapping, type F
 
 export const ROOM_FIELDS: FieldDef[] = [
   { key: 'name', label: '실명', required: true, synonyms: ['시험실', '교실명', '이름', '장소'], note: '예: 1-1, 1학년 복도, 별도시험장' },
-  { key: 'spaceType', label: '공간유형', required: false, synonyms: ['유형', '구분'], note: '교실 / 별도실 / 복도 (비우면 교실)' },
+  {
+    key: 'spaceType',
+    label: '공간유형',
+    required: false,
+    synonyms: ['유형', '구분'],
+    note: '교실 / 별도실 / 복도 (비우면 교실)',
+    options: ['교실', '별도실', '복도'],
+  },
   { key: 'grade', label: '학년', required: false, note: '교실·복도의 담당 학년 (기본 배치 자동 생성에 사용)' },
   { key: 'classNo', label: '반', required: false, note: '교실의 반 번호' },
   { key: 'chiefCount', label: '정감독수', required: false, synonyms: ['정감독'], note: '비우면 1' },

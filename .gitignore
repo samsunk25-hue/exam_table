@@ -9,6 +9,8 @@ coverage/
 !.env.example
 !apps/web/.env.emulator
 .emulator-data/
+scripts/e2e/out/
+scripts/e2e/fail-*.png
 .firebase/
 firebase-debug.log
 firestore-debug.log

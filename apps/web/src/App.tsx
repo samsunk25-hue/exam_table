@@ -9,7 +9,9 @@ import { PlaceholderPage } from '@/pages/PlaceholderPage';
 import { AdminsPage } from '@/pages/admin/AdminsPage';
 import { DashboardPage } from '@/pages/admin/DashboardPage';
 import { RoomsPage } from '@/pages/admin/RoomsPage';
+import { SessionAvailabilityPage } from '@/pages/admin/SessionAvailabilityPage';
 import { SessionLayout, SessionOverview } from '@/pages/admin/SessionPage';
+import { MyAvailabilityPage } from '@/pages/teacher/MyAvailabilityPage';
 import { SessionSetupPage } from '@/pages/admin/SessionSetupPage';
 import { TeachersPage } from '@/pages/admin/TeachersPage';
 
@@ -76,7 +78,7 @@ const router = createBrowserRouter([
               { path: 'setup', element: <SessionSetupPage /> },
               {
                 path: 'availability',
-                element: <PlaceholderPage title="불가시간" sprint="Sprint 3" description="교사 제출 현황, 승인·반려, 대리 입력." />,
+                element: <SessionAvailabilityPage />,
               },
               {
                 path: 'assign',
@@ -117,12 +119,7 @@ const router = createBrowserRouter([
               <PlaceholderPage title="내 감독 시간표" sprint="Sprint 5" description="교사 공개 이후 본인 감독 일정과 배정 사유를 확인합니다." />
             ),
           },
-          {
-            path: 'availability',
-            element: (
-              <PlaceholderPage title="불가 시간 관리" sprint="Sprint 3" description="출장·연수 등 근무 불가 시간을 제출하고 승인 상태를 확인합니다." />
-            ),
-          },
+          { path: 'availability', element: <MyAvailabilityPage /> },
         ],
       },
     ],

@@ -25,7 +25,7 @@ export interface OutSheet {
 }
 
 /** 엑셀 파일을 만들어 브라우저 다운로드 폴더에 저장하고, 저장 사실을 화면에 알린다. */
-export function downloadWorkbook(fileName: string, sheets: OutSheet[]): void {
+export function downloadWorkbook(fileName: string, sheets: OutSheet[]): boolean {
   try {
     const wb = XLSX.utils.book_new();
     for (const s of sheets) {
@@ -36,8 +36,10 @@ export function downloadWorkbook(fileName: string, sheets: OutSheet[]): void {
     }
     XLSX.writeFile(wb, fileName);
     toast(`"${fileName}" 파일을 다운로드 폴더에 저장했습니다.`);
+    return true;
   } catch (e) {
     toast(`파일을 만들지 못했습니다: ${e instanceof Error ? e.message : String(e)}`, 'alert');
+    return false;
   }
 }
 
@@ -62,8 +64,8 @@ export function guideSheet(name: string, sections: { title?: string; fields?: Fi
 }
 
 /** 표준 양식: 데이터 시트 + 안내 시트 */
-export function downloadTemplate(fileName: string, fields: FieldDef[], rows: OutCell[][], guide: string[] = []): void {
-  downloadWorkbook(fileName, [
+export function downloadTemplate(fileName: string, fields: FieldDef[], rows: OutCell[][], guide: string[] = []): boolean {
+  return downloadWorkbook(fileName, [
     tableSheet('데이터', fields, rows),
     guideSheet('안내', [
       { fields, lines: [...guide, '* 첫 번째 시트의 첫 행을 제목 행으로 읽습니다. 열 순서는 바꿔도 됩니다.'] },

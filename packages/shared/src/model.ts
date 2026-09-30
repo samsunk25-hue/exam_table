@@ -68,6 +68,21 @@ export interface BaseTimetableDoc {
   entries: TimetableEntry[];
 }
 
+export type AvailabilityStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+/** sessions/{sid}/availability/{teacherId}_{date}_{period} — 근무 불가 시간 1칸 */
+export interface AvailabilityDoc {
+  teacherId: string;
+  date: string;
+  period: number;
+  available: false;
+  reason: string;
+  source: 'TEACHER' | 'ADMIN';
+  status: AvailabilityStatus;
+  /** 반려 사유 등 관리자 메모 */
+  adminNote?: string | null;
+}
+
 export type WithId<T> = T & { id: string };
 
 export function slotIdOf(date: string, period: number, grade: number): string {
@@ -101,7 +116,15 @@ export const PLACEMENT_ROOM_TYPE_LABEL: Record<PlacementRoomType, string> = {
   SPECIAL: '특수',
 };
 
-export const WEEKDAY_LABEL = ['', '월', '화', '수', '목', '금', '토', '일'] as const;
+export const AVAILABILITY_STATUS_LABEL: Record<AvailabilityStatus, string> = {
+  PENDING: '승인 대기',
+  APPROVED: '승인',
+  REJECTED: '반려',
+};
+
+export const AVAILABILITY_REASONS = ['출장', '연수', '병가', '공가', '기타'] as const;
+
+export const WEEKDAY_LABEL =['', '월', '화', '수', '목', '금', '토', '일'] as const;
 
 /** 교사 ID 자동 생성: 기존 최대 번호 + 1 (T001, T002 …) */
 export function nextId(prefix: string, existing: string[], count = 1): string[] {

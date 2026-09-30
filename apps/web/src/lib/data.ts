@@ -2,7 +2,9 @@ import {
   collection,
   doc,
   onSnapshot,
+  query,
   serverTimestamp,
+  where,
   writeBatch,
   type DocumentReference,
   type WriteBatch,
@@ -17,14 +19,19 @@ export interface Live<T> {
   error: string | null;
 }
 
-/** 컬렉션 실시간 구독. path가 null이면 구독하지 않는다. */
-export function useCollection<T>(path: string | null): Live<WithId<T>[]> {
+/**
+ * 컬렉션 실시간 구독. path가 null이면 구독하지 않는다.
+ * where를 주면 해당 필드가 값과 같은 문서만 구독한다 (보안 규칙상 교사는 본인 문서만 조회 가능).
+ */
+export function useCollection<T>(path: string | null, where_?: [field: string, value: string]): Live<WithId<T>[]> {
   const [state, setState] = useState<Live<WithId<T>[]>>({ data: [], loading: true, error: null });
+  const [field, value] = where_ ?? [null, null];
   useEffect(() => {
     if (!path) return;
     setState((s) => ({ ...s, loading: true }));
+    const ref = collection(db, path);
     return onSnapshot(
-      collection(db, path),
+      field ? query(ref, where(field, '==', value)) : ref,
       (snap) =>
         setState({
           data: snap.docs.map((d) => ({ id: d.id, ...(d.data() as T) })),
@@ -33,7 +40,7 @@ export function useCollection<T>(path: string | null): Live<WithId<T>[]> {
         }),
       (e) => setState({ data: [], loading: false, error: e.message }),
     );
-  }, [path]);
+  }, [path, field, value]);
   return state;
 }
 

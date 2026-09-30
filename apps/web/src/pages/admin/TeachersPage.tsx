@@ -13,7 +13,7 @@ import {
 } from '@sim/shared';
 import { ImportWizard } from '@/components/ImportWizard';
 import { Modal } from '@/components/Modal';
-import { Alert, Button, Card, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
+import { Alert, Button, Card, DownloadButton, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
 import { downloadTemplate } from '@/lib/xlsx';
@@ -47,7 +47,7 @@ function downloadTeacherTemplate(teachers: Teacher[]) {
           ['', '김국어', 'kim@school.kr', '국어', 1, 1, '일반', 'Y'],
           ['', '박영어', 'park@school.kr', '영어', '', '', '복도대기', 'Y'],
         ];
-  downloadTemplate('교사명단_양식.xlsx', TEACHER_FIELDS, rows, [
+  return downloadTemplate('교사명단_양식.xlsx', TEACHER_FIELDS, rows, [
     '* 교사ID가 있으면 해당 교사를 수정하고, 없으면 이메일 → 이름 순으로 기존 교사를 찾습니다. 못 찾으면 새로 등록합니다.',
     '* 업로드로 교사가 삭제되지는 않습니다. 삭제나 사용 중지는 화면에서 하세요.',
   ]);
@@ -225,9 +225,9 @@ export function TeachersPage() {
 
       <div className="mb-4 flex flex-wrap gap-2">
         <Button onClick={() => setImporting(true)}>엑셀 업로드</Button>
-        <Button variant="secondary" onClick={() => downloadTeacherTemplate(data)}>
+        <DownloadButton onDownload={() => downloadTeacherTemplate(data)}>
           {data.length ? '현재 명단 양식 다운로드' : '양식 다운로드'}
-        </Button>
+        </DownloadButton>
         <Button variant="secondary" onClick={() => setEditing('new')}>
           + 교사 추가
         </Button>

@@ -33,7 +33,7 @@ import {
 } from '@sim/shared';
 import { ImportWizard } from '@/components/ImportWizard';
 import { Modal } from '@/components/Modal';
-import { Alert, Button, Card, Field, Select, Spinner, Table, Td } from '@/components/ui';
+import { Alert, Button, Card, DownloadButton, Field, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
 import type { ExamSession } from '@/lib/sessions';
@@ -479,18 +479,16 @@ function ScheduleCard({ sid, editable, slots, rooms }: { sid: string; editable: 
       {editable ? (
         <div className="mt-3 flex flex-wrap gap-2">
           <Button onClick={() => setModal({ kind: 'importSlots' })}>일정 엑셀 업로드</Button>
-          <Button variant="secondary" onClick={downloadSlotTemplate}>
-            일정 양식
-          </Button>
+          <DownloadButton onDownload={downloadSlotTemplate}>일정 양식</DownloadButton>
           <Button variant="secondary" onClick={() => void autoPlace()} disabled={busy || unplaced.length === 0}>
             기본 배치 자동 생성{unplaced.length ? ` (${unplaced.length}건)` : ''}
           </Button>
           <Button variant="secondary" onClick={() => setModal({ kind: 'importPlacements' })} disabled={slots.length === 0}>
             배치 엑셀 업로드
           </Button>
-          <Button variant="secondary" onClick={downloadPlacementTemplate} disabled={slots.length === 0}>
+          <DownloadButton onDownload={downloadPlacementTemplate} disabled={slots.length === 0}>
             배치 양식
-          </Button>
+          </DownloadButton>
           <Button variant="ghost" onClick={() => setModal({ kind: 'slot', slot: null })}>
             + 시험 추가
           </Button>
@@ -681,9 +679,7 @@ function TimetableCard({ sid, editable, session, teachers, timetable }: {
           <Button onClick={() => setImporting(true)} disabled={teachers.length === 0}>
             시간표 엑셀 업로드
           </Button>
-          <Button variant="secondary" onClick={download}>
-            {timetable.length ? '현재 시간표 양식' : '양식 다운로드'}
-          </Button>
+          <DownloadButton onDownload={download}>{timetable.length ? '현재 시간표 양식' : '양식 다운로드'}</DownloadButton>
         </div>
       )}
       {timetable.length > 0 && (

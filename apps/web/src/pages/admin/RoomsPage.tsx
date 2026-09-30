@@ -13,7 +13,7 @@ import {
 } from '@sim/shared';
 import { ImportWizard } from '@/components/ImportWizard';
 import { Modal } from '@/components/Modal';
-import { Alert, Button, Card, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
+import { Alert, Button, Card, DownloadButton, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
 import { downloadTemplate } from '@/lib/xlsx';
@@ -42,7 +42,7 @@ function downloadRoomTemplate(rooms: Room[]) {
           ['1학년 복도', '복도', 1, '', 1, 0],
           ['별도시험장', '별도실', '', '', 1, 1],
         ];
-  downloadTemplate('시험실_양식.xlsx', ROOM_FIELDS, rows, [
+  return downloadTemplate('시험실_양식.xlsx', ROOM_FIELDS, rows, [
     '* 실명이 같은 시험실은 수정, 없으면 새로 등록합니다. 업로드로 삭제되는 시험실은 없습니다.',
     '* 학년·반을 입력한 교실과 학년을 입력한 복도는 시험 일정의 "기본 배치 자동 생성"에 쓰입니다.',
   ]);
@@ -176,9 +176,9 @@ export function RoomsPage() {
 
       <div className="mb-4 flex flex-wrap gap-2">
         <Button onClick={() => setImporting(true)}>엑셀 업로드</Button>
-        <Button variant="secondary" onClick={() => downloadRoomTemplate(data)}>
+        <DownloadButton onDownload={() => downloadRoomTemplate(data)}>
           {data.length ? '현재 목록 양식 다운로드' : '양식 다운로드'}
-        </Button>
+        </DownloadButton>
         <Button variant="secondary" onClick={() => setEditing('new')}>
           + 시험실 추가
         </Button>

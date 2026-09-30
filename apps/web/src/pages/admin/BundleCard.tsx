@@ -10,7 +10,7 @@ import {
   type WithId,
 } from '@sim/shared';
 import { Modal } from '@/components/Modal';
-import { Alert, Button, Card } from '@/components/ui';
+import { Alert, Button, Card, DownloadButton } from '@/components/ui';
 import { bundleSheets, saveBundle } from '@/lib/bundle';
 import { errorMessage } from '@/lib/firebase';
 import type { ExamSession } from '@/lib/sessions';
@@ -196,7 +196,9 @@ export function BundleCard(props: Props) {
         현재 등록된 자료가 채워진 양식이 내려받아집니다.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button onClick={download}>통합 양식 다운로드</Button>
+        <DownloadButton variant="primary" onDownload={download}>
+          통합 양식 다운로드
+        </DownloadButton>
         <Button variant="secondary" onClick={() => setImporting(true)}>
           통합 양식 업로드
         </Button>

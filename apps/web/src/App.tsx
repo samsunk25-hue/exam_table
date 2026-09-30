@@ -1,0 +1,135 @@
+import { Navigate, Outlet, RouterProvider, createBrowserRouter } from 'react-router';
+import { useAuth } from '@/auth/AuthProvider';
+import { Spinner } from '@/components/ui';
+import { AppShell, type NavItem } from '@/layouts/AppShell';
+import type { Role } from '@/lib/firebase';
+import { LoginPage } from '@/pages/LoginPage';
+import { NoAccessPage } from '@/pages/NoAccessPage';
+import { PlaceholderPage } from '@/pages/PlaceholderPage';
+import { AdminsPage } from '@/pages/admin/AdminsPage';
+import { DashboardPage } from '@/pages/admin/DashboardPage';
+import { RoomsPage } from '@/pages/admin/RoomsPage';
+import { SessionLayout, SessionOverview } from '@/pages/admin/SessionPage';
+import { SessionSetupPage } from '@/pages/admin/SessionSetupPage';
+import { TeachersPage } from '@/pages/admin/TeachersPage';
+
+const ADMIN_NAV: NavItem[] = [
+  { to: '/admin', label: '대시보드', end: true },
+  { to: '/admin/teachers', label: '교사 관리' },
+  { to: '/admin/rooms', label: '시험실 관리' },
+  { to: '/admin/admins', label: '관리자 관리' },
+];
+
+const TEACHER_NAV: NavItem[] = [
+  { to: '/me', label: '내 감독 시간표', end: true },
+  { to: '/me/availability', label: '불가 시간 관리' },
+];
+
+function homeFor(role: Role): string {
+  return role === 'ADMIN' ? '/admin' : role === 'TEACHER' ? '/me' : '/no-access';
+}
+
+/** 로그인과 역할을 확인하고, 맞지 않으면 알맞은 첫 화면으로 보낸다. */
+function RequireRole({ role }: { role?: Role }) {
+  const { loading, user, role: current } = useAuth();
+  if (loading) return <Spinner label="계정 확인 중…" />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (role && current !== role) return <Navigate to={homeFor(current)} replace />;
+  return <Outlet />;
+}
+
+function Home() {
+  const { loading, user, role } = useAuth();
+  if (loading) return <Spinner label="계정 확인 중…" />;
+  return <Navigate to={user ? homeFor(role) : '/login'} replace />;
+}
+
+function LoginRoute() {
+  const { loading, user, role } = useAuth();
+  if (loading && user) return <Spinner label="계정 확인 중…" />;
+  return user && !loading ? <Navigate to={homeFor(role)} replace /> : <LoginPage />;
+}
+
+const router = createBrowserRouter([
+  { path: '/', element: <Home /> },
+  { path: '/login', element: <LoginRoute /> },
+  {
+    element: <RequireRole />,
+    children: [{ path: '/no-access', element: <NoAccessPage /> }],
+  },
+  {
+    element: <RequireRole role="ADMIN" />,
+    children: [
+      {
+        path: '/admin',
+        element: <AppShell nav={ADMIN_NAV} modeLabel="관리자" />,
+        children: [
+          { index: true, element: <DashboardPage /> },
+          { path: 'admins', element: <AdminsPage /> },
+          { path: 'teachers', element: <TeachersPage /> },
+          { path: 'rooms', element: <RoomsPage /> },
+          {
+            path: 'sessions/:sid',
+            element: <SessionLayout />,
+            children: [
+              { index: true, element: <SessionOverview /> },
+              { path: 'setup', element: <SessionSetupPage /> },
+              {
+                path: 'availability',
+                element: <PlaceholderPage title="불가시간" sprint="Sprint 3" description="교사 제출 현황, 승인·반려, 대리 입력." />,
+              },
+              {
+                path: 'assign',
+                element: (
+                  <PlaceholderPage title="자동 배정" sprint="Sprint 4" description="배정 엔진 실행, 결과 미리보기(성공률·형평성·미배정 사유), 적용." />
+                ),
+              },
+              {
+                path: 'editor',
+                element: (
+                  <PlaceholderPage title="시간표 편집" sprint="Sprint 5" description="날짜·교시 × 시험실 그리드, 셀 클릭 후보 선택, 충돌 경고." />
+                ),
+              },
+              {
+                path: 'print',
+                element: <PlaceholderPage title="출력" sprint="Sprint 6" description="전체·개인별 시간표 인쇄용 PDF." />,
+              },
+              {
+                path: 'history',
+                element: <PlaceholderPage title="변경 이력" sprint="Sprint 5" description="Audit Log 조회." />,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    element: <RequireRole role="TEACHER" />,
+    children: [
+      {
+        path: '/me',
+        element: <AppShell nav={TEACHER_NAV} modeLabel="교사" />,
+        children: [
+          {
+            index: true,
+            element: (
+              <PlaceholderPage title="내 감독 시간표" sprint="Sprint 5" description="교사 공개 이후 본인 감독 일정과 배정 사유를 확인합니다." />
+            ),
+          },
+          {
+            path: 'availability',
+            element: (
+              <PlaceholderPage title="불가 시간 관리" sprint="Sprint 3" description="출장·연수 등 근무 불가 시간을 제출하고 승인 상태를 확인합니다." />
+            ),
+          },
+        ],
+      },
+    ],
+  },
+  { path: '*', element: <Navigate to="/" replace /> },
+]);
+
+export function App() {
+  return <RouterProvider router={router} />;
+}

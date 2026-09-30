@@ -1,0 +1,215 @@
+import { describe, expect, it } from 'vitest';
+import { runAssignment, seatCandidates, validateAssignments, weekdayOf, type EngineInput } from '../src';
+import { emptyInput, fakeSchool, teacher } from './fixtures';
+
+/** 교실 1개, 시험 1개(날짜 2026-10-12 월요일 1교시) */
+function oneRoom(extra: Partial<EngineInput> = {}): EngineInput {
+  return emptyInput({
+    rooms: [{ id: 'R11', name: '1-1', chiefCount: 1, assistantCount: 1, spaceType: 'CLASSROOM' }],
+    slots: [{ id: 'S1', date: '2026-10-12', period: 1, grade: 1, subject: '수학', type: 'EXAM' }],
+    groups: [{ id: 'G1', slotId: 'S1', roomId: 'R11', grade: 1, classNo: 1, roomType: 'NORMAL' }],
+    ...extra,
+  });
+}
+
+describe('좌석 생성', () => {
+  it('정·부감독 좌석과 역할 가중치를 만든다', () => {
+    const r = runAssignment(oneRoom({ teachers: [teacher('A'), teacher('B')] }));
+    expect(r.seats.map((s) => [s.id, s.role, s.weight])).toEqual([
+      ['G1_CHIEF_1', 'CHIEF', 1.0],
+      ['G1_ASSISTANT_1', 'ASSISTANT', 0.8],
+    ]);
+  });
+
+  it('연장 그룹은 정감독 좌석이 연장감독(1.5)이 된다', () => {
+    const input = oneRoom({ teachers: [teacher('A'), teacher('B')] });
+    input.groups[0]!.roomType = 'EXTENDED';
+    expect(runAssignment(input).seats[0]).toMatchObject({ role: 'EXTENDED', weight: 1.5 });
+  });
+
+  it('날짜를 요일로 변환한다', () => {
+    expect(weekdayOf('2026-10-12')).toBe(1);
+    expect(weekdayOf('2026-10-18')).toBe(7);
+  });
+});
+
+describe('하드 조건', () => {
+  it('불가시간(승인·대기)은 배정하지 않고, 반려는 무시한다', () => {
+    const input = oneRoom({
+      teachers: [teacher('A'), teacher('B'), teacher('C')],
+      availability: [
+        { teacherId: 'A', date: '2026-10-12', period: 1, status: 'APPROVED' },
+        { teacherId: 'B', date: '2026-10-12', period: 1, status: 'PENDING' },
+        { teacherId: 'C', date: '2026-10-12', period: 1, status: 'REJECTED' },
+      ],
+    });
+    const r = runAssignment(input);
+    expect(r.assignments.map((a) => a.teacherId)).toEqual(['C']);
+    expect(r.unassigned).toHaveLength(1);
+    expect(r.unassigned[0]!.message).toBe(
+      '1-1반 수학 부감독 미배정 (가용 인력 0명 - 불가시간 2명, 동시간 타 감독 1명)',
+    );
+  });
+
+  it('동시간대 중복 배정을 하지 않는다', () => {
+    const input = oneRoom({ teachers: [teacher('A')] });
+    const r = runAssignment(input);
+    expect(r.assignments).toHaveLength(1);
+    expect(validateAssignments(input, r.assignments)).toEqual([]);
+  });
+
+  it('연장감독 직후 교시에는 배정하지 않는다', () => {
+    const input = emptyInput({
+      teachers: [teacher('A'), teacher('B')],
+      rooms: [
+        { id: 'SEP', name: '별도실', chiefCount: 1, assistantCount: 0, spaceType: 'SEPARATE' },
+        { id: 'R11', name: '1-1', chiefCount: 1, assistantCount: 0, spaceType: 'CLASSROOM' },
+      ],
+      slots: [
+        { id: 'S1', date: '2026-10-12', period: 1, grade: 1, subject: '수학', type: 'EXAM' },
+        { id: 'S2', date: '2026-10-12', period: 2, grade: 1, subject: '영어', type: 'EXAM' },
+      ],
+      groups: [
+        { id: 'G1', slotId: 'S1', roomId: 'SEP', grade: 1, classNo: null, roomType: 'EXTENDED' },
+        { id: 'G2', slotId: 'S2', roomId: 'R11', grade: 1, classNo: 1, roomType: 'NORMAL' },
+      ],
+    });
+    const r = runAssignment(input);
+    const ext = r.assignments.find((a) => a.role === 'EXTENDED')!;
+    const next = r.assignments.find((a) => a.slotId === 'S2')!;
+    expect(ext.teacherId).not.toBe(next.teacherId);
+
+    const bad = [
+      { seatId: 'G1_EXTENDED_1', teacherId: 'A' },
+      { seatId: 'G2_CHIEF_1', teacherId: 'A' },
+    ];
+    expect(validateAssignments(input, bad).map((v) => v.reason)).toContain('AFTER_EXTENDED');
+  });
+
+  it('HARD 예외 규칙과 배정 제외 교사, 복도 역할을 지킨다', () => {
+    const input = oneRoom({
+      teachers: [
+        teacher('A', { homeroom: { grade: 1, classNo: 1 } }),
+        teacher('B', { defaultRole: 'EXCLUDED' }),
+        teacher('C', { defaultRole: 'HALLWAY' }),
+        teacher('D'),
+      ],
+      constraints: [{ teacherId: 'A', type: 'HOMEROOM_EXCLUDE', priority: 'HARD' }],
+    });
+    const r = runAssignment(input);
+    expect(r.assignments.map((a) => a.teacherId)).toEqual(['D']);
+  });
+});
+
+describe('소프트 점수', () => {
+  const base = () =>
+    oneRoom({
+      rooms: [{ id: 'R11', name: '1-1', chiefCount: 1, assistantCount: 0, spaceType: 'CLASSROOM' }],
+      teachers: [teacher('A'), teacher('B')],
+      baseTimetable: [{ teacherId: 'B', weekday: 1, period: 1, grade: 1, classNo: 1 }],
+    });
+
+  it('기초시간표 반영을 켜면 원래 수업 교사가 +50을 받는다', () => {
+    const input = base();
+    input.settings.useBaseTimetable = true;
+    const [a] = runAssignment(input).assignments;
+    expect(a!.teacherId).toBe('B');
+    expect(a!.reason).toContain('+50(기초일치)');
+  });
+
+  it('기초시간표 반영을 끄면 가점이 없다', () => {
+    const [a] = runAssignment(base()).assignments;
+    expect(a!.teacherId).toBe('A');
+    expect(a!.reason).not.toContain('기초일치');
+  });
+
+  it('SOFT 예외 규칙은 감점한다', () => {
+    const input = base();
+    input.constraints = [{ teacherId: 'A', type: 'SUBJECT_EXCLUDE', target: '수학', priority: 'SOFT' }];
+    const [a] = runAssignment(input).assignments;
+    expect(a!.teacherId).toBe('B');
+  });
+
+  it('누적 부담이 낮은 교사를 우선한다', () => {
+    const input = base();
+    input.teachers[0]!.priorLoad = 10;
+    const [a] = runAssignment(input).assignments;
+    expect(a!.teacherId).toBe('B');
+  });
+});
+
+describe('고정 배정(pinned)', () => {
+  it('고정 배정은 유지하고, 하드 조건 위반 고정은 거부한다', () => {
+    const input = oneRoom({
+      teachers: [teacher('A'), teacher('B'), teacher('C')],
+      availability: [{ teacherId: 'C', date: '2026-10-12', period: 1, status: 'APPROVED' }],
+      pinned: [
+        { seatId: 'G1_ASSISTANT_1', teacherId: 'A' },
+        { seatId: 'G1_CHIEF_1', teacherId: 'C' },
+      ],
+    });
+    const r = runAssignment(input);
+    expect(r.assignments.find((a) => a.seatId === 'G1_ASSISTANT_1')).toMatchObject({ teacherId: 'A', source: 'MANUAL' });
+    expect(r.assignments.find((a) => a.seatId === 'G1_CHIEF_1')!.teacherId).toBe('B');
+    expect(r.rejectedPinned.map((v) => v.reason)).toEqual(['UNAVAILABLE']);
+  });
+});
+
+describe('수동 편집 후보', () => {
+  it('가능한 교사를 점수순으로, 불가 교사는 사유와 함께 뒤에 둔다', () => {
+    const input = oneRoom({
+      teachers: [teacher('A'), teacher('B'), teacher('C')],
+      availability: [{ teacherId: 'C', date: '2026-10-12', period: 1, status: 'APPROVED' }],
+    });
+    const list = seatCandidates(input, [{ seatId: 'G1_ASSISTANT_1', teacherId: 'A' }], 'G1_CHIEF_1');
+    expect(list.map((c) => [c.teacherId, c.blockedBy])).toEqual([
+      ['B', null],
+      ['C', 'UNAVAILABLE'],
+      ['A', 'BUSY'],
+    ]);
+  });
+});
+
+describe('가상 학교 (교사 60명, 4일 × 3교시, 28실)', () => {
+  const input = fakeSchool();
+
+  it('하드 조건 위반 0건, 성공률 95% 이상, 1초 이내', () => {
+    const t0 = performance.now();
+    const r = runAssignment(input);
+    const elapsed = performance.now() - t0;
+
+    expect(validateAssignments(input, r.assignments)).toEqual([]);
+    expect(r.metrics.successRate).toBeGreaterThanOrEqual(0.95);
+    expect(elapsed).toBeLessThan(1000);
+  });
+
+  it('같은 입력이면 같은 결과를 낸다', () => {
+    expect(runAssignment(input)).toEqual(runAssignment(input));
+  });
+
+  it('형평성 재배치로 이번 세션 부담 편차가 작다', () => {
+    const r = runAssignment(input);
+    const normal = input.teachers.filter((t) => t.active && t.defaultRole === 'NORMAL');
+    const session = normal.map((t) => r.metrics.sessionLoads[t.id]!);
+    expect(Math.max(...session) - Math.min(...session)).toBeLessThanOrEqual(6);
+    // 과거 부담이 반영되어 누적 편차는 과거 편차보다 줄어든다
+    const prior = normal.map((t) => t.priorLoad);
+    const total = normal.map((t) => r.metrics.loads[t.id]!);
+    expect(Math.max(...total) - Math.min(...total)).toBeLessThan(Math.max(...prior) - Math.min(...prior));
+  });
+
+  it('검증 함수가 주입된 중복 배정을 잡아낸다', () => {
+    const r = runAssignment(input);
+    const [a, b] = r.assignments.filter((x) => x.slotId === r.assignments[0]!.slotId);
+    const tampered = r.assignments.map((x) => (x.seatId === b!.seatId ? { ...x, teacherId: a!.teacherId } : x));
+    expect(validateAssignments(input, tampered).map((v) => v.reason)).toContain('BUSY');
+  });
+
+  it('인력이 부족하면 미배정 사유를 설명한다', () => {
+    const tight = fakeSchool({ teacherCount: 30, hallwayTeachers: 2 });
+    const r = runAssignment(tight);
+    expect(validateAssignments(tight, r.assignments)).toEqual([]);
+    expect(r.unassigned.length).toBeGreaterThan(0);
+    expect(r.unassigned[0]!.message).toMatch(/미배정 \(가용 인력 0명 - .*동시간 타 감독 \d+명/);
+  });
+});

@@ -1,0 +1,15 @@
+node_modules/
+dist/
+lib/
+.next/
+out/
+coverage/
+*.log
+.env*
+!.env.example
+!apps/web/.env.emulator
+.emulator-data/
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

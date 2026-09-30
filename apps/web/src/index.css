@@ -1,0 +1,32 @@
+@import 'tailwindcss';
+
+/* 디자인 토큰 (PRD 7장) */
+@theme {
+  --font-sans: 'Pretendard Variable', Pretendard, 'Malgun Gothic', system-ui, sans-serif;
+
+  --color-bg: #f8f9fa;
+  --color-surface: #ffffff;
+  --color-ink: #333333;
+  --color-muted: #6b7280;
+  --color-line: #e5e7eb;
+  --color-primary: #4a90e2;
+  --color-primary-strong: #2f74c8;
+  --color-primary-soft: #eaf3fc;
+  --color-mint: #2ecc71;
+  --color-mint-soft: #e8f8ef;
+  --color-alert: #ff6b6b;
+  --color-alert-soft: #fff0f0;
+
+  --radius-card: 1rem;
+}
+
+html {
+  font-size: 17px; /* 본문 16~18px */
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}

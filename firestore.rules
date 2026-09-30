@@ -1,0 +1,130 @@
+rules_version = '2';
+
+// 권한 원칙 (PRD 6.3)
+// - 역할은 Custom Claims(role: ADMIN | TEACHER, teacherId)로 판단
+// - 관리자 쓰기는 updatedBy == 본인 uid 를 강제해 Audit Log에 행위자를 남긴다
+// - auditLogs, loadLedger, runs, assignments, busy, admins, 세션 status 는 Cloud Functions 전용
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && request.auth.token.role == 'ADMIN'; }
+    function isTeacher() { return signedIn() && request.auth.token.role == 'TEACHER'; }
+    function isMember() { return isAdmin() || isTeacher(); }
+    function myTeacherId() { return request.auth.token.teacherId; }
+    function stamped() { return request.resource.data.updatedBy == request.auth.uid; }
+
+    function sessionStatus(sid) {
+      return get(/databases/$(database)/documents/sessions/$(sid)).data.status;
+    }
+    function setupEditable(sid) {
+      return sessionStatus(sid) in ['DRAFT', 'AUTO_ASSIGNED', 'REVIEW'];
+    }
+    function published(sid) {
+      return sessionStatus(sid) in ['PUBLISHED', 'SWAP', 'CONFIRMED', 'LOCKED'];
+    }
+    function adminSetupWrite(sid) {
+      return isAdmin() && setupEditable(sid) && (request.method == 'delete' || stamped());
+    }
+
+    match /users/{uid} {
+      allow read: if (signedIn() && request.auth.uid == uid) || isAdmin();
+      allow write: if false;
+    }
+
+    // 관리자 목록: addAdmin / removeAdmin 함수로만 변경
+    match /admins/{email} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // 학교 공통 데이터
+    match /teachers/{teacherId} {
+      allow read: if isMember();
+      allow create, update: if isAdmin() && stamped();
+      allow delete: if isAdmin();
+    }
+
+    match /rooms/{roomId} {
+      allow read: if isMember();
+      allow create, update: if isAdmin() && stamped();
+      allow delete: if isAdmin();
+    }
+
+    match /loadLedger/{ledgerId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /sessions/{sid} {
+      allow read: if isMember();
+      allow create: if isAdmin() && stamped() && request.resource.data.status == 'DRAFT';
+      allow update: if isAdmin() && stamped()
+        && request.resource.data.status == resource.data.status;
+      allow delete: if isAdmin() && resource.data.status == 'DRAFT';
+
+      // 교사별 문서 1개 (entries 배열)
+      match /baseTimetable/{teacherId} {
+        allow read: if isAdmin();
+        allow write: if adminSetupWrite(sid);
+      }
+
+      // 시험 1건 = 문서 1개, 시험실 배치는 rooms 배열
+      match /slots/{id} {
+        allow read: if isMember();
+        allow write: if adminSetupWrite(sid);
+      }
+
+      match /constraints/{id} {
+        allow read: if isAdmin();
+        allow write: if adminSetupWrite(sid);
+      }
+
+      // 교사: 본인 불가시간을 대기(PENDING) 상태로만 제출/수정/삭제
+      match /availability/{id} {
+        allow read: if isAdmin() || (isTeacher() && resource.data.teacherId == myTeacherId());
+        allow create: if isTeacher() && stamped()
+          && setupEditable(sid)
+          && request.resource.data.teacherId == myTeacherId()
+          && request.resource.data.status == 'PENDING'
+          && request.resource.data.source == 'TEACHER';
+        allow update: if isTeacher() && stamped()
+          && setupEditable(sid)
+          && resource.data.teacherId == myTeacherId()
+          && resource.data.status == 'PENDING'
+          && request.resource.data.teacherId == myTeacherId()
+          && request.resource.data.status == 'PENDING'
+          && request.resource.data.source == 'TEACHER';
+        allow delete: if isTeacher()
+          && setupEditable(sid)
+          && resource.data.teacherId == myTeacherId()
+          && resource.data.status == 'PENDING';
+        allow write: if isAdmin() && (request.method == 'delete' || stamped());
+      }
+
+      match /assignments/{id} {
+        allow read: if isAdmin() || (isTeacher() && published(sid));
+        allow write: if false;
+      }
+
+      match /runs/{id} {
+        allow read: if isAdmin();
+        allow write: if false;
+      }
+
+      match /busy/{id} {
+        allow read, write: if false;
+      }
+
+      match /auditLogs/{id} {
+        allow read: if isAdmin();
+        allow write: if false;
+      }
+    }
+  }
+}

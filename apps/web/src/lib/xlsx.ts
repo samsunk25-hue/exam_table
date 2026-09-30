@@ -16,7 +16,7 @@ export async function readWorkbook(file: File): Promise<SheetData[]> {
   }));
 }
 
-type OutCell = string | number | null;
+export type OutCell = string | number | null;
 
 export interface OutSheet {
   name: string;
@@ -41,20 +41,32 @@ export function downloadWorkbook(fileName: string, sheets: OutSheet[]): void {
   }
 }
 
-/** 표준 양식: 데이터 시트(필수 열은 * 표시) + 안내 시트 */
+/** 표 형식 시트: 첫 행은 제목(필수 열은 * 표시) */
+export function tableSheet(name: string, fields: FieldDef[], rows: OutCell[][]): OutSheet {
+  return { name, rows: [fields.map((f) => (f.required ? `${f.label}*` : f.label)), ...rows] };
+}
+
+/** 항목 설명 + 안내 문장 시트 */
+export function guideSheet(name: string, sections: { title?: string; fields?: FieldDef[]; lines?: string[] }[]): OutSheet {
+  const rows: OutCell[][] = [];
+  for (const s of sections) {
+    if (s.title) rows.push([`■ ${s.title}`]);
+    if (s.fields) {
+      rows.push(['항목', '필수', '설명']);
+      rows.push(...s.fields.map((f) => [f.label, f.required ? '필수' : '', f.note ?? '']));
+    }
+    for (const line of s.lines ?? []) rows.push([line]);
+    rows.push([]);
+  }
+  return { name, rows, widths: [16, 6, 80] };
+}
+
+/** 표준 양식: 데이터 시트 + 안내 시트 */
 export function downloadTemplate(fileName: string, fields: FieldDef[], rows: OutCell[][], guide: string[] = []): void {
   downloadWorkbook(fileName, [
-    { name: '데이터', rows: [fields.map((f) => (f.required ? `${f.label}*` : f.label)), ...rows] },
-    {
-      name: '안내',
-      rows: [
-        ['항목', '필수', '설명'],
-        ...fields.map((f) => [f.label, f.required ? '필수' : '', f.note ?? '']),
-        [],
-        ...guide.map((g) => [g]),
-        ['* 첫 번째 시트의 첫 행을 제목 행으로 읽습니다. 열 순서는 바꿔도 됩니다.'],
-      ],
-      widths: [14, 6, 70],
-    },
+    tableSheet('데이터', fields, rows),
+    guideSheet('안내', [
+      { fields, lines: [...guide, '* 첫 번째 시트의 첫 행을 제목 행으로 읽습니다. 열 순서는 바꿔도 됩니다.'] },
+    ]),
   ]);
 }

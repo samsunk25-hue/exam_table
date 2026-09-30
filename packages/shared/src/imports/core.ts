@@ -19,6 +19,8 @@ export type ColumnMapping = Record<string, number | null>;
 export interface RowResult<T> {
   /** 엑셀 기준 행 번호 (헤더 다음 행이 2) */
   rowNumber: number;
+  /** 행 번호 대신 보여줄 위치 (예: "김국어 · 화 3교시") */
+  label?: string;
   value: T | null;
   errors: string[];
 }
@@ -42,6 +44,18 @@ export function cellText(c: Cell): string {
 
 export function isBlankRow(row: Cell[]): boolean {
   return row.every((c) => cellText(c) === '');
+}
+
+export interface SheetRows {
+  name: string;
+  rows: Cell[][];
+}
+
+/** 첫 번째 비어 있지 않은 행을 제목 행으로 보고 나머지를 데이터 행으로 나눈다. */
+export function splitHeader(rows: Cell[][]): { header: Cell[]; data: Cell[][] } {
+  const idx = rows.findIndex((r) => !isBlankRow(r));
+  if (idx < 0) return { header: [], data: [] };
+  return { header: rows[idx]!, data: rows.slice(idx + 1) };
 }
 
 /** 헤더 이름으로 필드와 열을 자동 연결한다. 못 찾은 필드는 null. */

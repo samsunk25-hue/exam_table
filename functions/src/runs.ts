@@ -34,7 +34,7 @@ async function loadSession(sessionId: string) {
   return { ref, status, useBaseTimetable: snap.get('settings.useBaseTimetable') === true };
 }
 
-async function loadData(sessionId: string, useBaseTimetable: boolean) {
+export async function loadData(sessionId: string, useBaseTimetable: boolean) {
   const firestore = db();
   const [teachers, rooms, slots, availability, constraints, baseTimetable, assignments] = await Promise.all([
     firestore.collection('teachers').get(),

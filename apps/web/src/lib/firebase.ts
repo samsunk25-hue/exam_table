@@ -54,7 +54,12 @@ export const callApplyRun = httpsCallable<{ sessionId: string; runId: string }, 
   { timeout: 120_000 },
 );
 
-export const callAddAdmin =httpsCallable<{ email: string }, { email: string; applied: boolean }>(functions, 'addAdmin');
+export const callApplyChanges = httpsCallable<
+  { sessionId: string; changes: { seatId: string; teacherId: string | null }[]; reason?: string; label?: string },
+  { changed: number }
+>(functions, 'applyAssignmentChanges', { timeout: 60_000 });
+
+export const callAddAdmin = httpsCallable<{ email: string }, { email: string; applied: boolean }>(functions, 'addAdmin');
 export const callRemoveAdmin = httpsCallable<{ email: string }, { email: string }>(functions, 'removeAdmin');
 
 /** Firebase 오류를 사용자에게 보여줄 한국어 문장으로 */

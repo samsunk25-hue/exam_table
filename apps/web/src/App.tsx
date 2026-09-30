@@ -11,6 +11,7 @@ import { DashboardPage } from '@/pages/admin/DashboardPage';
 import { RoomsPage } from '@/pages/admin/RoomsPage';
 import { SessionAssignPage } from '@/pages/admin/SessionAssignPage';
 import { SessionAvailabilityPage } from '@/pages/admin/SessionAvailabilityPage';
+import { SessionEditorPage } from '@/pages/admin/SessionEditorPage';
 import { SessionLayout, SessionOverview } from '@/pages/admin/SessionPage';
 import { MyAvailabilityPage } from '@/pages/teacher/MyAvailabilityPage';
 import { SessionSetupPage } from '@/pages/admin/SessionSetupPage';
@@ -87,9 +88,7 @@ const router = createBrowserRouter([
               },
               {
                 path: 'editor',
-                element: (
-                  <PlaceholderPage title="시간표 편집" sprint="Sprint 5" description="날짜·교시 × 시험실 그리드, 셀 클릭 후보 선택, 충돌 경고." />
-                ),
+                element: <SessionEditorPage />,
               },
               {
                 path: 'print',

@@ -120,7 +120,7 @@ export const runAssignment = onCall(RUN_OPTIONS, async (req) => {
 
   const session = await loadSession(sessionId);
   const { data, current } = await loadData(sessionId, session.useBaseTimetable);
-  if (data.slots.length === 0) throw new HttpsError('failed-precondition', '시험 일정이 없습니다. 기본 설정에서 일정을 먼저 등록하세요.');
+  if (data.slots.length === 0) throw new HttpsError('failed-precondition', '시험 일정이 없습니다. 준비 > 시험 일정에서 먼저 입력하세요.');
 
   data.pinned = keep ? current.filter((a) => a.source === 'MANUAL').map((a) => ({ seatId: a.id, teacherId: a.teacherId })) : [];
   const input = buildEngineInput(data);

@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { useMemo, useState } from 'react';
 import {
   AVAILABILITY_STATUS_LABEL,
@@ -34,7 +35,12 @@ function CapacityCard({ rows }: { rows: ReturnType<typeof capacityByTime> }) {
         </div>
       )}
       {rows.length === 0 ? (
-        <p className="mt-3 text-muted">시험 일정이 없습니다. 기본 설정에서 일정을 먼저 올려 주세요.</p>
+        <p className="mt-3 text-muted">
+          시험 일정이 없습니다.{' '}
+          <Link to="../schedule" relative="path" className="font-semibold text-primary-strong underline underline-offset-2">
+            시험 일정 입력하기 →
+          </Link>
+        </p>
       ) : (
         groupByDate(rows).map(([date, list]) => (
           <section key={date} className="mt-4">

@@ -1,10 +1,19 @@
 import { checkSchedule, type BaseTimetableDoc, type RoomDoc, type SetupIssue, type SlotDoc, type TeacherDoc, type WithId } from '@sim/shared';
+import { Link } from 'react-router';
 import { Alert, Card } from '@/components/ui';
 import type { ExamSession } from '@/lib/sessions';
 
 type Slot = WithId<SlotDoc>;
 type Room = WithId<RoomDoc>;
 type Teacher = WithId<TeacherDoc>;
+
+/** 문제마다 고칠 수 있는 화면 (프로젝트 안 탭) */
+function fixPage(message: string): { to: string; label: string } {
+  if (message.includes('기초시간표')) return { to: '', label: '배정 설정에서 올리기' };
+  if (message.includes('교사')) return { to: 'teachers', label: '교사 명단에서 고치기' };
+  if (message.includes('등록된 시험실') || message.includes('필요한 감독 수')) return { to: 'rooms', label: '시험실에서 고치기' };
+  return { to: 'schedule', label: '시험 일정에서 고치기' };
+}
 
 /** 기초 자료 점검: 자동 배정 전에 고쳐야 할 문제와 주의 사항 (개요 탭) */
 export function Readiness({ session, slots, rooms, teachers, timetable }: {
@@ -16,8 +25,8 @@ export function Readiness({ session, slots, rooms, teachers, timetable }: {
 }) {
   const issues: SetupIssue[] = [...checkSchedule(slots, rooms)];
   const active = teachers.filter((t) => t.active && t.defaultRole !== 'EXCLUDED');
-  if (active.length === 0) issues.unshift({ level: 'error', message: '감독 가능한 교사가 없습니다 (교사 관리).' });
-  if (rooms.length === 0) issues.unshift({ level: 'error', message: '등록된 시험실이 없습니다 (시험실 관리).' });
+  if (active.length === 0) issues.unshift({ level: 'error', message: '감독 가능한 교사가 없습니다.' });
+  if (rooms.length === 0) issues.unshift({ level: 'error', message: '등록된 시험실이 없습니다.' });
   if (session.settings.useBaseTimetable && timetable.length === 0) {
     issues.push({ level: 'warning', message: '기초시간표 반영이 켜져 있지만 기초시간표가 없습니다.' });
   }
@@ -35,7 +44,7 @@ export function Readiness({ session, slots, rooms, teachers, timetable }: {
   }
   const peak = [...need.entries()].sort((a, b) => b[1] - a[1])[0];
   if (peak && peak[1] > active.length) {
-    issues.push({ level: 'error', message: `${peak[0]}에 감독 ${peak[1]}명이 필요하지만 감독 가능한 교사는 ${active.length}명입니다.` });
+    issues.push({ level: 'error', message: `${peak[0]}에 감독 ${peak[1]}명이 필요하지만 감독 가능한 교사는 ${active.length}명입니다 (교사를 늘리거나 임시 감독자 추가).` });
   }
 
   const errors = issues.filter((i) => i.level === 'error');
@@ -67,18 +76,23 @@ export function Readiness({ session, slots, rooms, teachers, timetable }: {
               {errors.length ? `해결해야 할 문제 ${errors.length}건` : '확인이 필요한 항목'}
             </p>
             <ul className="mt-1 list-disc pl-5">
-              {issues.slice(0, 12).map((i) => (
-                <li key={i.message}>
-                  {i.level === 'warning' && '(주의) '}
-                  {i.message}
-                </li>
-              ))}
+              {issues.slice(0, 12).map((i) => {
+                const fix = fixPage(i.message);
+                return (
+                  <li key={i.message}>
+                    {i.level === 'warning' && '(주의) '}
+                    {i.message}{' '}
+                    <Link to={`/admin/sessions/${session.id}${fix.to ? `/${fix.to}` : ''}`} className="font-semibold whitespace-nowrap text-primary-strong underline underline-offset-2">
+                      {fix.label} →
+                    </Link>
+                  </li>
+                );
+              })}
               {issues.length > 12 && <li>외 {issues.length - 12}건</li>}
             </ul>
             {errors.length > 0 && (
               <p className="mt-2 font-semibold">
-                → 아래 "통합 양식 다운로드"로 현재 자료를 내려받아 고친 뒤 "통합 양식 업로드"로 다시 올리세요. 몇 건만 고칠 때는 "기본 설정" 탭에서 직접
-                수정해도 됩니다.
+                → 각 항목의 링크를 누르면 고칠 화면으로 갑니다. 많이 고칠 때는 위 "통합 양식 다운로드"로 내려받아 고친 뒤 다시 올려도 됩니다.
               </p>
             )}
           </Alert>

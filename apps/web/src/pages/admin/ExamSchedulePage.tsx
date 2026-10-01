@@ -229,7 +229,7 @@ function ExamForm({
         {!editing && (
           <label className="flex min-h-12 cursor-pointer items-center gap-3">
             <input type="checkbox" className="size-5 accent-primary" checked={autoPlace} onChange={(e) => setAutoPlace(e.target.checked)} />
-            <span>같은 학년 교실·복도를 시험실로 자동 배치 (특별실은 기본 설정에서 추가)</span>
+            <span>같은 학년 교실·복도를 시험실로 자동 배치 (특별실은 준비 &gt; 시험실에서 추가)</span>
           </label>
         )}
         {error && <Alert>{error}</Alert>}

@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { useMemo, useState } from 'react';
 import type { Timestamp } from 'firebase/firestore';
 import {
@@ -298,7 +299,7 @@ export function SessionAssignPage() {
             자동 배정 실행
           </Button>
           <span className="ml-2 text-sm text-muted">← 결과를 비교한 뒤 직접 고르기</span>
-          {slots.data.length === 0 && <span className="ml-3 text-muted">기본 설정에서 시험 일정을 먼저 등록하세요.</span>}
+          {slots.data.length === 0 && <Link to="../schedule" relative="path" className="ml-3 font-semibold text-primary-strong underline underline-offset-2">시험 일정을 먼저 입력하세요 →</Link>}
         </div>
       </Card>
 

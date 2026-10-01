@@ -26,6 +26,15 @@ const say = async () => (await next.innerText()).replace(/\s+/g, ' ');
 await go(page, `/admin/sessions/${SID}`);
 await next.waitFor();
 check('교사 없음 → 교사 명단 입력 안내', (await say()).includes('교사 명단 입력하기'), await say());
+// 기초 자료 점검의 문제 항목: 누르면 고칠 화면으로
+const fixLink = page.getByRole('link', { name: '교사 명단에서 고치기 →' }).first();
+await fixLink.waitFor();
+await fixLink.click();
+await page.waitForURL(/teachers$/);
+check('점검 항목 링크 → 교사 명단 화면', page.url().endsWith(`/admin/sessions/${SID}/teachers`), page.url());
+check('"기본 설정" 같은 없는 탭 이름 안내 없음', !(await page.locator('body').innerText()).includes('기본 설정'));
+await go(page, `/admin/sessions/${SID}`);
+await next.waitFor();
 
 await db.doc('teachers/RDY1').set({ name: '준비교사', email: null, subject: '국어', homeroom: null, defaultRole: 'NORMAL', active: true, cumulativeLoad: 0, ...TERM, updatedBy: 'seed' });
 await page.waitForFunction(() => document.querySelector('[aria-label="다음 할 일"]')?.textContent?.includes('시험실 등록하기'), null, { timeout: 15000 }).catch(() => {});

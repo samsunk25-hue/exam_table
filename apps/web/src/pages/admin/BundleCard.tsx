@@ -138,7 +138,7 @@ function BundleImportDialog({
                   ))}
                 </ul>
               )}
-              <p className="mt-1 text-sm">잘못 읽은 부분은 저장한 뒤 기본 설정·교사 관리에서 고치거나, 되돌리기로 취소할 수 있습니다.</p>
+              <p className="mt-1 text-sm">잘못 읽은 부분은 저장한 뒤 준비 단계의 시험 일정·교사 명단에서 고치거나, 되돌리기로 취소할 수 있습니다.</p>
             </Alert>
           ) : (
           <label className="flex flex-col gap-1.5">

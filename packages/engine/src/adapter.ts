@@ -67,7 +67,7 @@ export function buildEngineInput(d: SessionData): EngineInput {
       spaceType: r.spaceType,
     })),
     slots: d.slots.map((s) => ({ id: s.id, date: s.date, period: s.period, grade: s.grade, subject: s.subject, type: s.type })),
-    // 삭제된 시험실이 배치에 남아 있으면 건너뛴다 (기본 설정 점검에서 오류로 표시됨)
+    // 삭제된 시험실이 배치에 남아 있으면 건너뛴다 (기초 자료 점검에서 오류로 표시됨)
     groups: d.slots.flatMap((s) =>
       s.rooms
         .filter((p) => d.rooms.some((r) => r.id === p.roomId))

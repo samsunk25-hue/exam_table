@@ -64,6 +64,21 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // 되돌리기 기록: 관리자가 본인 이름으로 새 기록만 남길 수 있고, 되돌림 표시는 undoOperation 함수만
+    match /undoOps/{opId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.undone == false;
+      allow update, delete: if false;
+
+      match /snapshots/{n} {
+        allow read: if isAdmin();
+        allow create: if isAdmin() && getAfter(/databases/$(database)/documents/undoOps/$(opId)).data.createdBy == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
     match /loadLedger/{ledgerId} {
       allow read: if isAdmin();
       allow write: if false;

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { RoomDoc, TeacherDoc } from '@sim/shared';
 import { Alert, Button, Card, DownloadButton, Spinner, Table, Td } from '@/components/ui';
+import { UndoHistory } from '@/components/UndoHistory';
 import { ACTION_LABEL, TARGET_LABEL, changes, targetText, useAuditLogs, type AuditLog } from '@/lib/audit';
 import { useCollection } from '@/lib/data';
 import { sessionTitle } from '@/lib/sessions';
@@ -60,6 +61,13 @@ export function SessionHistoryPage() {
 
   return (
     <div className="grid gap-6">
+      <Card>
+        <UndoHistory
+          key={scope}
+          sessionId={scope === 'session' ? session.id : null}
+          title={scope === 'session' ? '작업 기록·되돌리기 (이 시험 프로젝트)' : '작업 기록·되돌리기 (학교 공통: 교사·시험실)'}
+        />
+      </Card>
       <Card>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant={scope === 'session' ? 'primary' : 'secondary'} onClick={() => (setScope('session'), setType('ALL'))}>

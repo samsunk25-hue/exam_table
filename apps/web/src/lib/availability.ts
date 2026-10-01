@@ -31,16 +31,16 @@ export function submitAvailability(sid: string, teacherId: string, cells: Cell[]
       adminNote: null,
     } satisfies AvailabilityDoc,
   }));
-  return commitOps(ops);
+  return commitOps(ops, asAdmin ? '불가시간 대리 입력' : '불가시간 제출');
 }
 
 export function deleteAvailability(sid: string, ids: string[]) {
-  return commitOps(ids.map((id) => ({ type: 'delete', ref: ref(path(sid), id) })));
+  return commitOps(ids.map((id) => ({ type: 'delete', ref: ref(path(sid), id) })), '불가시간 취소');
 }
 
 /** 관리자 승인/반려. merge로 상태와 메모만 바꾼다. */
 export function reviewAvailability(sid: string, ids: string[], status: AvailabilityStatus, adminNote: string | null = null) {
-  return commitOps(ids.map((id) => ({ type: 'set', ref: ref(path(sid), id), data: { status, adminNote }, merge: true })));
+  return commitOps(ids.map((id) => ({ type: 'set', ref: ref(path(sid), id), data: { status, adminNote }, merge: true })), `불가시간 ${status === 'APPROVED' ? '승인' : status === 'REJECTED' ? '반려' : '승인 취소'}`);
 }
 
 export function sortAvailability(list: Availability[], nameOf: (id: string) => string): Availability[] {

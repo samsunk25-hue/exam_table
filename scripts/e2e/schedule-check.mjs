@@ -73,9 +73,14 @@ await page.getByRole('button', { name: '1교시 기준으로 나머지 자동 �
 await page.getByRole('button', { name: '+ 교시 추가' }).click();
 await page.getByRole('button', { name: '저장', exact: true }).click();
 await page.getByRole('status').filter({ hasText: '교시별 기본 시간을 저장했습니다' }).last().waitFor();
-const pt = (await db.doc(`sessions/${SID}`).get()).get('settings.periodTimes');
-const got = [2, 3, 4, 5].map((p) => `${pt?.[p]?.start}~${pt?.[p]?.end}`).join(' ');
-check('쉬는 시간으로 나머지 교시 자동 계산 (+교시 추가)', got === '10:00~10:45 11:00~11:45 12:00~12:45 13:00~13:45', got);
+const want = '10:00~10:45 11:00~11:45 12:00~12:45 13:00~13:45';
+let got = '';
+for (let i = 0; i < 50 && got !== want; i++) {
+  const pt = (await db.doc(`sessions/${SID}`).get()).get('settings.periodTimes');
+  got = [2, 3, 4, 5].map((p) => `${pt?.[p]?.start}~${pt?.[p]?.end}`).join(' ');
+  if (got !== want) await new Promise((r) => setTimeout(r, 300));
+}
+check('쉬는 시간으로 나머지 교시 자동 계산 (+교시 추가)', got === want, got);
 
 // 4. 여러 교시 동시 선택: 표(가로 교시, 세로 학년)에 입력
 await page.getByRole('button', { name: /^10월 13일/ }).click();
@@ -89,7 +94,11 @@ await f2.getByRole('checkbox', { name: '3학년' }).uncheck();
 await page.screenshot({ path: `${OUT}/schedule-multi.png`, fullPage: true });
 await f2.getByRole('button', { name: '저장' }).click();
 await page.getByRole('status').filter({ hasText: '시험 2건을 추가했습니다' }).last().waitFor();
-const study = (await db.doc(`sessions/${SID}/slots/2026-10-13_2_1`).get()).data();
+let study;
+for (let i = 0; i < 50 && !study; i++) {
+  study = (await db.doc(`sessions/${SID}/slots/2026-10-13_2_1`).get()).data();
+  if (!study) await new Promise((r) => setTimeout(r, 300));
+}
 check('여러 교시 한 번에 추가 (자습·교시 시간)', study?.type === 'STUDY' && study?.startTime === '10:00', JSON.stringify({ type: study?.type, start: study?.startTime }));
 
 // 5. 기간 선택 (주말 제외) → 표 입력에 날짜가 들어감

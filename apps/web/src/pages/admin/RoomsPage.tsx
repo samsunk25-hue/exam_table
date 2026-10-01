@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { SPACE_TYPE_LABEL, nextId, termFields, termLabel, type RoomDoc, type SpaceType, type TermRef, type WithId } from '@sim/shared';
 import { BundleHint } from '@/components/BundleHint';
 import { Modal } from '@/components/Modal';
+import { UndoHistory } from '@/components/UndoHistory';
 import { RosterImportDialog, TermPicker, useTermChoice } from '@/components/TermRoster';
 import { Alert, Button, Card, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection } from '@/lib/data';
@@ -72,7 +73,7 @@ function RoomForm({
     const data: RoomDoc = { name, spaceType: f.spaceType, grade, classNo, chiefCount: chief, assistantCount: assistant };
     try {
       const id = room?.id ?? nextId('R', takenIds)[0]!;
-      await commitOps([{ type: 'set', ref: ref('rooms', id), data: { ...data, ...termFields(term) } }]);
+      await commitOps([{ type: 'set', ref: ref('rooms', id), data: { ...data, ...termFields(term) } }], room ? '시험실 수정' : '시험실 추가');
       onClose();
     } catch (err) {
       setError(errorMessage(err));
@@ -83,7 +84,7 @@ function RoomForm({
   const remove = async () => {
     setBusy(true);
     try {
-      await commitOps([{ type: 'delete', ref: ref('rooms', room!.id) }]);
+      await commitOps([{ type: 'delete', ref: ref('rooms', room!.id) }], '시험실 삭제');
       onClose();
     } catch (err) {
       setError(errorMessage(err));
@@ -146,6 +147,7 @@ export function RoomsPage() {
   const takenIds = useMemo(() => everyone.data.map((r) => r.id), [everyone.data]);
   const [editing, setEditing] = useState<Room | 'new' | null>(null);
   const [importing, setImporting] = useState(false);
+  const [history, setHistory] = useState(false);
   const rooms = useMemo(() => sortRooms(data), [data]);
   const seats = data.reduce((s, r) => s + r.chiefCount + r.assistantCount, 0);
 
@@ -178,6 +180,9 @@ export function RoomsPage() {
           <Button onClick={() => setEditing('new')}>+ 특별실 추가</Button>
           <Button variant="secondary" onClick={() => setImporting(true)}>
             다른 학기에서 불러오기
+          </Button>
+          <Button variant="ghost" onClick={() => setHistory(true)}>
+            ↶ 작업 기록·되돌리기
           </Button>
         </div>
       )}
@@ -213,6 +218,11 @@ export function RoomsPage() {
         <RoomForm room={editing === 'new' ? null : editing} all={data} takenIds={takenIds} term={choice.current} onClose={() => setEditing(null)} />
       )}
       {importing && choice.current && <RosterImportDialog kind="rooms" target={choice.current} all={everyone.data} onClose={() => setImporting(false)} />}
+      {history && (
+        <Modal title="작업 기록·되돌리기" onClose={() => setHistory(false)} wide>
+          <UndoHistory sessionId={null} title="학교 공통 (교사·시험실)" />
+        </Modal>
+      )}
     </>
   );
 }

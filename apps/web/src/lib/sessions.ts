@@ -6,11 +6,11 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  updateDoc,
   type Timestamp,
 } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { sessionTerm, termKey, type SessionStatus } from '@sim/shared';
+import { commitOps } from './data';
 import { auth, db } from './firebase';
 
 export interface PeriodTime {
@@ -52,8 +52,9 @@ export function createSession(data: NewSession) {
   });
 }
 
+/** 설정 변경도 되돌리기 목록에 남긴다 */
 export function updateSessionSettings(id: string, settings: SessionSettings) {
-  return updateDoc(doc(db, 'sessions', id), { settings, ...stamp() });
+  return commitOps([{ type: 'set', ref: doc(db, 'sessions', id), data: { settings }, merge: true }], '시험 설정 변경');
 }
 
 interface Live<T> {
@@ -106,4 +107,23 @@ export function sessionTitle(s: Pick<ExamSession, 'year' | 'semester' | 'examNam
 /** 이 세션 학교·학기의 교사·시험실만 구독할 때: useCollection('teachers', termWhere(session)) */
 export function termWhere(s: Pick<ExamSession, 'schoolName' | 'year' | 'semester'>): [string, string] {
   return ['term', termKey(sessionTerm(s))];
+}
+
+/**
+ * 교사 화면용: 내 교사 문서의 학교·학기 프로젝트만 (다른 학교·학기 프로젝트는 보이지 않게).
+ * 학기가 지정되지 않은 예전 교사 문서면 전체를 보여 준다.
+ */
+export function useMySessions(teacherId: string | null): Live<ExamSession[]> {
+  const all = useSessions();
+  const [term, setTerm] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!teacherId) return setTerm(null);
+    return onSnapshot(
+      doc(db, 'teachers', teacherId),
+      (snap) => setTerm((snap.get('term') as string | undefined) ?? null),
+      () => setTerm(null),
+    );
+  }, [teacherId]);
+  if (term === undefined) return { data: [], loading: true, error: all.error };
+  return { ...all, data: term ? all.data.filter((s) => termKey(sessionTerm(s)) === term) : all.data };
 }

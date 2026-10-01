@@ -15,6 +15,7 @@ import {
   sessionTerm,
   termKey,
 } from '@sim/shared';
+import { recordOp } from './undo';
 import { db, requireAdmin, serverTimestamp } from './common';
 import type { QuerySnapshot, WriteBatch } from 'firebase-admin/firestore';
 import { buildEngineInput, toRunDoc, type SessionData } from './engineInput';
@@ -132,6 +133,13 @@ export const applyRun = onCall(RUN_OPTIONS, async (req) => {
   const firestore = db();
   const col = firestore.collection(`sessions/${sessionId}/assignments`);
   const keep = new Set(run.assignments.map((a) => a.seatId));
+  await recordOp({
+    label: '자동 배정 적용',
+    sessionId,
+    uid,
+    email: (req.auth?.token.email as string | undefined) ?? null,
+    refs: [session.ref, ...current.map((a) => col.doc(a.id)), ...run.assignments.map((a) => col.doc(a.seatId))],
+  });
   type Op = (b: WriteBatch) => void;
   const ops: Op[] = [
     ...current.filter((a) => !keep.has(a.id)).map((a): Op => (b) => b.delete(col.doc(a.id))),

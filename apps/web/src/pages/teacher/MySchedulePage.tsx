@@ -5,7 +5,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { FullTimetable, PersonalTimetable } from '@/components/TimetableViews';
 import { Alert, Button, Card, DownloadButton, PageTitle, Spinner } from '@/components/ui';
 import { useCollection } from '@/lib/data';
-import { sessionTitle, useSessions, type ExamSession, termWhere } from '@/lib/sessions';
+import { sessionTitle, useMySessions, type ExamSession, termWhere } from '@/lib/sessions';
 import { downloadCalendar, downloadFullTimetable, downloadPersonalTimetable, dutiesOf, type TimetableData } from '@/lib/timetable';
 
 /** 시험 일정이 나왔으면 불가 시간 제출로 안내 */
@@ -102,7 +102,7 @@ function PublishedSchedule({ session, teacherId }: { session: ExamSession; teach
 
 export function MySchedulePage() {
   const { teacherId } = useAuth();
-  const { data: sessions, loading, error } = useSessions();
+  const { data: sessions, loading, error } = useMySessions(teacherId);
   const published = sessions.filter((s) => isPublished(s.status));
   const open = sessions.filter((s) => isSetupEditable(s.status));
   const [sid, setSid] = useState<string | null>(null);

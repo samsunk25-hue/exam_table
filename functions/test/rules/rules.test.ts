@@ -74,6 +74,24 @@ describe('가입·권한 신청', () => {
   });
 });
 
+describe('되돌리기 기록', () => {
+  const op = { label: '교사 수정', kind: 'DATA', sessionId: null, paths: ['teachers/T001'], count: 1, createdBy: 'admin', undone: false };
+
+  it('관리자는 본인 이름으로 새 기록만 남기고, 고치거나 지울 수 없다', async () => {
+    await assertSucceeds(setDoc(doc(admin(), 'undoOps/O1'), op));
+    await assertFails(setDoc(doc(admin(), 'undoOps/O2'), { ...op, createdBy: 'someone' }));
+    await assertFails(setDoc(doc(admin(), 'undoOps/O3'), { ...op, undone: true }));
+    await assertFails(updateDoc(doc(admin(), 'undoOps/O1'), { undone: true }));
+    await assertFails(deleteDoc(doc(admin(), 'undoOps/O1')));
+  });
+
+  it('교사는 기록을 읽거나 쓸 수 없다', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'undoOps/O1'), op));
+    await assertFails(getDoc(doc(kim(), 'undoOps/O1')));
+    await assertFails(setDoc(doc(kim(), 'undoOps/O9'), { ...op, createdBy: 'kim' }));
+  });
+});
+
 describe('세션 상태', () => {
   it('관리자는 DRAFT로만 세션을 만들고, 상태 필드는 직접 바꿀 수 없다', async () => {
     await assertSucceeds(setDoc(doc(admin(), 'sessions/S9'), { status: 'DRAFT', updatedBy: 'admin' }));

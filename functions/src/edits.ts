@@ -3,6 +3,7 @@ import { DEFAULT_ROLE_WEIGHTS, buildEngineInput, buildSeats, validateAssignments
 import type { AssignmentDoc, SessionStatus } from '@sim/shared';
 import { db, requireAdmin, serverTimestamp } from './common';
 import { loadData } from './runs';
+import { recordOp } from './undo';
 
 interface Change {
   seatId: string;
@@ -49,8 +50,15 @@ export const applyAssignmentChanges = onCall({ timeoutSeconds: 60 }, async (req)
     throw new HttpsError('failed-precondition', `하드 조건 위반으로 저장하지 않았습니다: ${violations.slice(0, 3).map((v) => v.message).join(' / ')}`);
   }
 
-  const batch = db().batch();
   const col = db().collection(`sessions/${sessionId}/assignments`);
+  await recordOp({
+    label: kind,
+    sessionId,
+    uid,
+    email: (req.auth?.token.email as string | undefined) ?? null,
+    refs: list.map((c) => col.doc(c.seatId)),
+  });
+  const batch = db().batch();
   for (const c of list) {
     if (!c.teacherId) {
       batch.delete(col.doc(c.seatId));

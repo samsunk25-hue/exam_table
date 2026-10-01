@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, NavLink, Outlet, useOutletContext, useParams } from 'react-router';
 import { STATUS_LABEL, TRANSITIONS, isSetupEditable, type Transition } from '@sim/shared';
 import { StatusStepper } from '@/components/StatusStepper';
+import { UndoConfirm, useUndoOps } from '@/components/UndoHistory';
 import { BundleSection } from './BundleCard';
 import { Alert, Button, Card, PageTitle, Spinner, Toggle } from '@/components/ui';
 import { callTransitionSession, errorMessage } from '@/lib/firebase';
@@ -48,6 +49,22 @@ export function SessionLayout() {
         ))}
       </nav>
       <Outlet context={session} />
+    </>
+  );
+}
+
+/** 가장 최근의 (되돌리지 않은) 단계 변경을 되돌린다 = 이전 단계로 */
+function PrevStepButton({ sessionId }: { sessionId: string }) {
+  const ops = useUndoOps(sessionId);
+  const [open, setOpen] = useState(false);
+  const last = ops.data.find((o) => o.kind === 'STATUS' && !o.undone);
+  if (!last) return null;
+  return (
+    <>
+      <Button variant="ghost" onClick={() => setOpen(true)}>
+        ↶ 이전 단계로 되돌리기
+      </Button>
+      {open && <UndoConfirm op={last} onClose={() => setOpen(false)} />}
     </>
   );
 }
@@ -149,6 +166,10 @@ export function SessionOverview() {
           {TRANSITIONS[session.status].map((t) => (
             <TransitionButton key={t.to} session={session} t={t} />
           ))}
+          <PrevStepButton sessionId={session.id} />
+          <Link to="history" className="inline-flex min-h-12 items-center px-3 font-semibold text-primary-strong underline-offset-4 hover:underline">
+            작업 기록·되돌리기 →
+          </Link>
         </div>
       </Card>
 

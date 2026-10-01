@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { DEFAULT_ROLE_LABEL, SELECTABLE_ROLES, nextId, termFields, termLabel, type DefaultRole, type TeacherDoc, type TermRef, type WithId } from '@sim/shared';
 import { BundleHint } from '@/components/BundleHint';
 import { Modal } from '@/components/Modal';
+import { UndoHistory } from '@/components/UndoHistory';
 import { RosterImportDialog, TermPicker, useTermChoice } from '@/components/TermRoster';
 import { Alert, Button, Card, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection } from '@/lib/data';
@@ -89,10 +90,10 @@ function TeacherForm({
       ...termFields(term),
     };
     try {
-      if (teacher) await commitOps([{ type: 'set', ref: ref('teachers', teacher.id), data, merge: true }]);
+      if (teacher) await commitOps([{ type: 'set', ref: ref('teachers', teacher.id), data, merge: true }], '교사 수정');
       else {
         const [id] = nextId('T', takenIds);
-        await commitOps([{ type: 'set', ref: ref('teachers', id!), data: { ...data, cumulativeLoad: 0 } }]);
+        await commitOps([{ type: 'set', ref: ref('teachers', id!), data: { ...data, cumulativeLoad: 0 } }], '교사 추가');
       }
       onClose();
     } catch (err) {
@@ -104,7 +105,7 @@ function TeacherForm({
   const remove = async () => {
     setBusy(true);
     try {
-      await commitOps([{ type: 'delete', ref: ref('teachers', teacher!.id) }]);
+      await commitOps([{ type: 'delete', ref: ref('teachers', teacher!.id) }], '교사 삭제');
       onClose();
     } catch (err) {
       setError(errorMessage(err));
@@ -183,6 +184,7 @@ export function TeachersPage() {
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Teacher | 'new' | null>(null);
   const [importing, setImporting] = useState(false);
+  const [history, setHistory] = useState(false);
 
   const teachers = useMemo(() => sortTeachers(data), [data]);
   const shown = teachers.filter((t) => {
@@ -216,6 +218,9 @@ export function TeachersPage() {
           <Button onClick={() => setEditing('new')}>+ 교사 추가</Button>
           <Button variant="secondary" onClick={() => setImporting(true)}>
             다른 학기에서 불러오기
+          </Button>
+          <Button variant="ghost" onClick={() => setHistory(true)}>
+            ↶ 작업 기록·되돌리기
           </Button>
         </div>
       )}
@@ -273,6 +278,11 @@ export function TeachersPage() {
         />
       )}
       {importing && choice.current && <RosterImportDialog kind="teachers" target={choice.current} all={everyone.data} onClose={() => setImporting(false)} />}
+      {history && (
+        <Modal title="작업 기록·되돌리기" onClose={() => setHistory(false)} wide>
+          <UndoHistory sessionId={null} title="학교 공통 (교사·시험실)" />
+        </Modal>
+      )}
     </>
   );
 }

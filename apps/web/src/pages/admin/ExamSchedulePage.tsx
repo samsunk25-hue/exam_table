@@ -223,7 +223,7 @@ function ExamForm({
       ops.push({ type: 'delete', ref: ref(`sessions/${session.id}/slots`, editing.id) });
     }
     try {
-      await commitOps(ops);
+      await commitOps(ops, editing ? '시험 수정' : '시험 추가');
       toast(editing ? '시험을 수정했습니다.' : `시험 ${ids.length}건을 추가했습니다.`);
       onClose();
     } catch (e) {
@@ -391,7 +391,7 @@ function ScheduleEditor({ session }: { session: ExamSession }) {
 
   const remove = async (s: Slot) => {
     try {
-      await commitOps([{ type: 'delete', ref: ref(`sessions/${session.id}/slots`, s.id) }]);
+      await commitOps([{ type: 'delete', ref: ref(`sessions/${session.id}/slots`, s.id) }], '시험 삭제');
       toast(`${s.period}교시 ${s.grade}학년 ${s.subject} 시험을 삭제했습니다.`);
       setConfirmDelete(null);
     } catch (e) {

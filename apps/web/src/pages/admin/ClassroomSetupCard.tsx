@@ -88,7 +88,7 @@ export function ClassroomSetupCard({ rooms, term, takenIds }: { rooms: WithId<Ro
       ...plan.remove.map((r): BatchOp => ({ type: 'delete', ref: ref('rooms', r.id) })),
     ];
     try {
-      await commitOps(ops);
+      await commitOps(ops, '교실·복도 시험실 설정');
       toast(`시험실을 설정했습니다. 교실 ${examRooms}개${config.hallways ? ' + 복도' : ''} (신규 ${plan.created}, 삭제 ${plan.remove.length})`);
       setConfirming(false);
       setOpen(false);

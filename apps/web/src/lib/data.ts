@@ -12,6 +12,7 @@ import {
 import { useEffect, useState } from 'react';
 import type { WithId } from '@sim/shared';
 import { auth, db } from './firebase';
+import { captureBefore, undoable } from './undo';
 
 export interface Live<T> {
   data: T;
@@ -53,16 +54,22 @@ export type BatchOp =
   | { type: 'set'; ref: DocumentReference; data: Record<string, unknown>; merge?: boolean }
   | { type: 'delete'; ref: DocumentReference };
 
-/** Firestore 배치 한도(500)를 넘지 않게 나눠서 커밋한다. */
-export async function commitOps(ops: BatchOp[], chunk = 400): Promise<void> {
-  for (let i = 0; i < ops.length; i += chunk) {
-    const batch: WriteBatch = writeBatch(db);
-    for (const op of ops.slice(i, i + chunk)) {
-      if (op.type === 'set') batch.set(op.ref, { ...op.data, ...stamp() }, { merge: op.merge ?? false });
-      else batch.delete(op.ref);
+/**
+ * Firestore 배치 한도(500)를 넘지 않게 나눠서 커밋한다.
+ * 바꾸기 직전 상태를 되돌리기 목록에 작업 하나(label)로 남긴다 (undoable로 묶여 있으면 그 작업에 합친다).
+ */
+export async function commitOps(ops: BatchOp[], label = '자료 수정', chunk = 400): Promise<void> {
+  return undoable(label, async () => {
+    await captureBefore(ops.map((o) => o.ref));
+    for (let i = 0; i < ops.length; i += chunk) {
+      const batch: WriteBatch = writeBatch(db);
+      for (const op of ops.slice(i, i + chunk)) {
+        if (op.type === 'set') batch.set(op.ref, { ...op.data, ...stamp() }, { merge: op.merge ?? false });
+        else batch.delete(op.ref);
+      }
+      await batch.commit();
     }
-    await batch.commit();
-  }
+  });
 }
 
 export function ref(path: string, id: string): DocumentReference {

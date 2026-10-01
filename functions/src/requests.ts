@@ -1,6 +1,7 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { nextId, sessionTerm, termFields, type AccessRequestDoc } from '@sim/shared';
 import { db, requireAdmin, serverTimestamp } from './common';
+import { recordOp } from './undo';
 import { refreshUserRole } from './admins';
 
 /**
@@ -38,6 +39,7 @@ export const reviewAccessRequest = onCall(async (req) => {
       await existing.ref.set({ active: true, updatedBy: reviewer, updatedAt: serverTimestamp() }, { merge: true });
     } else {
       const [id] = nextId('T', teachers.docs.map((d) => d.id));
+      await recordOp({ label: `가입 승인: ${r.name}`, sessionId: null, uid: reviewer, refs: [db().doc(`teachers/${id}`)] });
       await db().doc(`teachers/${id}`).set({
         name: r.name,
         email: r.email,

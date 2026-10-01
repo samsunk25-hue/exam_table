@@ -33,7 +33,7 @@ const session = (id, year, semester, ago) =>
   });
 await session('TERM_25_2', 2025, 2, 3e9);
 await session('TERM_26_1', 2026, 1, 2e9);
-await session('TERM_26_2', 2026, 2, 0); // 가장 최근
+await session('TERM_26_2', 2026, 2, -86_400_000); // 가장 최근 (다른 점검 세션보다 나중)
 const teacher = (name, email, load, homeroom, t) => ({
   name, email, subject: '국어', homeroom, defaultRole: 'NORMAL', active: true, cumulativeLoad: load, ...t, updatedBy: 'seed',
 });

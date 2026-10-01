@@ -8,6 +8,7 @@ import { toast } from '@/components/Toast';
 import { Alert, Button } from '@/components/ui';
 import { commitOps, ref, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
+import { undoable } from '@/lib/undo';
 import { guessBreak, recalcPeriods, withAddedPeriod } from '@/lib/periodTimes';
 import { updateSessionSettings, type ExamSession, type PeriodTime } from '@/lib/sessions';
 
@@ -117,9 +118,11 @@ export function ExamGridEditor({
     }
     for (const s of plan.removed) ops.push({ type: 'delete', ref: ref(`sessions/${session.id}/slots`, s.id) });
     try {
-      await commitOps(ops);
-      const clean = Object.fromEntries(Object.entries(times).filter(([p, t]) => Number(p) <= periods && (t.start || t.end)));
-      await updateSessionSettings(session.id, { ...session.settings, periodTimes: clean });
+      await undoable('시험 시간표 표 입력', async () => {
+        await commitOps(ops);
+        const clean = Object.fromEntries(Object.entries(times).filter(([p, t]) => Number(p) <= periods && (t.start || t.end)));
+        await updateSessionSettings(session.id, { ...session.settings, periodTimes: clean });
+      });
       toast(`시험 ${plan.keep.size}건을 저장했습니다${plan.removed.length ? ` (삭제 ${plan.removed.length}건)` : ''}. 시험실은 자동 배치했습니다.`);
       onClose();
     } catch (e) {

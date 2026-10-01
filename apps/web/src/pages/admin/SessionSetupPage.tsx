@@ -85,7 +85,7 @@ function SlotForm({ sid, slot, slots, onClose }: { sid: string; slot: Slot | nul
     const ops: BatchOp[] = [{ type: 'set', ref: ref(`sessions/${sid}/slots`, id), data: { ...data } }];
     if (slot && slot.id !== id) ops.push({ type: 'delete', ref: ref(`sessions/${sid}/slots`, slot.id) });
     try {
-      await commitOps(ops);
+      await commitOps(ops, slot ? '시험 수정' : '시험 추가');
       onClose();
     } catch (err) {
       setError(errorMessage(err));
@@ -162,7 +162,7 @@ function PlacementEditor({ sid, slot, slots, rooms, onClose }: {
     setBusy(true);
     const ordered = sortRooms(rooms).flatMap((r) => (draft.has(r.id) ? [draft.get(r.id)!] : []));
     try {
-      await commitOps([{ type: 'set', ref: ref(`sessions/${sid}/slots`, slot.id), data: { rooms: ordered }, merge: true }]);
+      await commitOps([{ type: 'set', ref: ref(`sessions/${sid}/slots`, slot.id), data: { rooms: ordered }, merge: true }], '시험실 배치 변경');
       onClose();
     } catch (err) {
       setError(errorMessage(err));
@@ -298,13 +298,13 @@ function ScheduleCard({ session, editable, slots, rooms }: { session: ExamSessio
         count += rooms_.length;
         ops.push({ type: 'set', ref: ref(`sessions/${sid}/slots`, s.id), data: { rooms: rooms_ }, merge: true });
       }
-      await commitOps(ops);
+      await commitOps(ops, '기본 배치 자동 생성');
       return `시험 ${ops.length}건에 시험실 ${count}개를 배치했습니다. 별도시험장은 "배치" 버튼으로 추가하세요.`;
     });
 
   const deleteSlot = (s: Slot) =>
     run(async () => {
-      await commitOps([{ type: 'delete', ref: ref(`sessions/${sid}/slots`, s.id) }]);
+      await commitOps([{ type: 'delete', ref: ref(`sessions/${sid}/slots`, s.id) }], '시험 삭제');
       setConfirmDelete(null);
       return `${slotLabel(s)} 시험을 삭제했습니다.`;
     });

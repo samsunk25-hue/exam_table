@@ -2,6 +2,7 @@ import type { Transaction } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { findTransition, isSessionStatus, sumLoads, type SessionStatus } from '@sim/shared';
 import { db, increment, requireAdmin, serverTimestamp } from './common';
+import { recordOp } from './undo';
 
 /**
  * 세션 업무점수를 loadLedger에 기록하고 교사 누적 점수를 증감한다.
@@ -43,6 +44,34 @@ export const transitionSession = onCall(async (req) => {
   const reasonText = typeof reason === 'string' ? reason.trim() : '';
 
   const ref = db().doc(`sessions/${sessionId}`);
+
+  // 되돌리기 기록: 세션 상태 + (확정·잠금이면) 누적 점수 원장과 교사 점수
+  const before = await ref.get();
+  const from0 = before.get('status') as SessionStatus | undefined;
+  const t0 = from0 ? findTransition(from0, to) : undefined;
+  if (t0) {
+    const refs = [ref];
+    if ((to === 'CONFIRMED' && from0 !== 'LOCKED') || to === 'LOCKED') {
+      const [assignSnap, ledgerSnap] = await Promise.all([
+        db().collection(`sessions/${sessionId}/assignments`).get(),
+        db().collection('loadLedger').where('sessionId', '==', sessionId).get(),
+      ]);
+      const teacherIds = new Set([
+        ...assignSnap.docs.map((d) => d.get('teacherId') as string),
+        ...ledgerSnap.docs.map((d) => d.get('teacherId') as string),
+      ]);
+      for (const id of teacherIds) refs.push(db().doc(`teachers/${id}`), db().doc(`loadLedger/${sessionId}_${id}`));
+    }
+    await recordOp({
+      label: `단계 변경: ${t0.label}`,
+      kind: 'STATUS',
+      sessionId,
+      uid,
+      email: (req.auth?.token.email as string | undefined) ?? null,
+      refs,
+    });
+  }
+
   await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', '세션을 찾을 수 없습니다.');
@@ -96,5 +125,8 @@ export const deleteSession = onCall({ timeoutSeconds: 300 }, async (req) => {
   }
 
   await firestore.recursiveDelete(ref);
+  // 이 프로젝트의 되돌리기 기록도 지운다
+  const ops = await firestore.collection('undoOps').where('sessionId', '==', sessionId).get();
+  for (const d of ops.docs) await firestore.recursiveDelete(d.ref);
   return { revertedTeachers: ledger.size };
 });

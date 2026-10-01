@@ -24,6 +24,7 @@ import {
   type TermFields,
 } from '@sim/shared';
 import { commitOps, ref, type BatchOp } from './data';
+import { undoable } from './undo';
 import { guideSheet, tableSheet, type OutSheet } from './xlsx';
 
 type Teacher = WithId<TeacherDoc>;
@@ -162,7 +163,17 @@ export function replacePreview(plan: BundlePlan, ctx: BundleContext) {
  * mode = merge: 파일 내용만 추가·수정 / replace: 파일에 없는 기존 자료도 정리(교사는 사용 안 함).
  * 단계마다 커밋하므로 중간에 실패하면 앞 단계까지는 저장된다.
  */
-export async function saveBundle(
+export function saveBundle(
+  sid: string,
+  plan: BundlePlan,
+  ctx: BundleContext,
+  opts: { autoPlace: boolean; mode: SaveMode; term: TermFields },
+): Promise<string[]> {
+  // 여러 단계로 나눠 저장해도 되돌리기는 "통합 양식 업로드" 작업 하나로
+  return undoable('통합 양식 업로드', () => saveSteps(sid, plan, ctx, opts));
+}
+
+async function saveSteps(
   sid: string,
   plan: BundlePlan,
   ctx: BundleContext,

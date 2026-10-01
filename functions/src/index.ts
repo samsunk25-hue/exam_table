@@ -7,3 +7,4 @@ export { runAssignment, applyRun } from './runs';
 export { auditSession, auditSessionChild, auditTeacher, auditRoom, auditAdmin } from './audit';
 export { applyAssignmentChanges } from './edits';
 export { reviewAccessRequest } from './requests';
+export { undoOperation } from './undo';

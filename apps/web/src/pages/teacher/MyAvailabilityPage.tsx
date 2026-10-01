@@ -14,7 +14,7 @@ import { Alert, Button, Card, PageTitle, Spinner, Table, Td } from '@/components
 import { cellKey, deleteAvailability, submitAvailability, type Availability } from '@/lib/availability';
 import { useCollection } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
-import { sessionTitle, useSessions, type ExamSession } from '@/lib/sessions';
+import { sessionTitle, useMySessions, type ExamSession } from '@/lib/sessions';
 
 function MyAvailabilityForm({ session, teacherId }: { session: ExamSession; teacherId: string }) {
   const sid = session.id;
@@ -159,7 +159,7 @@ function MyAvailabilityForm({ session, teacherId }: { session: ExamSession; teac
 
 export function MyAvailabilityPage() {
   const { teacherId } = useAuth();
-  const { data: sessions, loading, error } = useSessions();
+  const { data: sessions, loading, error } = useMySessions(teacherId);
   const open = sessions.filter((s) => isSetupEditable(s.status));
   const [sid, setSid] = useState<string | null>(null);
   const current = open.find((s) => s.id === sid) ?? open[0];

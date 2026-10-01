@@ -8,6 +8,7 @@ import { toast } from '@/components/Toast';
 import { Alert, Button, Spinner } from '@/components/ui';
 import { commitOps, ref, type BatchOp } from '@/lib/data';
 import { db, errorMessage } from '@/lib/firebase';
+import { undoable } from '@/lib/undo';
 import { sessionTitle, updateSessionSettings, useSessions, type ExamSession } from '@/lib/sessions';
 
 type Slot = WithId<SlotDoc>;
@@ -76,10 +77,12 @@ export function ScheduleImportDialog({
         const data: SlotDoc = { ...s, date, rooms: placements };
         ops.push({ type: 'set', ref: ref(`sessions/${session.id}/slots`, slotIdOf(date, s.period, s.grade)), data: { ...data } });
       }
-      await commitOps(ops);
-      if (picked.settings.periodTimes && Object.keys(picked.settings.periodTimes).length) {
-        await updateSessionSettings(session.id, { ...session.settings, periodTimes: picked.settings.periodTimes });
-      }
+      await undoable('다른 프로젝트 시험 시간표 불러오기', async () => {
+        await commitOps(ops);
+        if (picked.settings.periodTimes && Object.keys(picked.settings.periodTimes).length) {
+          await updateSessionSettings(session.id, { ...session.settings, periodTimes: picked.settings.periodTimes });
+        }
+      });
       toast(`시험 ${source.length}건을 불러왔습니다${dropped ? ` (없어진 시험실 배치 ${dropped}개 제외)` : ''}.`);
       onClose();
     } catch (e) {

@@ -61,6 +61,10 @@ export const callApplyChanges = httpsCallable<
   { changed: number }
 >(functions, 'applyAssignmentChanges', { timeout: 60_000 });
 
+export const callUndoOperation = httpsCallable<{ opId: string; preview?: boolean }, { ops: { id: string; label: string }[]; paths: number }>(
+  functions,
+  'undoOperation',
+);
 export const callAddAdmin = httpsCallable<{ email: string }, { email: string; applied: boolean }>(functions, 'addAdmin');
 export const callRemoveAdmin = httpsCallable<{ email: string }, { email: string }>(functions, 'removeAdmin');
 export const callReviewAccessRequest = httpsCallable<{ uid: string; approve: boolean; note?: string }, { status: string }>(

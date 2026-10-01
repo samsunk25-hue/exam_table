@@ -128,7 +128,7 @@ export function RosterImportDialog({ kind, target, all, onClose }: { kind: Roste
       });
     }
     try {
-      await commitOps(ops);
+      await commitOps(ops, `${KIND_LABEL[kind]} 명단 불러오기`);
       toast(`${KIND_LABEL[kind]} ${fresh.length}${kind === 'teachers' ? '명을' : '개를'} ${termLabel(target)}(으)로 불러왔습니다.`);
       onClose();
     } catch (e) {

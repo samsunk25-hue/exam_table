@@ -66,7 +66,7 @@ check('모든 시험에 시험실 배치', slotDocs.docs.every((d) => d.get('roo
 
 await go(page, `/admin/sessions/${SID}/assign`);
 await page.getByRole('checkbox', { name: /대안 시나리오/ }).uncheck();
-await page.getByRole('button', { name: '자동 배정 실행' }).click();
+await page.getByRole('button', { name: '자동 배정 실행', exact: true }).click();
 await page.getByText(/^성공률$/).waitFor({ timeout: 60000 });
 const metrics = await page.locator('main').innerText();
 check('자동 배정 성공률 100%', /성공률\s*100%/.test(metrics));

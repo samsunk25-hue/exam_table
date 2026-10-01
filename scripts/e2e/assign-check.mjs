@@ -59,7 +59,7 @@ for (const date of ['2026-10-12', '2026-10-13']) {
 
 const { browser, page, errors } = await openApp();
 await go(page, `/admin/sessions/${SID}/assign`);
-await page.getByRole('button', { name: '자동 배정 실행' }).click();
+await page.getByRole('button', { name: '자동 배정 실행', exact: true }).click();
 await page.getByText('다중 시나리오 비교').waitFor({ timeout: 60000 });
 const compare = page.locator('section', { hasText: '다중 시나리오 비교' }).first();
 const heads = await compare.locator('thead th').allInnerTexts();

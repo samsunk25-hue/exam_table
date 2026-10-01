@@ -27,7 +27,7 @@ await db.doc(`sessions/${SID}`).update({ status: 'DRAFT' }); // 다시 실행해
   const { browser, page, errors } = await openApp();
   await go(page, `/admin/sessions/${SID}/assign`);
   await page.getByRole('checkbox', { name: /대안 시나리오/ }).uncheck();
-  await page.getByRole('button', { name: '자동 배정 실행' }).click();
+  await page.getByRole('button', { name: '자동 배정 실행', exact: true }).click();
   await page.getByRole('button', { name: '이 결과 적용' }).click({ timeout: 60000 });
   await page.getByRole('status').filter({ hasText: '적용했습니다' }).waitFor({ timeout: 60000 });
   await db.doc(`sessions/${SID}`).update({ status: 'PUBLISHED' }); // 상태 전환은 함수 점검에서 따로 확인

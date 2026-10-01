@@ -21,6 +21,7 @@ import { termWhere } from '@/lib/sessions';
 import { callApplyRun, callRunAssignment, errorMessage } from '@/lib/firebase';
 import { sortRooms } from './RoomsPage';
 import { useCurrentSession } from './SessionPage';
+import { WeightSimulator } from './WeightSimulator';
 
 type Run = WithId<RunDoc & { createdAt?: Timestamp; appliedAt?: Timestamp }>;
 
@@ -276,6 +277,25 @@ export function SessionAssignPage() {
           {slots.data.length === 0 && <span className="ml-3 text-muted">기본 설정에서 시험 일정을 먼저 등록하세요.</span>}
         </div>
       </Card>
+
+      <WeightSimulator
+        session={session}
+        keepManual={keepManual}
+        disabled={!editable || busy !== null}
+        onRun={async (weights) => {
+          setBusy('run');
+          setError(null);
+          try {
+            const { data } = await callRunAssignment({ sessionId: sid, keepManual, scenarios: false, weights });
+            setSelectedId(data.runId);
+            toast(`조정한 가중치로 실행했습니다. 성공률 ${pct(data.metrics.successRate)}. 아래 결과를 확인하고 적용하세요.`);
+          } catch (e) {
+            setError(errorMessage(e));
+          } finally {
+            setBusy(null);
+          }
+        }}
+      />
 
       {run && batch.length > 1 && (
         <ScenarioCompare runs={batch} selectedId={run.id} appliedRunId={appliedRunId} onSelect={setSelectedId} />

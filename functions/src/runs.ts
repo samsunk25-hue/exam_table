@@ -1,5 +1,5 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
-import { SCENARIOS, runAssignment as runEngine, scenarioInput, validateAssignments, type ScenarioKey } from '@sim/engine';
+import { SCENARIOS, runAssignment as runEngine, scenarioInput, validateAssignments, type EngineInput, type ScenarioKey, type Weights } from '@sim/engine';
 import {
   isSetupEditable,
   type AssignmentDoc,
@@ -64,6 +64,44 @@ export async function loadData(sessionId: string, useBaseTimetable: boolean) {
   return { data, current: withIds<AssignmentDoc>(assignments) };
 }
 
+// 시뮬레이션에서 바꿀 수 있는 가중치와 범위
+const WEIGHT_RANGE: Partial<Record<keyof Weights, [number, number]>> = {
+  baseMatch: [0, 200],
+  lowLoad: [0, 200],
+  highLoad: [-200, 0],
+  notHomeroomGrade: [0, 100],
+  consecutive: [-1000, 0],
+  hallwayMatch: [0, 100],
+  examSubjectHallway: [0, 200],
+  examSubjectRoom: [-200, 0],
+};
+const WEIGHT_LABEL: Partial<Record<keyof Weights, string>> = {
+  baseMatch: '기초시간표',
+  lowLoad: '부담 적은 교사',
+  highLoad: '부담 많은 교사',
+  notHomeroomGrade: '다른 학년 담임',
+  consecutive: '연속 감독',
+  hallwayMatch: '복도전담',
+  examSubjectHallway: '출제 교사 복도',
+  examSubjectRoom: '출제 교사 교실',
+};
+
+function sanitizeWeights(raw: unknown): Partial<Weights> | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const out: Partial<Weights> = {};
+  for (const [k, range] of Object.entries(WEIGHT_RANGE) as [keyof Weights, [number, number]][]) {
+    const v = (raw as Record<string, unknown>)[k];
+    if (typeof v === 'number' && Number.isFinite(v)) out[k] = Math.min(range[1], Math.max(range[0], Math.round(v)));
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function describeWeights(w: Partial<Weights>): string {
+  return Object.entries(w)
+    .map(([k, v]) => `${WEIGHT_LABEL[k as keyof Weights] ?? k} ${v! > 0 ? '+' : ''}${v}`)
+    .join(', ');
+}
+
 function args(data: unknown): Record<string, unknown> {
   return (data ?? {}) as Record<string, unknown>;
 }
@@ -71,7 +109,8 @@ function args(data: unknown): Record<string, unknown> {
 /** 자동 배정 실행 → runs 문서로 저장 (실제 배정은 바꾸지 않는다) */
 export const runAssignment = onCall(RUN_OPTIONS, async (req) => {
   const uid = requireAdmin(req);
-  const { sessionId, keepManual, scenarios } = args(req.data);
+  const { sessionId, keepManual, scenarios, weights } = args(req.data);
+  const custom = sanitizeWeights(weights);
   if (typeof sessionId !== 'string') throw new HttpsError('invalid-argument', '세션 ID가 필요합니다.');
   const keep = keepManual !== false;
 
@@ -83,13 +122,22 @@ export const runAssignment = onCall(RUN_OPTIONS, async (req) => {
   const input = buildEngineInput(data);
 
   // 다중 시나리오: 기본안 + A(형평성)·B(연속 배제)·C(출제 교사 복도) — 같은 batchId로 묶는다
+  // 가중치 시뮬레이션에서 정한 값이 있으면 그 안 하나만 실행한다
   const keys = scenarios === true ? SCENARIOS.map((s) => s.key) : (['BASE'] as ScenarioKey[]);
+  const list: { scenario: { key: string; label: string; description: string }; input: EngineInput }[] = custom
+    ? [
+        {
+          scenario: { key: 'CUSTOM', label: '사용자 가중치', description: describeWeights(custom) },
+          input: { ...input, settings: { ...input.settings, weights: { ...input.settings.weights, ...custom } } },
+        },
+      ]
+    : SCENARIOS.filter((s) => keys.includes(s.key)).map((s) => ({ scenario: s, input: scenarioInput(input, s) }));
   const col = db().collection(`sessions/${sessionId}/runs`);
   const batchId = col.doc().id;
   const out: { runId: string; scenario: string; metrics: RunDoc['metrics']; unassigned: number }[] = [];
-  for (const scenario of SCENARIOS.filter((s) => keys.includes(s.key))) {
+  for (const { scenario, input: scenarioIn } of list) {
     const t0 = Date.now();
-    const result = runEngine(scenarioInput(input, scenario));
+    const result = runEngine(scenarioIn);
     const run = toRunDoc(result, {
       createdBy: uid,
       useBaseTimetable: session.useBaseTimetable,

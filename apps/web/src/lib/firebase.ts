@@ -40,7 +40,7 @@ export const callTransitionSession = httpsCallable<
 export const callDeleteSession = httpsCallable<{ sessionId: string }, { revertedTeachers: number }>(functions, 'deleteSession');
 
 export const callRunAssignment = httpsCallable<
-  { sessionId: string; keepManual: boolean; scenarios: boolean },
+  { sessionId: string; keepManual: boolean; scenarios: boolean; weights?: Record<string, number> },
   {
     runId: string;
     batchId: string;

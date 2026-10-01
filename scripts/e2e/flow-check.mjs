@@ -74,7 +74,7 @@ check('3. 교사 불가시간 제출 → 관리자 승인', true);
 
 // 4. 자동 배정(대안 포함) → 기본안 적용
 await go(A.page, `/admin/sessions/${sid}/assign`);
-await A.page.getByRole('button', { name: '자동 배정 실행' }).click();
+await A.page.getByRole('button', { name: '자동 배정 실행', exact: true }).click();
 await A.page.getByText('다중 시나리오 비교').waitFor({ timeout: 90000 });
 await A.page.getByRole('button', { name: '이 결과 적용' }).click();
 await A.page.getByText('현재 적용됨').waitFor({ timeout: 60000 });

@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router';
 import { useAuth } from '@/auth/AuthProvider';
-import { APP_NAME, APP_SUBTITLE, HeroImage } from '@/components/Brand';
+import { AppTitle, HeroImage } from '@/components/Brand';
 import { Button } from '@/components/ui';
 import { usingEmulators } from '@/lib/firebase';
 
@@ -20,21 +20,19 @@ export function AppShell({ nav, modeLabel }: { nav: NavItem[]; modeLabel: string
       )}
       <header className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <HeroImage className="hidden h-16 w-[122px] shrink-0 rounded-xl object-cover sm:block" />
-            <div className="min-w-0">
-              <div className="text-[1.3rem] leading-tight font-bold">
-                <span className="text-primary-strong">{APP_NAME}</span>
-                <span className="text-ink">: {APP_SUBTITLE}</span>
-              </div>
-              <div className="truncate text-sm text-muted">
-                {modeLabel} · {user?.email}
-              </div>
+          <div className="min-w-0">
+            <AppTitle />
+            <div className="mt-1 truncate text-sm text-muted">
+              {modeLabel} · {user?.email}
             </div>
           </div>
-          <Button variant="secondary" onClick={() => void signOut()}>
-            로그아웃
-          </Button>
+          {/* 오른쪽 빈 공간에 대문 그림 (좁은 화면에서는 숨김) */}
+          <div className="flex shrink-0 items-center gap-4">
+            <HeroImage className="hidden h-20 w-[152px] rounded-xl object-cover shadow-sm md:block" />
+            <Button variant="secondary" onClick={() => void signOut()}>
+              로그아웃
+            </Button>
+          </div>
         </div>
         <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-2 pb-2" aria-label="주 메뉴">
           {nav.map((item) => (

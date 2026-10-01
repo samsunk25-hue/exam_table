@@ -3,6 +3,8 @@
 /* 디자인 토큰 (PRD 7장) */
 @theme {
   --font-sans: 'Pretendard Variable', Pretendard, 'Malgun Gothic', system-ui, sans-serif;
+  /* 앱 제목 전용 필기체 */
+  --font-hand: 'Nanum Pen Script', 'Pretendard Variable', cursive;
 
   --color-bg: #f8f9fa;
   --color-surface: #ffffff;

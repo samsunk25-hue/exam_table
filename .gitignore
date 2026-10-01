@@ -25,3 +25,6 @@ hero-source.png
 /*.mp4
 # AI 키 (로컬 에뮬레이터용, 커밋 금지)
 .secret.local
+
+# 비교용 외부 프로그램 파일 (커밋 금지)
+/gamdog_*

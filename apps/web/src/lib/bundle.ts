@@ -24,6 +24,7 @@ import {
   type TermFields,
 } from '@sim/shared';
 import { commitOps, ref, type BatchOp } from './data';
+import { periodTimesFromSlots } from './periodTimes';
 import { undoable } from './undo';
 import { guideSheet, tableSheet, type OutSheet } from './xlsx';
 
@@ -231,6 +232,9 @@ async function saveSteps(
     // 기존 유지면 파일에 없는 시험은 그대로 둔다
     const removed = replace ? ctx.slots.filter((s) => !keep.has(s.id)) : [];
     for (const s of removed) ops.push({ type: 'delete', ref: ref(slotPath, s.id) });
+    // 파일의 시험 시각으로 교시별 기본 시간도 채운다 (시험 추가·표 입력 때 자동 입력)
+    const times = periodTimesFromSlots(plan.slots);
+    if (Object.keys(times).length) ops.push({ type: 'set', ref: ref('sessions', sid), data: { settings: { periodTimes: times } }, merge: true });
     await commitOps(ops);
     slotsAfter = [
       ...plan.slots.map((s) => ({ ...s, rooms: existing.get(s.id)?.rooms ?? [] })),

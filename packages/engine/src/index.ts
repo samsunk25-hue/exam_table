@@ -7,6 +7,9 @@ export { validateAssignments, seatCandidates, type SeatCandidate } from './valid
 export {
   DEFAULT_WEIGHTS,
   DEFAULT_ROLE_WEIGHTS,
+  DEFAULT_CLASS_WEIGHT,
+  classLoadOf,
+  classTimes,
   ROLE_LABEL,
   EXCLUSION_LABEL,
   buildSeats,

@@ -1,9 +1,10 @@
+import type { ReactNode } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { AnimalParade } from '@/components/AnimalParade';
 import { AppFooter, AppTitle, HeroImage } from '@/components/Brand';
 import { NotificationBell } from '@/components/NotificationBell';
-import { HeaderTermPicker, TermProvider } from '@/components/TermRoster';
+import { TermProvider } from '@/components/TermRoster';
 import { Button } from '@/components/ui';
 import { usingEmulators } from '@/lib/firebase';
 
@@ -23,7 +24,16 @@ export function AppShell({ nav, modeLabel, termPicker = false }: { nav: NavItem[
   );
 }
 
-function Shell({ nav, modeLabel, termPicker }: { nav: NavItem[]; modeLabel: string; termPicker: boolean }) {
+function Shell({ nav, modeLabel }: { nav: NavItem[]; modeLabel: string; termPicker: boolean }) {
+  return (
+    <BrandFrame nav={nav} modeLabel={modeLabel}>
+      <Outlet />
+    </BrandFrame>
+  );
+}
+
+/** 머리글(제목·대문 그림·동물) + 본문 + 바닥글. 승인 전 화면은 메뉴·알림 없이 같은 틀을 쓴다 */
+export function BrandFrame({ nav = [], modeLabel, bell = true, children }: { nav?: NavItem[]; modeLabel: string; bell?: boolean; children: ReactNode }) {
   const { signOut } = useAuth();
 
   return (
@@ -42,8 +52,7 @@ function Shell({ nav, modeLabel, termPicker }: { nav: NavItem[]; modeLabel: stri
             <HeroImage src="/hero.jpg" className="h-28 w-auto max-w-full rounded-xl object-contain shadow-sm" />
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-0">
-            {termPicker && <HeaderTermPicker />}
-            <NotificationBell />
+            {bell && <NotificationBell />}
             <Button variant="secondary" className="shrink-0" onClick={() => void signOut()}>
               로그아웃
             </Button>
@@ -68,7 +77,7 @@ function Shell({ nav, modeLabel, termPicker }: { nav: NavItem[]; modeLabel: stri
         </nav>
       </header>
       <main className="mx-auto max-w-[1440px] px-4 py-6 lg:px-8">
-        <Outlet />
+        {children}
       </main>
       <AppFooter />
     </div>

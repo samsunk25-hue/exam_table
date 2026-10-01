@@ -47,6 +47,7 @@ export const EXCLUSION_LABEL: Record<ExclusionReason, string> = {
   BUSY: '동시간 타 감독',
   AFTER_EXTENDED: '연장 감독 인접',
   EXAM_WRITER: '출제 과목 시험',
+  IN_CLASS: '수업 중',
 };
 
 /** YYYY-MM-DD → 1=월 ... 7=일 */
@@ -72,6 +73,46 @@ export interface Context {
   constraintsByTeacher: Map<string, Constraint[]>;
   /** `${teacherId}|${weekday}|${period}|${grade}|${classNo}` */
   baseMatch: Set<string>;
+  /** 시험 없는 학년 수업 중: `${teacherId}|${date}|${period}` */
+  inClass: Set<string>;
+  /** 교사별 이번 시험 기간 수업 업무 점수 (수업 시간 × classWeight) */
+  classLoad: Map<string, number>;
+}
+
+export const DEFAULT_CLASS_WEIGHT = 0.8;
+
+/**
+ * 시험 없는 학년은 수업할 때, 교사별로 그 수업 시간을 센다 (`${teacherId}|${date}|${period}` 집합).
+ * 같은 날짜·교시에 시험(자습 포함)이 있는 학년은 수업하지 않는다고 본다.
+ */
+export function classTimes(
+  slots: { date: string; period: number; grade: number }[],
+  baseTimetable: { teacherId: string; weekday: number; period: number; grade: number }[],
+): Set<string> {
+  const out = new Set<string>();
+  const examGrades = new Map<string, Set<number>>();
+  for (const s of slots) {
+    const k = timeKey(s.date, s.period);
+    examGrades.set(k, new Set([...(examGrades.get(k) ?? []), s.grade]));
+  }
+  for (const [k, grades] of examGrades) {
+    const [date, p] = k.split('|');
+    const weekday = weekdayOf(date!);
+    for (const b of baseTimetable) {
+      if (b.weekday === weekday && b.period === Number(p) && !grades.has(b.grade)) out.add(`${b.teacherId}|${k}`);
+    }
+  }
+  return out;
+}
+
+/** 교사별 수업 업무 점수 */
+export function classLoadOf(times: Set<string>, weight = DEFAULT_CLASS_WEIGHT): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const k of times) {
+    const t = k.split('|')[0]!;
+    m.set(t, Math.round(((m.get(t) ?? 0) + weight) * 1000) / 1000);
+  }
+  return m;
 }
 
 export function buildSeats(input: EngineInput, roleWeights: RoleWeights): Seat[] {
@@ -126,7 +167,13 @@ export function buildContext(input: EngineInput): Context {
   const writerWeights = writer === 'NONE' ? {} : { examSubjectHallway: 60, examSubjectRoom: -60 };
   const weights = { ...DEFAULT_WEIGHTS, ...writerWeights, ...input.settings.weights };
   const roleWeights = { ...DEFAULT_ROLE_WEIGHTS, ...input.settings.roleWeights };
-  const seats = buildSeats(input, roleWeights);
+  // 감독 없음으로 정한 자리는 배정 대상에서 뺀다
+  const skip = new Set(input.settings.skipSeats ?? []);
+  const seats = buildSeats(input, roleWeights).filter((s) => !skip.has(s.id));
+
+  // 시험 없는 학년은 수업: 그 시간 수업하는 교사는 감독에서 빼고, 수업 시간도 업무 점수로 센다
+  const inClass = input.settings.classDuringExam ? classTimes(input.slots, input.baseTimetable) : new Set<string>();
+  const classLoad = classLoadOf(inClass, input.settings.classWeight ?? DEFAULT_CLASS_WEIGHT);
 
   const unavailable = new Set<string>();
   for (const a of input.availability) {
@@ -160,6 +207,8 @@ export function buildContext(input: EngineInput): Context {
     unavailable,
     constraintsByTeacher,
     baseMatch,
+    inClass,
+    classLoad,
   };
 }
 
@@ -184,6 +233,7 @@ export function staticHardReason(ctx: Context, teacher: Teacher, seat: Seat): Ex
   // 일반 교사는 교실·복도 모두 가능, 복도전담 교사는 복도만
   if (teacher.defaultRole === 'HALLWAY' && seat.role !== 'HALLWAY') return 'ROLE_MISMATCH';
   if (seat.periods.some((p) => ctx.unavailable.has(`${teacher.id}|${seat.date}|${p}`))) return 'UNAVAILABLE';
+  if (seat.periods.some((p) => ctx.inClass.has(`${teacher.id}|${seat.date}|${p}`))) return 'IN_CLASS';
   // 출제 교사는 자기 과목 시험 시간에 교실 감독 불가 (복도 대기는 가능)
   if (ctx.input.settings.examWriterRule === 'NO_ROOM' && teacher.subject && teacher.subject === seat.subject && seat.role !== 'HALLWAY') {
     return 'EXAM_WRITER';

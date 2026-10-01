@@ -319,3 +319,71 @@ describe('출제 교사 규칙', () => {
     expect(r.assignments).toHaveLength(1);
   });
 });
+
+describe('일부 학년만 시험 (수업 중 교사 제외)', () => {
+  // 월요일 1교시: 1학년만 시험, 2학년은 수업. A는 그 시간 2학년 수업, B는 수업 없음
+  const input = (classDuringExam: boolean) =>
+    emptyInput({
+      teachers: [teacher('A'), teacher('B')],
+      rooms: [{ id: 'R11', name: '1-1', chiefCount: 1, assistantCount: 0, spaceType: 'CLASSROOM' }],
+      slots: [{ id: 'S1', date: '2026-10-12', period: 1, grade: 1, subject: '국어', type: 'EXAM' }],
+      groups: [{ id: 'G1', slotId: 'S1', roomId: 'R11', grade: 1, classNo: 1, roomType: 'NORMAL' }],
+      baseTimetable: [{ teacherId: 'A', weekday: 1, period: 1, grade: 2, classNo: 3 }],
+      settings: { useBaseTimetable: true, classDuringExam },
+    });
+
+  it('켜면: 시험 없는 학년을 가르치는 교사는 감독하지 않는다', () => {
+    const on = input(true);
+    expect(runAssignment(on).assignments.map((a) => a.teacherId)).toEqual(['B']);
+    expect(validateAssignments(on, [{ seatId: 'G1_CHIEF_1', teacherId: 'A' }]).map((v) => v.reason)).toContain('IN_CLASS');
+  });
+
+  it('끄면: 제한 없음', () => {
+    expect(validateAssignments(input(false), [{ seatId: 'G1_CHIEF_1', teacherId: 'A' }])).toEqual([]);
+  });
+});
+
+describe('감독 없음 자리', () => {
+  it('배정하지 않고 미배정으로도 세지 않는다', () => {
+    const input = oneRoom({ teachers: [teacher('A'), teacher('B')] });
+    input.settings.skipSeats = ['G1_ASSISTANT_1'];
+    const r = runAssignment(input);
+    expect(r.assignments.map((a) => a.seatId)).toEqual(['G1_CHIEF_1']);
+    expect(r.unassigned).toHaveLength(0);
+    expect(r.metrics.seatCount).toBe(1);
+  });
+});
+
+describe('수업 시간도 업무 점수', () => {
+  it('수업 시간을 업무 점수로 세어 형평성에 반영한다', () => {
+    // 월 1·3교시 1학년 시험 / A는 1교시에 2학년 수업 → 1교시는 B, 3교시는 점수가 낮은 A (A = 수업 0.8 + 감독 1)
+    const input = emptyInput({
+      teachers: [teacher('A'), teacher('B')],
+      rooms: [{ id: 'R11', name: '1-1', chiefCount: 1, assistantCount: 0, spaceType: 'CLASSROOM' }],
+      slots: [
+        { id: 'S1', date: '2026-10-12', period: 1, grade: 1, subject: '국어', type: 'EXAM' },
+        { id: 'S2', date: '2026-10-12', period: 3, grade: 1, subject: '수학', type: 'EXAM' },
+      ],
+      groups: [
+        { id: 'G1', slotId: 'S1', roomId: 'R11', grade: 1, classNo: 1, roomType: 'NORMAL' },
+        { id: 'G2', slotId: 'S2', roomId: 'R11', grade: 1, classNo: 1, roomType: 'NORMAL' },
+      ],
+      baseTimetable: [{ teacherId: 'A', weekday: 1, period: 1, grade: 2, classNo: 1 }],
+      settings: { useBaseTimetable: true, classDuringExam: true },
+    });
+    const r = runAssignment(input);
+    expect(r.assignments.map((a) => a.teacherId)).toEqual(['B', 'A']);
+    expect(r.metrics.sessionLoads.A).toBe(1.8); // 수업 1시간 0.8 + 정감독 1
+    expect(r.metrics.sessionLoads.B).toBe(1);
+  });
+});
+
+describe('임시 감독자', () => {
+  it('교사가 충분하면 쓰지 않고, 모자랄 때만 쓴다', () => {
+    const tmp = { ...teacher('X'), temporary: true };
+    const enough = oneRoom({ teachers: [teacher('A'), teacher('B'), tmp] });
+    expect(runAssignment(enough).assignments.map((a) => a.teacherId).sort()).toEqual(['A', 'B']);
+    const short = oneRoom({ teachers: [teacher('A'), tmp] });
+    expect(runAssignment(short).assignments.map((a) => a.teacherId).sort()).toEqual(['A', 'X']);
+  });
+});

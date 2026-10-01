@@ -58,7 +58,7 @@ async function approveIn(adminPage, name, approve = true, note = '') {
   await u.page.getByLabel('학년도').fill('2026');
   await u.page.getByLabel('학기').selectOption('2');
   await u.page.getByRole('button', { name: '교사(사용자) 승인 신청' }).click();
-  await u.page.getByText('교사(사용자) 승인 대기 중입니다.').waitFor();
+  await u.page.getByText('승인을 기다리는 중입니다.').waitFor();
   check('미등록 계정: 가입 신청 → 승인 대기', true);
 
   await approveIn(admin.page, '신규교사');
@@ -68,8 +68,8 @@ async function approveIn(adminPage, name, approve = true, note = '') {
   check('승인 → 교사 명단 등록 + 화면이 자동으로 교사 화면으로', t?.get('name') === '신규교사' && t?.get('subject') === '과학');
   check('신청한 학교·학기 명단으로 등록', t?.get('term') === '가입중학교|2026|2', t?.get('term'));
   // 교사 관리에서 그 학교·학기로 바로 구분되어 보임
-  await go(admin.page, '/admin/teachers');
-  await admin.page.getByLabel('학교·학기').selectOption('가입중학교|2026|2');
+  await db.doc('sessions/E2E_JOIN').set({ schoolName: '가입중학교', year: 2026, semester: 2, examName: '가입 점검', status: 'DRAFT', settings: { useBaseTimetable: false }, createdAt: new Date(), updatedBy: 'seed' });
+  await go(admin.page, '/admin/sessions/E2E_JOIN/teachers');
   check('교사 관리: 가입한 학교·학기 명단에 표시', await admin.page.getByRole('cell', { name: '신규교사' }).waitFor({ timeout: 10000 }).then(() => true).catch(() => false));
   check('신청자 화면 콘솔 오류 없음', u.errors.length === 0, u.errors.join(' / '));
   await u.browser.close();
@@ -86,7 +86,7 @@ async function approveIn(adminPage, name, approve = true, note = '') {
   await go(k.page, '/me/admin-request');
   await k.page.getByLabel('이름').fill('김국어');
   await k.page.getByRole('button', { name: '관리자 승인 신청' }).click();
-  await k.page.getByText('관리자 승인 대기 중입니다.').waitFor();
+  await k.page.getByText('승인을 기다리는 중입니다.').waitFor();
   await approveIn(admin.page, '김국어');
   await k.page.waitForURL((u) => u.pathname === '/admin', { timeout: 20000 });
   check('교사 → 관리자 신청 승인 → 관리자 화면으로', true, k.page.url());
@@ -100,7 +100,7 @@ async function approveIn(adminPage, name, approve = true, note = '') {
   await r.page.getByLabel('이름').fill('반려대상');
   await r.page.getByLabel('학교명').fill('가입중학교');
   await r.page.getByRole('button', { name: '교사(사용자) 승인 신청' }).click();
-  await r.page.getByText('승인 대기 중').waitFor();
+  await r.page.getByText('승인을 기다리는 중입니다.').waitFor();
   await approveIn(admin.page, '반려대상', false, '우리 학교 교사가 아닙니다');
   await r.page.getByText(/반려되었습니다: 우리 학교 교사가 아닙니다/).waitFor({ timeout: 15000 });
   check('반려 사유가 신청자에게 표시, 다시 신청 가능', await r.page.getByRole('button', { name: /승인 신청/ }).isVisible());
@@ -109,4 +109,5 @@ async function approveIn(adminPage, name, approve = true, note = '') {
 
 check('관리자 화면 콘솔 오류 없음', admin.errors.length === 0, admin.errors.join(' / '));
 await admin.browser.close();
+await db.recursiveDelete(db.doc('sessions/E2E_JOIN'));
 process.exit(failures ? 1 : 0);

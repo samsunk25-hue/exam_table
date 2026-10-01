@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { Link } from 'react-router';
 import {
   PLACEMENT_ROOM_TYPE_LABEL,
   SLOT_TYPE_LABEL,
@@ -22,7 +23,7 @@ import { Modal } from '@/components/Modal';
 import { Alert, Button, Card, Field, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
-import { termWhere, type ExamSession } from '@/lib/sessions';
+import { termWhere, type ExamSession, useSessionTeachers } from '@/lib/sessions';
 import { ScheduleEditor } from './ExamSchedulePage';
 import { useCurrentSession } from './SessionPage';
 import { sortRooms } from './RoomsPage';
@@ -492,9 +493,15 @@ function TimetableCard({ session, teachers, timetable }: {
     <Card>
       <h2 className="text-lg font-bold">기초시간표</h2>
       <p className="mt-1 text-muted">
-        시험 시간에 해당 반을 원래 가르치던 교사에게 가점(+50)을 줍니다. 현재 교사 {timetable.length}명, 수업 {total}건. 시간표는 개요의 통합 양식(교사별
-        시간표 시트)으로 올립니다.
+        시험 시간에 해당 반을 원래 가르치던 교사에게 가점(+50)을 주고, 시험 없는 학년 수업이 있는 교사는 그 시간 감독에서 빼며 수업 시간도 업무 점수로 셉니다.
+        현재 교사 {timetable.length}명, 수업 {total}건.
       </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Link to=".." relative="path" className="inline-flex min-h-12 items-center rounded-xl bg-primary px-5 font-semibold text-white hover:bg-primary-strong">
+          기초시간표 올리기 (개요의 통합 양식) →
+        </Link>
+        <span className="text-sm text-muted">통합 양식을 내려받으면 교사마다 시간표 시트가 들어 있습니다. 채워서 올리면 됩니다.</span>
+      </div>
       {timetable.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
           {[...timetable]
@@ -516,7 +523,7 @@ function TimetableCard({ session, teachers, timetable }: {
 export function SessionSetupPage() {
   const session = useCurrentSession();
   const sid = session.id;
-  const teachers = useCollection<TeacherDoc>('teachers', termWhere(session));
+  const teachers = useSessionTeachers(session);
   const timetable = useCollection<BaseTimetableDoc>(`sessions/${sid}/baseTimetable`);
 
   const loading = teachers.loading || timetable.loading;

@@ -32,15 +32,15 @@ for (const g of [1, 2]) {
 const { browser, page, errors } = await openApp();
 await go(page, `/admin/sessions/${SID}/schedule`);
 
-// 1. 교시별 기본 시간 (1교시 09:00~09:45)
-const row1 = page.locator('div.grid', { hasText: '1교시' }).filter({ has: page.getByText('시작', { exact: true }) }).first();
-await row1.locator('button[aria-haspopup]').first().click();
-await page.getByRole('dialog', { name: '시작 선택' }).getByRole('button', { name: '9', exact: true }).click();
-await page.getByRole('dialog', { name: '시작 선택' }).getByRole('button', { name: '00', exact: true }).click();
-await row1.locator('button[aria-haspopup]').nth(1).click();
-await page.getByRole('dialog', { name: '종료 선택' }).getByRole('button', { name: '9', exact: true }).click();
-await page.getByRole('dialog', { name: '종료 선택' }).getByRole('button', { name: '45', exact: true }).click();
-check('시계로 시간 선택', (await row1.innerText()).includes('09:00') && (await row1.innerText()).includes('09:45'));
+// 1. 교시별 기본 시간: 시험 시간 45분 · 쉬는 시간 15분 · 1교시 시작 9:00 → 모든 교시 자동
+const bar = page.getByText('1교시 시작만 넣으면').locator('..');
+await bar.getByLabel('시험 시간 (분)').fill('45');
+await bar.getByLabel('쉬는 시간 (분)').fill('15');
+await bar.locator('button[aria-haspopup]').first().click();
+await page.getByRole('dialog', { name: '1교시 시작 선택' }).getByRole('button', { name: '9', exact: true }).first().click();
+await page.getByRole('dialog', { name: '1교시 시작 선택' }).getByRole('button', { name: '00', exact: true }).last().click();
+const card = await page.locator('main').innerText();
+check('시계로 1교시 시작 → 모든 교시 자동', ['09:00', '09:45', '10:00', '10:45', '11:00', '11:45'].every((t) => card.includes(t)));
 await page.getByRole('button', { name: '저장', exact: true }).click();
 await page.getByRole('status').filter({ hasText: '교시별 기본 시간을 저장했습니다' }).last().waitFor();
 check('교시별 기본 시간 저장', true);
@@ -67,9 +67,7 @@ check('저장된 시험 (시간·자동 배치)', slots.size === 2 && s1?.get('s
 
 // 3. 쉬는 시간 15분 → 1교시 기준 자동 계산 → 교시 추가도 자동
 await page.getByRole('button', { name: '시간 설정' }).click();
-await page.getByLabel('쉬는 시간 (분)').fill('15');
-await page.getByRole('button', { name: '1교시 기준으로 나머지 자동 계산' }).click();
-await page.getByRole('button', { name: '+ 교시 추가' }).click();
+await page.getByRole('button', { name: '+ 교시 추가' }).click(); // 쉬는 시간 15분을 알아서 이어 붙인다
 await page.getByRole('button', { name: '저장', exact: true }).click();
 await page.getByRole('status').filter({ hasText: '교시별 기본 시간을 저장했습니다' }).last().waitFor();
 const want = '10:00~10:45 11:00~11:45 12:00~12:45 13:00~13:45';

@@ -53,7 +53,7 @@ function MyAvailabilityForm({ session, teacherId }: { session: ExamSession; teac
         const [date, period] = k.split('|');
         return { date: date!, period: Number(period) };
       });
-      await submitAvailability(sid, teacherId, cells, reason.trim(), false);
+      await submitAvailability(sid, teacherId, cells, reason.trim() || '기타', false);
       toast(session.settings.autoApproveAvailability ? `불가 시간 ${cells.length}칸을 제출했습니다. 바로 반영됩니다.` : `불가 시간 ${cells.length}칸을 제출했습니다. 관리자 승인을 기다립니다.`);
       setSelected(new Set());
     } catch (e) {
@@ -101,7 +101,7 @@ function MyAvailabilityForm({ session, teacherId }: { session: ExamSession; teac
           <div className="grid gap-4">
             <ReasonPicker value={reason} onChange={setReason} />
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={() => void submit()} disabled={busy || !reason.trim()}>
+              <Button onClick={() => void submit()} disabled={busy}>
                 {busy ? '제출 중…' : `${selected.size}칸 제출`}
               </Button>
               <Button variant="secondary" onClick={() => setSelected(new Set())} disabled={busy}>

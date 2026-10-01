@@ -38,19 +38,27 @@ export function useTermChoice(docs: TermDoc[] = []) {
     }
   });
   const terms = useMemo(() => {
+    // 보이는(숨기지 않은) 프로젝트가 있는 학기만. 프로젝트가 하나도 없을 때만 명단의 학기를 쓴다
     const keys = new Set<string>();
-    for (const s of sessions.data) keys.add(termKey(sessionTerm(s)));
-    for (const d of docs) if (d.term) keys.add(d.term);
+    for (const s of sessions.data) if (!s.hidden) keys.add(termKey(sessionTerm(s)));
+    if (!keys.size) for (const d of docs) if (d.term) keys.add(d.term);
     return [...keys].flatMap((k) => parseTermKey(k) ?? []).sort(byRecent);
   }, [sessions.data, docs]);
-  const latest = sessions.data[0] ? termKey(sessionTerm(sessions.data[0])) : terms[0] ? termKey(terms[0]) : null;
-  const key = chosen && terms.some((t) => termKey(t) === chosen) ? chosen : latest;
+  const visible = sessions.data.filter((s) => !s.hidden);
+  const latest = visible[0] ? termKey(sessionTerm(visible[0])) : terms[0] ? termKey(terms[0]) : null;
+  // 프로젝트는 없고 명단만 있는 학기 (예: 가입 신청으로 생긴 학교·학기) — 교사·시험실 관리에서만 따로 고른다
+  const otherTerms = useMemo(() => {
+    const shown = new Set(terms.map(termKey));
+    return [...new Set(docs.flatMap((d) => (d.term && !shown.has(d.term) ? [d.term] : [])))].flatMap((k) => parseTermKey(k) ?? []).sort(byRecent);
+  }, [docs, terms]);
+  const valid = (k: string) => terms.some((t) => termKey(t) === k) || otherTerms.some((t) => termKey(t) === k);
+  const key = chosen && valid(chosen) ? chosen : latest;
   const current = key ? parseTermKey(key) : null;
   const choose = (k: string) => {
     setChosen(k);
     rememberTerm(k);
   };
-  return { terms, current, key, choose, loading: sessions.loading };
+  return { terms, otherTerms, current, key, choose, loading: sessions.loading };
 }
 
 type TermChoice = ReturnType<typeof useTermChoice>;
@@ -71,15 +79,15 @@ export function useTerm(): TermChoice {
   return c;
 }
 
-/** 머리글의 학교·학기 선택 */
-export function HeaderTermPicker() {
+/** 대시보드의 학교·학기 선택 (교사 관리·시험실 관리도 이 선택을 따른다) */
+export function TermSelect() {
   const c = useTerm();
   if (!c.terms.length) return null;
   return (
     <select
       aria-label="학교·학기"
-      title="학교·학기 (교사 관리·시험실 관리·대시보드에 적용)"
-      className="min-h-12 max-w-56 rounded-xl border border-line bg-surface px-3 text-sm font-semibold sm:max-w-72"
+      title="학교·학기 (교사 관리·시험실 관리에도 적용)"
+      className="min-h-12 min-w-64 rounded-xl border border-line bg-surface px-4 font-semibold"
       value={c.key ?? ''}
       onChange={(e) => c.choose(e.target.value)}
     >
@@ -89,6 +97,22 @@ export function HeaderTermPicker() {
         </option>
       ))}
     </select>
+  );
+}
+
+/** 교사·시험실 관리: 프로젝트 없는 명단(학교·학기)으로 바꾸는 버튼 */
+export function OtherTermLinks() {
+  const c = useTerm();
+  if (!c.otherTerms.length) return null;
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-muted">프로젝트 없는 명단:</span>
+      {c.otherTerms.map((t) => (
+        <Button key={termKey(t)} variant={c.key === termKey(t) ? 'primary' : 'secondary'} onClick={() => c.choose(termKey(t))}>
+          {termLabel(t)}
+        </Button>
+      ))}
+    </div>
   );
 }
 
@@ -142,7 +166,8 @@ export function rosterCopyOps(o: {
 }
 
 /** 가장 최근 다른 학기(같은 학교) 명단: 새 프로젝트를 만들 때 이어받을 후보 */
-export function latestRoster(all: Doc[], target: TermRef): { term: TermRef; docs: Doc[] } | null {
+export function latestRoster(everything: Doc[], target: TermRef): { term: TermRef; docs: Doc[] } | null {
+  const all = everything.filter((d) => !(d as { temporary?: boolean }).temporary);
   const key = termKey(target);
   if (all.some((d) => d.term === key)) return null; // 이미 이 학기 명단이 있으면 가져올 필요 없음
   const terms = [...new Set(all.flatMap((d) => (d.term && d.term !== key ? [d.term] : [])))]
@@ -176,7 +201,9 @@ function sameKey(kind: RosterKind, d: Doc): string {
  * - 학기 미지정(예전 자료): 그대로 이 학기로 지정 (ID 유지 → 기존 배정 기록 연결)
  * 이 학기에 이미 있는 대상(이메일·이름·실명 기준)은 건너뛴다. 목록에서 체크한 것만 가져온다.
  */
-export function RosterImportDialog({ kind, target, all, onClose }: { kind: RosterKind; target: TermRef; all: Doc[]; onClose: () => void }) {
+export function RosterImportDialog({ kind, target, all: everything, onClose }: { kind: RosterKind; target: TermRef; all: Doc[]; onClose: () => void }) {
+  // 임시 감독자는 그 시험에만 쓰므로 불러오지 않는다
+  const all = everything.filter((d) => !(d as { temporary?: boolean }).temporary);
   const targetKey = termKey(target);
   const legacy = all.filter((d) => !d.term);
   const sources = useMemo(() => {

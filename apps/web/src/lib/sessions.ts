@@ -10,8 +10,8 @@ import {
   type Timestamp,
 } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { sessionTerm, termKey, type ExamWriterRule, type SessionStatus, type TermRef } from '@sim/shared';
-import { commitOps } from './data';
+import { sessionTerm, termKey, type ExamWriterRule, type SessionStatus, type TeacherDoc, type TermRef, type WithId } from '@sim/shared';
+import { commitOps, useCollection } from './data';
 import { auth, db } from './firebase';
 
 export interface PeriodTime {
@@ -25,6 +25,10 @@ export interface SessionSettings {
   periodTimes?: Record<string, PeriodTime>;
   /** 교사가 낸 불가시간을 관리자 승인 없이 바로 반영 (관리자는 문제 있는 것만 반려) */
   autoApproveAvailability?: boolean;
+  /** 시험 없는 학년은 수업: 그 시간 기초시간표에 수업이 있는 교사는 감독에서 뺀다 */
+  classDuringExam?: boolean;
+  /** 감독 없음으로 정한 자리(좌석 ID) */
+  noSupervisor?: string[];
   /** 출제 교사 배정 규칙 (없으면 상관없음) */
   examWriter?: ExamWriterRule;
 }
@@ -40,6 +44,8 @@ export interface ExamSession {
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
   lastChangeReason?: string | null;
+  /** 대시보드에서 숨긴 지난 프로젝트 */
+  hidden?: boolean;
 }
 
 export type NewSession = Pick<ExamSession, 'schoolName' | 'year' | 'semester' | 'examName' | 'settings'>;
@@ -145,4 +151,10 @@ export function useMySessions(term: TermRef | null): Live<ExamSession[]> {
     );
   }, [key]);
   return state;
+}
+
+/** 이 프로젝트에서 쓰는 교사: 같은 학교·학기 명단 + 이 프로젝트의 임시 감독자 (다른 프로젝트 임시 감독자는 뺀다) */
+export function useSessionTeachers(s: ExamSession): Live<WithId<TeacherDoc>[]> {
+  const all = useCollection<TeacherDoc>('teachers', termWhere(s));
+  return { ...all, data: all.data.filter((t) => !t.onlySession || t.onlySession === s.id) };
 }

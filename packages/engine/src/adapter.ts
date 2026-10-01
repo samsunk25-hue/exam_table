@@ -22,6 +22,8 @@ export interface SessionData {
   baseTimetable: WithId<BaseTimetableDoc>[];
   useBaseTimetable: boolean;
   examWriterRule?: 'NONE' | 'PREFER_HALLWAY' | 'NO_ROOM';
+  classDuringExam?: boolean;
+  skipSeats?: string[];
   pinned?: PinnedAssignment[];
 }
 
@@ -55,6 +57,7 @@ export function buildEngineInput(d: SessionData): EngineInput {
       defaultRole: t.defaultRole,
       active: t.active,
       priorLoad: t.cumulativeLoad ?? 0,
+      temporary: t.temporary === true,
     })),
     rooms: d.rooms.map((r) => ({
       id: r.id,
@@ -83,7 +86,12 @@ export function buildEngineInput(d: SessionData): EngineInput {
     baseTimetable: d.baseTimetable.flatMap((doc) =>
       doc.entries.map((e) => ({ teacherId: doc.id, weekday: e.weekday, period: e.period, grade: e.grade, classNo: e.classNo, subject: e.subject ?? undefined })),
     ),
-    settings: { useBaseTimetable: d.useBaseTimetable, examWriterRule: d.examWriterRule ?? 'NONE' },
+    settings: {
+      useBaseTimetable: d.useBaseTimetable,
+      examWriterRule: d.examWriterRule ?? 'NONE',
+      classDuringExam: d.classDuringExam ?? false,
+      skipSeats: d.skipSeats ?? [],
+    },
     pinned: d.pinned,
   };
 }

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DEFAULT_WEIGHTS, buildEngineInput, runAssignment, type EngineInput, type Metrics, type Weights } from '@sim/engine';
-import type { AssignmentDoc, AvailabilityDoc, BaseTimetableDoc, ConstraintDoc, RoomDoc, SlotDoc, TeacherDoc } from '@sim/shared';
+import type { AssignmentDoc, AvailabilityDoc, BaseTimetableDoc, ConstraintDoc, RoomDoc, SlotDoc } from '@sim/shared';
 import { Alert, Button, Card, Spinner } from '@/components/ui';
 import { useCollection } from '@/lib/data';
-import { termWhere, type ExamSession } from '@/lib/sessions';
+import { termWhere, type ExamSession, useSessionTeachers } from '@/lib/sessions';
 
 /** 슬라이더 하나: 화면에서는 모두 "클수록 강하게" (감점 항목은 부호를 뒤집어 저장) */
 interface Knob {
@@ -69,7 +69,7 @@ export function WeightSimulator({
   const sid = session.id;
   const slots = useCollection<SlotDoc>(`sessions/${sid}/slots`);
   const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
-  const teachers = useCollection<TeacherDoc>('teachers', termWhere(session));
+  const teachers = useSessionTeachers(session);
   const assignments = useCollection<AssignmentDoc>(`sessions/${sid}/assignments`);
   const availability = useCollection<AvailabilityDoc>(`sessions/${sid}/availability`);
   const constraints = useCollection<ConstraintDoc>(`sessions/${sid}/constraints`);
@@ -97,9 +97,11 @@ export function WeightSimulator({
       baseTimetable: timetable.data,
       useBaseTimetable: session.settings.useBaseTimetable,
       examWriterRule: session.settings.examWriter ?? 'NONE',
+      classDuringExam: session.settings.classDuringExam !== false,
+      skipSeats: session.settings.noSupervisor ?? [],
       pinned: keepManual ? assignments.data.filter((a) => a.source === 'MANUAL').map((a) => ({ seatId: a.id, teacherId: a.teacherId })) : [],
     });
-  }, [loading, slots.data, rooms.data, teachers.data, availability.data, constraints.data, timetable.data, assignments.data, keepManual, session.settings.useBaseTimetable, session.settings.examWriter]);
+  }, [loading, slots.data, rooms.data, teachers.data, availability.data, constraints.data, timetable.data, assignments.data, keepManual, session.settings]);
 
   // 기준 = 이 프로젝트 기본 가중치 (출제 교사 규칙 포함)
   const base = useMemo(() => (input ? runAssignment(input).metrics : null), [input]);

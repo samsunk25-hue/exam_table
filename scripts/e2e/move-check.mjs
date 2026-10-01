@@ -20,7 +20,8 @@ const check = (label, ok, detail = '') => {
 await db.doc('teachers/T001').update({ cumulativeLoad: 3, homeroom: { grade: 1, classNo: 1 } });
 const A = await openApp();
 await A.page.evaluate((k) => localStorage.setItem('sim.term', k), TERM);
-await go(A.page, '/admin/teachers');
+await db.doc('sessions/E2E_MOVE').set({ schoolName: '점검중학교', year: 2026, semester: 2, examName: '이동 점검', status: 'DRAFT', settings: { useBaseTimetable: false }, createdAt: new Date(), updatedBy: 'seed' });
+await go(A.page, '/admin/sessions/E2E_MOVE/teachers');
 await A.page.locator('tr', { hasText: '김국어' }).getByRole('button', { name: '수정' }).click();
 const dlg = A.page.getByRole('dialog', { name: /교사 수정/ });
 await dlg.getByLabel('소속 학교·학기').selectOption('__new');
@@ -38,10 +39,12 @@ for (let i = 0; i < 30; i++) {
 }
 check('다른 학교 명단으로 이동 (누적 0, 담임 비움)', t.term === '이동중학교|2026|2' && t.cumulativeLoad === 0 && t.homeroom === null, JSON.stringify({ term: t.term, load: t.cumulativeLoad, homeroom: t.homeroom }));
 check('원래 학기 명단에서 사라짐', (await A.page.locator('tr', { hasText: '김국어' }).count()) === 0);
-await A.page.getByLabel('학교·학기').selectOption('이동중학교|2026|2');
-check('옮긴 학교·학기에서 보임', await A.page.getByRole('cell', { name: '김국어' }).waitFor({ timeout: 10000 }).then(() => true).catch(() => false));
+await db.doc('sessions/E2E_MOVE2').set({ schoolName: '이동중학교', year: 2026, semester: 2, examName: '이동 도착', status: 'DRAFT', settings: { useBaseTimetable: false }, createdAt: new Date(), updatedBy: 'seed' });
+await go(A.page, '/admin/sessions/E2E_MOVE2/teachers');
+check('옮긴 학교·학기 프로젝트에서 보임', await A.page.getByRole('cell', { name: '김국어' }).waitFor({ timeout: 10000 }).then(() => true).catch(() => false));
 const ops = await db.collection('undoOps').where('label', '==', '교사 이동: 김국어 → 이동중학교 · 2026학년도 2학기').get();
 check('되돌리기 목록에 이동 기록', ops.size === 1);
 check('콘솔 오류 없음', A.errors.length === 0, A.errors.join(' / '));
 await A.browser.close();
+for (const id of ['E2E_MOVE', 'E2E_MOVE2']) await db.recursiveDelete(db.doc(`sessions/${id}`));
 process.exit(failures ? 1 : 0);

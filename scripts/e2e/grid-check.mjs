@@ -36,7 +36,7 @@ for (const d of ['2026-11-02', '2026-11-03']) {
   await dlg.getByRole('button', { name: '+ 추가' }).click();
 }
 // 1교시 09:00~09:45 (시계)
-const p1 = dlg.locator('div.grid', { hasText: '1교시' }).filter({ has: page.getByText('시작', { exact: true }) }).first();
+const p1 = dlg.locator('div.grid', { has: page.getByText('1교시', { exact: true }) }).last();
 await p1.locator('button[aria-haspopup]').first().click();
 await page.getByRole('dialog', { name: '시작 선택' }).getByRole('button', { name: '9', exact: true }).click();
 await page.getByRole('dialog', { name: '시작 선택' }).getByRole('button', { name: '00', exact: true }).click();

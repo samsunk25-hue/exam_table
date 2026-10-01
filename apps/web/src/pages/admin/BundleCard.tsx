@@ -22,7 +22,7 @@ import { Alert, Button, Card, DownloadButton, Spinner } from '@/components/ui';
 import { RosterImportDialog, rememberTerm, type RosterKind } from '@/components/TermRoster';
 import { useCollection } from '@/lib/data';
 import { Readiness } from './Readiness';
-import { bundleSheets, replacePreview, saveBundle, type SaveMode } from '@/lib/bundle';
+import { bundleSheets, replacePreview, saveBundle, timetableSheets, type SaveMode } from '@/lib/bundle';
 import { callAiExtract, errorMessage, type AiSlotRow, type AiTeacherRow } from '@/lib/firebase';
 import { termWhere, type ExamSession } from '@/lib/sessions';
 import { downloadWorkbook, readWorkbook, type SheetData } from '@/lib/xlsx';
@@ -346,16 +346,30 @@ function AiExtractDialog({ year, onClose, onRead }: { year: number; onClose: () 
 
   const read = async () => {
     setError(null);
-    const bad = files.find((f) => !TYPE_OF[f.name.split('.').pop()?.toLowerCase() ?? '']);
-    if (bad) return setError(`"${bad.name}"은(는) 읽을 수 없는 형식입니다. PDF·사진(PNG·JPG)·글(TXT·CSV)로 올려 주세요. 한글(HWP)은 PDF로 저장해서 올리세요.`);
+    const ext = (f: File) => f.name.split('.').pop()?.toLowerCase() ?? '';
+    const isExcel = (f: File) => ext(f) === 'xlsx' || ext(f) === 'xls';
+    const bad = files.find((f) => !TYPE_OF[ext(f)] && !isExcel(f));
+    if (bad) return setError(`"${bad.name}"은(는) 읽을 수 없는 형식입니다. 엑셀·PDF·사진(PNG·JPG)·글(TXT·CSV)로 올려 주세요. 한글(HWP)은 PDF로 저장해서 올리세요.`);
     if (total > MAX_BYTES) return setError('파일이 너무 큽니다 (모두 합쳐 7MB까지). 필요한 쪽만 PDF로 저장하거나 사진 크기를 줄여 주세요.');
     if (!files.length && !text.trim()) return setError('파일을 고르거나 내용을 붙여 넣어 주세요.');
     setBusy(true);
     try {
+      // 엑셀은 브라우저에서 시트별 표 글로 바꿔 보낸다 (AI는 엑셀 파일을 직접 읽지 못함)
+      const cell = (c: unknown) => (c instanceof Date ? c.toISOString().slice(0, 10) : String(c ?? ''));
+      const excelText = (
+        await Promise.all(
+          files.filter(isExcel).map(async (f) =>
+            (await readWorkbook(f))
+              .map((sh) => `[${f.name} · ${sh.name} 시트]\n${sh.rows.map((r) => r.map(cell).join('\t')).join('\n')}`)
+              .join('\n\n'),
+          ),
+        )
+      ).join('\n\n');
       const payload = await Promise.all(
-        files.map(async (f) => ({ name: f.name, mediaType: TYPE_OF[f.name.split('.').pop()!.toLowerCase()]!, data: await toBase64(f) })),
+        files.filter((f) => !isExcel(f)).map(async (f) => ({ name: f.name, mediaType: TYPE_OF[ext(f)]!, data: await toBase64(f) })),
       );
-      const { data } = await callAiExtract({ kind, files: payload, text: text.trim() || undefined, year });
+      const allText = [excelText, text.trim()].filter(Boolean).join('\n\n');
+      const { data } = await callAiExtract({ kind, files: payload, text: allText || undefined, year });
       if (!data.slots.length && !data.teachers.length) {
         setError(`읽어 낸 자료가 없습니다.${data.notes.length ? ` (${data.notes.join(' / ')})` : ''}`);
         setBusy(false);
@@ -392,11 +406,11 @@ function AiExtractDialog({ year, onClose, onRead }: { year: number; onClose: () 
           </div>
         </fieldset>
         <label className="flex flex-col gap-1.5">
-          <span className="font-semibold">문서 파일 (PDF·사진, 여러 개 가능)</span>
+          <span className="font-semibold">문서 파일 (엑셀·PDF·사진, 여러 개 가능)</span>
           <input
             type="file"
             multiple
-            accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.csv"
+            accept=".xlsx,.xls,.pdf,.png,.jpg,.jpeg,.webp,.txt,.csv"
             className="min-h-12 rounded-xl border border-dashed border-line bg-bg p-3 file:mr-3 file:min-h-10 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:font-semibold file:text-white"
             onChange={(e) => setFiles([...(e.target.files ?? [])].slice(0, 4))}
           />
@@ -429,7 +443,9 @@ function AiExtractDialog({ year, onClose, onRead }: { year: number; onClose: () 
 
 /** 필요한 자료를 직접 불러오는 통합 양식 카드 (개요 탭용) */
 export function BundleSection({ session }: { session: ExamSession }) {
-  const teachers = useCollection<TeacherDoc>('teachers', termWhere(session));
+  const termTeachers = useCollection<TeacherDoc>('teachers', termWhere(session));
+  // 통합 양식·점검은 정식 교사만 (임시 감독자 제외)
+  const teachers = { ...termTeachers, data: termTeachers.data.filter((t) => !t.temporary) };
   const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
   const slots = useCollection<SlotDoc>(`sessions/${session.id}/slots`);
   const timetable = useCollection<BaseTimetableDoc>(`sessions/${session.id}/baseTimetable`);
@@ -439,8 +455,7 @@ export function BundleSection({ session }: { session: ExamSession }) {
   if (error) return <Alert>{error}</Alert>;
   return (
     <>
-      <RosterLoadCard session={session} teachers={teachers.data.length} rooms={rooms.data.length} />
-      <Readiness session={session} slots={slots.data} rooms={rooms.data} teachers={teachers.data} timetable={timetable.data} />
+      {/* 진행 단계 바로 아래: 기초 자료 한 번에 입력 → 명단 이어받기 → 기초 자료 점검 */}
       <BundleCard
         session={session}
         editable={isSetupEditable(session.status)}
@@ -449,6 +464,8 @@ export function BundleSection({ session }: { session: ExamSession }) {
         slots={slots.data}
         timetable={timetable.data}
       />
+      <RosterLoadCard session={session} teachers={teachers.data.length} rooms={rooms.data.length} />
+      <Readiness session={session} slots={slots.data} rooms={rooms.data} teachers={teachers.data} timetable={timetable.data} />
     </>
   );
 }
@@ -499,7 +516,7 @@ export function BundleCard(props: Props) {
         <DownloadButton onDownload={downloadSample}>샘플 양식 (교사 25명)</DownloadButton>
       </div>
       <p className="mt-2 text-sm text-muted">
-        샘플: 교사 25명 · 3학년 × 4반 · 다음 주 월요일부터 3일, 하루 3교시(1·2교시 시험 45분 + 쉬는 시간 15분, 3교시 자습). 작성 방법을 보거나 연습용으로
+        샘플: 교사 25명 · 3학년 × 3반(교실마다 정·부감독) · 다음 주 월요일부터 3일, 하루 3교시(1·2교시 시험 45분 + 쉬는 시간 15분, 3교시 자습). 작성 방법을 보거나 연습용으로
         쓰세요. 그대로 올리면 가상 교사 25명이 실제로 등록됩니다.
       </p>
       {importing && <BundleImportDialog {...props} onClose={() => setImporting(false)} />}
@@ -515,5 +532,44 @@ export function BundleCard(props: Props) {
       )}
       {aiResult && <BundleImportDialog {...props} initialSheets={aiResult.sheets} notes={aiResult.notes} onClose={() => setAiResult(null)} />}
     </Card>
+  );
+}
+
+/** 배정 설정 > 기초시간표: 현재 상태와 양식 받기·올리기 (교사마다 시간표 시트 하나) */
+export function TimetableUpload({ session }: { session: ExamSession }) {
+  const termTeachers = useCollection<TeacherDoc>('teachers', termWhere(session));
+  const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
+  const slots = useCollection<SlotDoc>(`sessions/${session.id}/slots`);
+  const timetable = useCollection<BaseTimetableDoc>(`sessions/${session.id}/baseTimetable`);
+  const [open, setOpen] = useState(false);
+  const teachers = termTeachers.data.filter((t) => !t.temporary);
+  const total = timetable.data.reduce((s, d) => s + d.entries.length, 0);
+  const editable = isSetupEditable(session.status);
+  return (
+    <div className="mt-2 ml-8 flex flex-wrap items-center gap-2 rounded-xl bg-bg p-3">
+      <span className="text-sm">
+        기초시간표: {timetable.data.length ? <b>교사 {timetable.data.length}명 · 수업 {total}건</b> : <b className="text-alert">아직 없음</b>}
+      </span>
+      <DownloadButton
+        onDownload={() => downloadWorkbook(`기초시간표_${session.examName.replace(/\s+/g, '')}.xlsx`, timetableSheets(teachers, timetable.data))}
+        disabled={!teachers.length}
+      >
+        양식 받기 (교사별 시트)
+      </DownloadButton>
+      <Button variant="secondary" onClick={() => setOpen(true)} disabled={!editable}>
+        기초시간표 올리기
+      </Button>
+      {open && (
+        <BundleImportDialog
+          session={session}
+          editable={editable}
+          teachers={teachers}
+          rooms={rooms.data}
+          slots={slots.data}
+          timetable={timetable.data}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </div>
   );
 }

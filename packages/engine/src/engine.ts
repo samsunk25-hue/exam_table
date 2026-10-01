@@ -257,7 +257,7 @@ function computeMetrics(ctx: Context, state: State): Metrics {
   for (const t of ctx.teachers.filter(isEligibleTeacher)) {
     const total = round(state.totalLoadOf(t));
     loads[t.id] = total;
-    sessionLoads[t.id] = round(state.sessionLoadOf(t.id));
+    sessionLoads[t.id] = round(state.sessionLoadOf(t.id) + (ctx.classLoad.get(t.id) ?? 0));
     values.push(total);
   }
   const n = values.length;

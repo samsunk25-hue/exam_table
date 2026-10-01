@@ -22,7 +22,7 @@ describe('통합 양식 샘플 (교사 25명)', () => {
     expect(new Set(teacherCells).size).toBe(teacherCells.length);
     const classCells = sample.timetable.flatMap((d) => d.entries.map((e) => `${e.grade}-${e.classNo}|${e.weekday}|${e.period}`));
     expect(new Set(classCells).size).toBe(classCells.length);
-    expect(classCells.length).toBeGreaterThan(12 * 25);
+    expect(classCells.length).toBeGreaterThan(9 * 25); // 9개 학급 × 주 28시간
   });
 
   it('자동 배정이 모든 자리를 하드 조건 위반 없이 채운다', () => {
@@ -39,6 +39,8 @@ describe('통합 양식 샘플 (교사 25명)', () => {
     expect(result.metrics.successRate).toBe(1);
     expect(validateAssignments(input, result.assignments)).toEqual([]);
     expect(result.assignments.some((a) => a.reason.includes('기초일치'))).toBe(true);
-    expect(result.assignments.filter((a) => a.role === 'STUDY').length).toBe(3 * 3 * 4);
+    expect(result.assignments.filter((a) => a.role === 'STUDY').length).toBe(3 * 3 * 3 * 2); // 3일 × 3학년 × 3반 × 정·부
+    expect(result.assignments.some((a) => a.role === 'HALLWAY')).toBe(false); // 복도 감독 없음
+    expect(result.assignments.filter((a) => a.role === 'ASSISTANT').length).toBeGreaterThan(0);
   });
 });

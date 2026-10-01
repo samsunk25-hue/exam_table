@@ -37,3 +37,40 @@ export function recalcPeriods(times: Record<string, PeriodTime>, count: number, 
   }
   return next;
 }
+
+/** 저장된 1교시 길이, 없으면 45분 */
+export function guessExamMinutes(times: Record<string, PeriodTime>): number {
+  const t = times[1];
+  const len = t?.start && t.end ? toMin(t.end) - toMin(t.start) : NaN;
+  return len > 0 ? len : 45;
+}
+
+/** 1교시 시작·시험 시간·쉬는 시간으로 1..count교시 시간을 모두 만든다 (자정을 넘는 교시는 뺀다) */
+export function planPeriods(start: string, examMin: number, breakMin: number, count: number): Record<string, PeriodTime> {
+  const out: Record<string, PeriodTime> = {};
+  let s = toMin(start);
+  for (let p = 1; p <= count; p++) {
+    if (s + examMin >= 24 * 60) break;
+    out[p] = { start: fromMin(s), end: fromMin(s + examMin) };
+    s += examMin + breakMin;
+  }
+  return out;
+}
+
+/** 시험 일정의 시각으로 교시별 기본 시간을 만든다 (교시마다 가장 많이 쓰인 시작·종료) */
+export function periodTimesFromSlots(slots: { period: number; startTime?: string | null; endTime?: string | null }[]): Record<string, PeriodTime> {
+  const counts = new Map<number, Map<string, number>>();
+  for (const s of slots) {
+    if (!s.startTime || !s.endTime) continue;
+    const m = counts.get(s.period) ?? new Map<string, number>();
+    const k = `${s.startTime}|${s.endTime}`;
+    m.set(k, (m.get(k) ?? 0) + 1);
+    counts.set(s.period, m);
+  }
+  const out: Record<string, PeriodTime> = {};
+  for (const [p, m] of counts) {
+    const [start, end] = [...m].sort((a, b) => b[1] - a[1])[0]![0].split('|');
+    out[p] = { start: start!, end: end! };
+  }
+  return out;
+}

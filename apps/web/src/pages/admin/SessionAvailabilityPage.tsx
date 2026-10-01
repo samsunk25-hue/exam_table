@@ -8,7 +8,6 @@ import {
   type AvailabilityDoc,
   type RoomDoc,
   type SlotDoc,
-  type TeacherDoc,
 } from '@sim/shared';
 import { AvailabilityGrid, GridLegend, ReasonPicker, dateLabel } from '@/components/AvailabilityGrid';
 import { Modal } from '@/components/Modal';
@@ -16,7 +15,7 @@ import { toast } from '@/components/Toast';
 import { Alert, Button, Card, Select, Spinner, Table, Td, Toggle } from '@/components/ui';
 import { cellKey, deleteAvailability, reviewAvailability, sortAvailability, submitAvailability, type Availability } from '@/lib/availability';
 import { useCollection } from '@/lib/data';
-import { termWhere, updateSessionSettings } from '@/lib/sessions';
+import { termWhere, updateSessionSettings, useSessionTeachers } from '@/lib/sessions';
 import { errorMessage } from '@/lib/firebase';
 import { useCurrentSession } from './SessionPage';
 
@@ -212,7 +211,7 @@ function ProxyCard({ sid, teachers, times, all }: { sid: string; teachers: { id:
         const [date, period] = k.split('|');
         return { date: date!, period: Number(period) };
       });
-      await submitAvailability(sid, teacherId, cells, reason.trim(), true);
+      await submitAvailability(sid, teacherId, cells, reason.trim() || '기타', true);
       toast(`${teachers.find((t) => t.id === teacherId)?.name} 교사의 불가 시간 ${cells.length}칸을 입력했습니다 (승인).`);
       setSelected(new Set());
     } catch (e) {
@@ -256,7 +255,7 @@ function ProxyCard({ sid, teachers, times, all }: { sid: string; teachers: { id:
             <>
               <ReasonPicker value={reason} onChange={setReason} />
               <div className="flex gap-2">
-                <Button onClick={() => void submit()} disabled={busy || !reason.trim()}>
+                <Button onClick={() => void submit()} disabled={busy}>
                   {busy ? '입력 중…' : `${selected.size}칸 대리 입력`}
                 </Button>
                 <Button variant="secondary" onClick={() => setSelected(new Set())} disabled={busy}>
@@ -276,7 +275,7 @@ export function SessionAvailabilityPage() {
   const sid = session.id;
   const slots = useCollection<SlotDoc>(`sessions/${sid}/slots`);
   const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
-  const teachers = useCollection<TeacherDoc>('teachers', termWhere(session));
+  const teachers = useSessionTeachers(session);
   const availability = useCollection<AvailabilityDoc>(`sessions/${sid}/availability`);
 
   const nameById = useMemo(() => new Map(teachers.data.map((t) => [t.id, t.name])), [teachers.data]);

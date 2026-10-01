@@ -1,6 +1,16 @@
 // 학급 수로 교실 만들기 점검: node scripts/e2e/rooms-check.mjs (빈 에뮬레이터에서)
 import { mkdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { go, openApp } from './session.mjs';
+
+process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
+const require = createRequire(import.meta.url);
+const { initializeApp } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
+initializeApp({ projectId: 'smart-invigilation' });
+const db = getFirestore();
+// 시험실은 프로젝트 안 "① 준비 > 시험실"에서 (그 프로젝트 학교·학기)
+await db.doc('sessions/E2E_ROOMS').set({ schoolName: '교실중학교', year: 2026, semester: 2, examName: '교실 점검', status: 'DRAFT', settings: { useBaseTimetable: false }, createdAt: new Date(), updatedBy: 'seed' });
 
 const OUT = 'scripts/e2e/out';
 mkdirSync(OUT, { recursive: true });
@@ -11,7 +21,7 @@ const check = (label, ok, detail = '') => {
 };
 
 const { browser, page, errors } = await openApp();
-await go(page, '/admin/rooms');
+await go(page, '/admin/sessions/E2E_ROOMS/rooms');
 const card = page.locator('section', { hasText: '학급 교실 한 번에 만들기' }).first();
 await card.waitFor();
 if (!(await card.getByRole('button', { name: /적용/ }).count())) await card.getByRole('button', { name: '학급 수·교실 설정' }).click();

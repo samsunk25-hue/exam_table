@@ -28,7 +28,7 @@ export function StatusBadge({ status }: { status: SessionStatus }) {
     <span
       className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-bold ${i === 3 ? 'bg-mint-soft text-ink' : 'bg-primary-soft text-primary-strong'}`}
     >
-      {i + 1}. {STEPS[i]!.label}
+      {STEPS[i]!.label}
       {d && <span className="ml-1 font-normal">· {d}</span>}
     </span>
   );

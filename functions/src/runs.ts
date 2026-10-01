@@ -52,7 +52,8 @@ export async function loadData(sessionId: string, useBaseTimetable: boolean) {
     firestore.collection(`sessions/${sessionId}/assignments`).get(),
   ]);
   const data: SessionData = {
-    teachers: withIds<TeacherDoc>(teachers),
+    // 임시 감독자는 그 프로젝트에서만 쓴다
+    teachers: withIds<TeacherDoc>(teachers).filter((t) => !t.onlySession || t.onlySession === sessionId),
     rooms: withIds<RoomDoc>(rooms),
     slots: withIds<SlotDoc>(slots),
     availability: availability.docs.map((d) => d.data() as AvailabilityDoc),
@@ -60,6 +61,9 @@ export async function loadData(sessionId: string, useBaseTimetable: boolean) {
     baseTimetable: withIds<BaseTimetableDoc>(baseTimetable),
     useBaseTimetable,
     examWriterRule: (session as { settings?: { examWriter?: 'NONE' | 'PREFER_HALLWAY' | 'NO_ROOM' } }).settings?.examWriter ?? 'NONE',
+    // 기본 켜짐 (기초시간표가 없으면 아무 영향 없음)
+    classDuringExam: (session as { settings?: { classDuringExam?: boolean } }).settings?.classDuringExam !== false,
+    skipSeats: (session as { settings?: { noSupervisor?: string[] } }).settings?.noSupervisor ?? [],
   };
   return { data, current: withIds<AssignmentDoc>(assignments) };
 }

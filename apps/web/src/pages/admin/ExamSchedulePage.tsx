@@ -18,23 +18,23 @@ import { toast } from '@/components/Toast';
 import { Alert, Button, Card, Spinner } from '@/components/ui';
 import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
-import { guessBreak, recalcPeriods, withAddedPeriod } from '@/lib/periodTimes';
+import { guessBreak, periodTimesFromSlots, withAddedPeriod } from '@/lib/periodTimes';
 import { updateSessionSettings, type ExamSession, type PeriodTime, termWhere } from '@/lib/sessions';
 
 type Slot = WithId<SlotDoc>;
 const MAX_PERIOD = 10;
 
 /** 교시별 기본 시간: 한 번 정하면 시험 추가 때 자동으로 채운다 */
-function PeriodTimesCard({ session, editable }: { session: ExamSession; editable: boolean }) {
-  const saved = session.settings.periodTimes ?? {};
+function PeriodTimesCard({ session, editable, slots }: { session: ExamSession; editable: boolean; slots: Slot[] }) {
+  // 저장된 기본 시간이 없으면 이미 넣은 시험 일정의 시각으로 채운다 (통합 양식으로 올린 경우 등)
+  const saved = Object.keys(session.settings.periodTimes ?? {}).length ? session.settings.periodTimes! : periodTimesFromSlots(slots);
   const [times, setTimes] = useState<Record<string, PeriodTime>>(saved);
   const [count, setCount] = useState(Math.max(4, ...Object.keys(saved).map(Number)));
   const [open, setOpen] = useState(Object.keys(saved).length === 0);
   const [busy, setBusy] = useState(false);
-  const [breakMin, setBreakMin] = useState(() => guessBreak(saved));
   const set = (p: number, patch: Partial<PeriodTime>) => setTimes({ ...times, [p]: { start: '', end: '', ...times[p], ...patch } });
   const addPeriod = () => {
-    setTimes(withAddedPeriod(times, count, breakMin));
+    setTimes(withAddedPeriod(times, count, guessBreak(times)));
     setCount(count + 1);
   };
 
@@ -74,7 +74,7 @@ function PeriodTimesCard({ session, editable }: { session: ExamSession; editable
       </div>
       {open && editable && (
         <div className="mt-4 grid gap-3">
-          <BreakTimeBar value={breakMin} onChange={setBreakMin} onRecalc={() => setTimes(recalcPeriods(times, count, breakMin))} canRecalc={Boolean(times[1]?.start && times[1]?.end)} />
+          <BreakTimeBar times={times} count={count} onChange={setTimes} />
           {Array.from({ length: count }, (_, i) => i + 1).map((p) => (
             <div key={p} className="grid grid-cols-[4rem_1fr_1fr] items-end gap-3">
               <span className="pb-3 text-lg font-bold">{p}교시</span>
@@ -408,7 +408,6 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
           <span className="text-muted">날짜·교시 시간을 정하고 표에 과목(또는 "자습")을 한 번에 적습니다.</span>
         </div>
       )}
-      <PeriodTimesCard session={session} editable={editable} />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <Card>
@@ -533,6 +532,9 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
           )}
         </Card>
       </div>
+
+      {/* 날짜를 먼저 고른 뒤 교시 시간 */}
+      <PeriodTimesCard session={session} editable={editable} slots={slots.data} />
 
       {importing && <ScheduleImportDialog session={session} slots={slots.data} rooms={rooms.data} onClose={() => setImporting(false)} />}
       {grid && <ExamGridEditor session={session} slots={slots.data} rooms={rooms.data} initialDates={grid.dates} onClose={() => setGrid(null)} />}

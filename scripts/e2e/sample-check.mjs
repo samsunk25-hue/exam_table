@@ -61,7 +61,7 @@ await dialog.getByRole('button', { name: '닫기' }).first().click();
 const slotDocs = await db.collection(`sessions/${SID}/slots`).get();
 const p1g1 = slotDocs.docs.filter((d) => d.get('grade') === 1 && d.get('period') === 1);
 const roomsOf = (d) => d.get('rooms').map((p) => p.roomType === 'EXTENDED' ? 'SEP' : p.classNo ?? 'H').join(',');
-check('특별실 + 자동 배치가 합쳐짐 (1학년 1교시: 교실 4 + 복도 + 별도시험장)', p1g1.length === 3 && p1g1.every((d) => d.get('rooms').length === 6), p1g1.map(roomsOf).join(' / '));
+check('특별실 + 자동 배치가 합쳐짐 (1학년 1교시: 교실 3 + 별도시험장, 복도 없음)', p1g1.length === 3 && p1g1.every((d) => roomsOf(d) === '1,2,3,SEP'), p1g1.map(roomsOf).join(' / '));
 check('모든 시험에 시험실 배치', slotDocs.docs.every((d) => d.get('rooms').length > 0));
 
 await go(page, `/admin/sessions/${SID}/assign`);

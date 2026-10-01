@@ -6,7 +6,7 @@ import { toast } from '@/components/Toast';
 import { Alert, Button, Card, Field, PageTitle, Spinner, Toggle } from '@/components/ui';
 import { callDeleteSession, errorMessage } from '@/lib/firebase';
 import { createSession, sessionTitle, useSessions, type ExamSession } from '@/lib/sessions';
-import { commitOps, useCollection } from '@/lib/data';
+import { commitOps, ref, useCollection } from '@/lib/data';
 import { latestRoster, rememberTerm, rosterCopyOps, useTerm } from '@/components/TermRoster';
 import { sessionTerm, termKey, termLabel, type RoomDoc, type TeacherDoc } from '@sim/shared';
 
@@ -178,20 +178,29 @@ function CreateSessionForm({ onDone }: { onDone: () => void }) {
 
 export function DashboardPage() {
   const { data: all, loading, error } = useSessions();
-  const choice = useTerm();
-  const [showAll, setShowAll] = useState(false);
-  const sessions = showAll || !choice.key ? all : all.filter((s) => termKey(sessionTerm(s)) === choice.key);
+  const [showHidden, setShowHidden] = useState(false);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<SessionItem | null>(null);
+  const hiddenCount = all.filter((s) => s.hidden).length;
+  const sessions = showHidden ? all : all.filter((s) => !s.hidden);
+  // 학교·학기별로 묶기 (최근 학기 먼저, 프로젝트는 만든 순서 최신 먼저)
+  const groups = [...new Set(sessions.map((s) => termKey(sessionTerm(s))))].map((k) => ({
+    key: k,
+    label: termLabel(sessionTerm(sessions.find((s) => termKey(sessionTerm(s)) === k)!)),
+    list: sessions.filter((s) => termKey(sessionTerm(s)) === k),
+  }));
+  const hide = async (s: SessionItem, hidden: boolean) => {
+    try {
+      await commitOps([{ type: 'set', ref: ref('sessions', s.id), data: { hidden }, merge: true }], hidden ? '프로젝트 숨기기' : '프로젝트 다시 보이기');
+      toast(hidden ? `"${sessionTitle(s)}"을(를) 숨겼습니다. 아래 "숨긴 프로젝트 보기"에서 다시 볼 수 있습니다.` : `"${sessionTitle(s)}"을(를) 다시 보이게 했습니다.`);
+    } catch (e) {
+      toast(errorMessage(e), 'alert');
+    }
+  };
 
   return (
     <>
-      <PageTitle sub={choice.current && !showAll ? `${termLabel(choice.current)} 시험 프로젝트 (학교·학기는 오른쪽 위에서 바꿉니다)` : '모든 학교·학기의 시험 프로젝트'}>대시보드</PageTitle>
-      {choice.key && (
-        <div className="mb-4">
-          <Toggle label="모든 학교·학기 프로젝트 보기" checked={showAll} onChange={setShowAll} />
-        </div>
-      )}
+      <PageTitle>대시보드</PageTitle>
 
       <div className="mb-6">
         {creating ? (
@@ -205,35 +214,55 @@ export function DashboardPage() {
       {error && <Alert>{error}</Alert>}
       {!loading && !error && sessions.length === 0 && (
         <Card>
-          <p className="text-muted">아직 시험 프로젝트가 없습니다.</p>
+          <p className="text-muted">{hiddenCount ? '보이는 시험 프로젝트가 없습니다 (숨긴 프로젝트만 있음).' : '아직 시험 프로젝트가 없습니다.'}</p>
         </Card>
       )}
 
-      <ul className="grid gap-3 md:grid-cols-2">
-        {sessions.map((s) => (
-          <li key={s.id} className="relative">
-            <button
-              type="button"
-              aria-label={`${sessionTitle(s)} 삭제`}
-              title="프로젝트 삭제"
-              onClick={() => setDeleting(s)}
-              className="absolute top-3 right-3 z-10 cursor-pointer rounded-lg px-3 py-2 text-sm text-muted hover:bg-alert-soft hover:text-alert"
-            >
-              삭제
-            </button>
-            <Link
-              to={`/admin/sessions/${s.id}`}
-              className="block rounded-card border border-line bg-surface p-5 shadow-sm transition-colors hover:border-primary"
-            >
-              <div className="text-sm text-muted">{s.schoolName}</div>
-              <div className="mt-1 text-lg font-bold">{sessionTitle(s)}</div>
-              <div className="mt-3">
-                <StatusBadge status={s.status} />
-              </div>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {groups.map((g) => (
+        <section key={g.key} className="mb-6" aria-label={g.label}>
+          <h2 className="mb-2 text-lg font-bold text-muted">{g.label}</h2>
+          <ul className="grid gap-3 md:grid-cols-2">
+            {g.list.map((s) => (
+              <li key={s.id} className="relative">
+                <div className="absolute top-3 right-3 z-10 flex gap-1">
+                  <button
+                    type="button"
+                    aria-label={`${sessionTitle(s)} ${s.hidden ? '다시 보이기' : '숨기기'}`}
+                    onClick={() => void hide(s, !s.hidden)}
+                    className="cursor-pointer rounded-lg px-3 py-2 text-sm text-muted hover:bg-bg hover:text-ink"
+                  >
+                    {s.hidden ? '다시 보이기' : '숨기기'}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`${sessionTitle(s)} 삭제`}
+                    title="프로젝트 삭제"
+                    onClick={() => setDeleting(s)}
+                    className="cursor-pointer rounded-lg px-3 py-2 text-sm text-muted hover:bg-alert-soft hover:text-alert"
+                  >
+                    삭제
+                  </button>
+                </div>
+                <Link
+                  to={`/admin/sessions/${s.id}`}
+                  className={`block rounded-card border border-line bg-surface p-5 shadow-sm transition-colors hover:border-primary ${s.hidden ? 'opacity-60' : ''}`}
+                >
+                  <div className="text-sm text-muted">{s.schoolName}</div>
+                  <div className="mt-1 pr-28 text-lg font-bold">{sessionTitle(s)}</div>
+                  <div className="mt-3">
+                    <StatusBadge status={s.status} />
+                    {s.hidden && <span className="ml-2 text-sm text-muted">숨김</span>}
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+
+      {hiddenCount > 0 && (
+        <Toggle label={`숨긴 프로젝트 보기 (${hiddenCount}개)`} checked={showHidden} onChange={setShowHidden} />
+      )}
       {deleting && <DeleteSessionDialog session={deleting} onClose={() => setDeleting(null)} />}
     </>
   );

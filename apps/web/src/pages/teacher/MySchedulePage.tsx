@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { isPublished, isSetupEditable, type AssignmentDoc, type RoomDoc, type SlotDoc, type TeacherDoc } from '@sim/shared';
+import { isPublished, isSetupEditable, type AssignmentDoc, type RoomDoc, type SlotDoc } from '@sim/shared';
 import { useAuth } from '@/auth/AuthProvider';
 import { FullTimetable, PersonalTimetable } from '@/components/TimetableViews';
 import { Alert, Button, Card, DownloadButton, PageTitle, Spinner } from '@/components/ui';
 import { ExplainDutiesCard } from '@/components/AiCards';
 import { TeacherSwapPanel } from '@/components/SwapRequests';
 import { useCollection } from '@/lib/data';
-import { sessionTitle, useMySessions, type ExamSession, termWhere } from '@/lib/sessions';
+import { sessionTitle, useMySessions, type ExamSession, termWhere, useSessionTeachers } from '@/lib/sessions';
 import { downloadCalendar, downloadFullTimetable, downloadPersonalTimetable, dutiesOf, type TimetableData } from '@/lib/timetable';
 
 /** 시험 일정이 나왔으면 불가 시간 제출로 안내 */
@@ -35,7 +35,7 @@ function PublishedSchedule({ session, teacherId }: { session: ExamSession; teach
   const sid = session.id;
   const slots = useCollection<SlotDoc>(`sessions/${sid}/slots`);
   const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
-  const teachers = useCollection<TeacherDoc>('teachers', termWhere(session));
+  const teachers = useSessionTeachers(session);
   const assignments = useCollection<AssignmentDoc>(`sessions/${sid}/assignments`);
   const [view, setView] = useState<'mine' | 'full'>('mine');
 

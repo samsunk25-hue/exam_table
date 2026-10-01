@@ -46,9 +46,9 @@ await db.doc('rooms/R001').set({ name: '1-1', spaceType: 'CLASSROOM', grade: 1, 
 
 const { browser, page, errors } = await openApp();
 await page.evaluate(() => localStorage.removeItem('sim.term'));
-await go(page, '/admin/teachers');
-const picker = page.getByLabel('학교·학기');
-check('처음 학기 = 가장 최근 프로젝트 (2026-2)', (await picker.inputValue()) === `${SCHOOL}|2026|2`, await picker.inputValue());
+// 교사 명단은 프로젝트 안에서 그 프로젝트 학교·학기 명단을 본다
+await go(page, '/admin/sessions/TERM_26_2/teachers');
+check('프로젝트 안 교사 명단 = 그 프로젝트 학기 (2026-2)', await page.getByText(`${SCHOOL} · 2026학년도 2학기`).first().isVisible());
 check('이 학기 명단은 비어 있음', await page.getByText('이 학기에 등록된 교사가 없습니다').isVisible());
 
 async function importFrom(label, skip) {
@@ -81,7 +81,7 @@ await page.getByRole('cell', { name: '예전쌤' }).waitFor();
 check('화면: 이 학기 교사 3명', (await page.locator('tbody tr').count()) === 3);
 
 // 다른 학기로 바꾸면 그 학기 명단
-await picker.selectOption(`${SCHOOL}|2026|1`);
+await go(page, '/admin/sessions/TERM_26_1/teachers');
 await page.getByRole('cell', { name: '일학기쌤' }).waitFor();
 check('학기 바꾸기 → 그 학기 명단만 (1학기 2명)', (await page.locator('tbody tr').count()) === 2);
 

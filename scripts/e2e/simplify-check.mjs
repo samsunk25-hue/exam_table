@@ -39,8 +39,7 @@ const A = await openApp();
 await go(A.page, `/admin/sessions/${SID}`);
 const steps = await A.page.getByRole('navigation', { name: '시험 프로젝트 단계' }).innerText();
 check('4단계 탭 (준비·배정·점검·공개·출력)', ['① 준비', '② 배정', '③ 점검', '④ 공개·출력'].every((x) => steps.includes(x)));
-const stepper = await A.page.locator('ol').first().innerText();
-check('진행 단계 4개로 표시', ['초안', '검토', '공개', '확정'].every((x) => stepper.includes(x)) && !stepper.includes('교환'));
+check('진행 상태는 단계 탭에 함께 (중복 단계표 없음)', steps.includes('진행 중') && (await A.page.locator('ol').count()) === 0 && (await A.page.getByText('현재 상태').isVisible()));
 const next = A.page.getByLabel('다음 할 일');
 check('다음 할 일: 시험 일정 입력', (await next.innerText()).includes('시험 일정 입력하기'));
 await next.getByRole('link', { name: /시험 일정 입력하기/ }).click();
@@ -49,9 +48,14 @@ const oneScreen = await A.page.getByText('시험별 시험실 배치').waitFor({
 check('(1) 시험 일정 한 화면: 달력 입력 + 시험실 배치', oneScreen && (await A.page.getByRole('button', { name: '시험 시간표 표로 입력' }).isVisible()));
 await A.page.screenshot({ path: 'scripts/e2e/out/simplify-schedule.png', fullPage: true });
 
-// (2) 머리글 학교·학기: 프로젝트를 열면 그 학기로
-check('(2) 머리글 학교·학기 = 프로젝트 학기', (await A.page.getByLabel('학교·학기').inputValue()) === TERM.term);
-check('상단 메뉴에 "시험일정 관리" 없음', (await A.page.getByRole('navigation', { name: '주 메뉴' }).getByText('시험일정 관리').count()) === 0);
+// (2) 학교·학기 선택 없음: 교사·시험실은 프로젝트 안에서 그 학기 명단
+await go(A.page, '/admin');
+check('(2) 대시보드에 학교·학기 선택 없음', (await A.page.getByLabel('학교·학기').count()) === 0);
+await go(A.page, `/admin/sessions/${SID}/teachers`);
+check('준비 > 교사 명단 = 프로젝트 학기 명단', await A.page.getByText('점검중학교 · 2026학년도 2학기').first().isVisible());
+await go(A.page, `/admin/sessions/${SID}/schedule`);
+const topNav = await A.page.getByRole('navigation', { name: '주 메뉴' }).innerText();
+check('상단 메뉴는 대시보드·관리자 관리만', !topNav.includes('시험일정 관리') && !topNav.includes('교사 관리') && !topNav.includes('시험실 관리'), topNav.replace(/\s+/g, ' '));
 
 // (4) 시험 1건 넣고 → 자동 배정하고 바로 적용
 await db.doc('rooms/RSIM').set({ name: '단순-1', spaceType: 'CLASSROOM', grade: 1, classNo: 1, chiefCount: 1, assistantCount: 0, ...TERM, updatedBy: 'seed' });

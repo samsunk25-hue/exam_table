@@ -12,10 +12,11 @@ import {
   type SlotDoc,
   type Transition,
 } from '@sim/shared';
-import { StatusStepper } from '@/components/StatusStepper';
+import { StatusBadge } from '@/components/StatusStepper';
 import { useTerm } from '@/components/TermRoster';
 import { UndoConfirm, useUndoOps } from '@/components/UndoHistory';
-import { BundleSection } from './BundleCard';
+import { BundleSection, TimetableUpload } from './BundleCard';
+import { TempStaffCard } from './TempStaffCard';
 import { Alert, Button, Card, PageTitle, Spinner, Toggle } from '@/components/ui';
 import { useCollection } from '@/lib/data';
 import { callTransitionSession, errorMessage } from '@/lib/firebase';
@@ -28,7 +29,8 @@ const STEPS: { label: string; tabs: { to: string; label: string }[] }[] = [
     tabs: [
       { to: '', label: '개요' },
       { to: 'schedule', label: '시험 일정' },
-      { to: 'setup', label: '기초시간표' },
+      { to: 'teachers', label: '교사 명단' },
+      { to: 'rooms', label: '시험실' },
       { to: 'availability', label: '불가시간' },
     ],
   },
@@ -111,6 +113,8 @@ export function SessionLayout() {
   // 지금 화면이 속한 단계
   const sub = pathname.split(`/sessions/${session.id}`)[1]?.replace(/^\//, '').split('/')[0] ?? '';
   const current = Math.max(0, STEPS.findIndex((st) => st.tabs.some((t) => t.to === sub)));
+  // 진행 상태 → 단계: 초안=준비, 배정 완료=배정, 검토=점검, 공개·확정=공개·출력
+  const progress = { DRAFT: 0, AUTO_ASSIGNED: 1, REVIEW: 2, PUBLISHED: 3, SWAP: 3, CONFIRMED: 3, LOCKED: 3 }[session.status];
   const tabClass = ({ isActive }: { isActive: boolean }) =>
     `flex min-h-12 shrink-0 items-center border-b-2 px-4 font-semibold ${isActive ? 'border-primary text-primary-strong' : 'border-transparent text-muted hover:text-ink'}`;
 
@@ -123,18 +127,25 @@ export function SessionLayout() {
       <SyncTerm session={session} />
       <NextAction session={session} />
       <nav className="flex gap-2 overflow-x-auto" aria-label="시험 프로젝트 단계">
-        {STEPS.map((st, i) => (
-          <Link
-            key={st.label}
-            to={st.tabs[0]!.to || '.'}
-            aria-current={i === current ? 'page' : undefined}
-            className={`flex min-h-12 shrink-0 items-center rounded-xl px-5 text-lg font-bold ${
-              i === current ? 'bg-primary text-white' : 'bg-surface text-ink border border-line hover:border-primary hover:bg-primary-soft'
-            }`}
-          >
-            {st.label}
-          </Link>
-        ))}
+        {STEPS.map((st, i) => {
+          // 진행 상태도 이 단계 탭으로 보여 준다: 지난 단계 ✓, 지금 단계 "진행 중"
+          const done = i < progress;
+          return (
+            <Link
+              key={st.label}
+              to={st.tabs[0]!.to || '.'}
+              aria-current={i === current ? 'page' : undefined}
+              className={`flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-5 text-lg font-bold ${
+                i === current ? 'bg-primary text-white' : 'bg-surface text-ink border border-line hover:border-primary hover:bg-primary-soft'
+              }`}
+            >
+              {done ? `✓ ${st.label.slice(2)}` : st.label}
+              {i === progress && (
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${i === current ? 'bg-white/25' : 'bg-primary-soft text-primary-strong'}`}>진행 중</span>
+              )}
+            </Link>
+          );
+        })}
       </nav>
       <nav className="mb-6 flex gap-1 overflow-x-auto border-b border-line" aria-label="시험 프로젝트 메뉴">
         {STEPS[current]!.tabs.map((t) => (
@@ -249,6 +260,18 @@ export function SessionOverview() {
     }
   };
 
+  const saveSetting = async (patch: Partial<ExamSession['settings']>) => {
+    setSaving(true);
+    setError(null);
+    try {
+      await updateSessionSettings(session.id, { ...session.settings, ...patch });
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveWriter = async (v: ExamWriterRule) => {
     setSaving(true);
     setError(null);
@@ -264,8 +287,9 @@ export function SessionOverview() {
   return (
     <div className="grid gap-6">
       <Card>
-        <h2 className="mb-4 text-lg font-bold">진행 단계</h2>
-        <StatusStepper status={session.status} />
+        <h2 className="text-lg font-bold">
+          현재 상태 <StatusBadge status={session.status} />
+        </h2>
         {session.lastChangeReason && (
           <p className="mt-3 text-sm text-muted">최근 변경 사유: {session.lastChangeReason}</p>
         )}
@@ -282,16 +306,31 @@ export function SessionOverview() {
       </Card>
 
       <BundleSection session={session} />
+      <TempStaffCard session={session} />
 
       <Card>
         <h2 className="mb-2 text-lg font-bold">배정 설정</h2>
         <Toggle
           label="기초시간표 반영"
-          hint="켜면 시험 시간에 해당 반을 원래 가르치던 교사에게 가점(+50)을 줍니다."
+          hint="켜면 시험 시간에 해당 반을 원래 가르치던 교사에게 가점(+50)을 줍니다. 켜면 아래에서 기초시간표를 올립니다."
           checked={session.settings.useBaseTimetable}
           disabled={!editable || saving}
           onChange={(v) => void toggleBase(v)}
         />
+        {session.settings.useBaseTimetable && (
+          <>
+            <TimetableUpload session={session} />
+            <div className="mt-3 ml-8">
+              <Toggle
+                label="시험 없는 학년은 수업 (수업 중인 교사는 감독 제외·수업 시간도 업무 점수)"
+                hint="같은 시간에 시험을 보지 않는 학년은 수업한다고 보고, 그 시간 그 학년 수업이 있는 교사는 감독에서 빼고 수업 1시간을 0.8점으로 셉니다. 기본 켜짐."
+                checked={session.settings.classDuringExam !== false}
+                disabled={!editable || saving}
+                onChange={(v) => void saveSetting({ classDuringExam: v })}
+              />
+            </div>
+          </>
+        )}
         <label className="mt-4 grid max-w-xl gap-1">
           <span className="font-semibold">출제 교사 (자기 과목 시험 시간)</span>
           <select

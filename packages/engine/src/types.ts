@@ -23,6 +23,8 @@ export interface Teacher {
   active: boolean;
   /** 과거 세션에서 적립된 누적 업무점수 (Load_Ledger 합계) */
   priorLoad: number;
+  /** 교사 명단에 없는 임시 감독자 (이번 시험만): 교사가 모자랄 때만 쓴다 */
+  temporary?: boolean;
 }
 
 export interface Room {
@@ -106,6 +108,12 @@ export interface Settings {
   useBaseTimetable: boolean;
   /** 출제 교사: 자기 과목 시험 시간에 복도 대기 우선 / 교실 감독 제외(하드) */
   examWriterRule?: 'NONE' | 'PREFER_HALLWAY' | 'NO_ROOM';
+  /** 시험 없는 학년은 수업: 그 시간 기초시간표에 수업이 있는 교사는 감독에서 뺀다 */
+  classDuringExam?: boolean;
+  /** 시험 없는 학년 수업 1시간의 업무 점수 (기본 0.8 = 부감독 1회) */
+  classWeight?: number;
+  /** 감독 없음으로 정한 자리 (배정하지 않고 미배정으로 세지 않음) */
+  skipSeats?: string[];
   weights?: Partial<Weights>;
   roleWeights?: Partial<RoleWeights>;
   /** 형평성 재배치 시 허용하는 소프트 점수 하락폭 */
@@ -171,7 +179,8 @@ export type ExclusionReason =
   | 'CONSTRAINT'
   | 'BUSY'
   | 'AFTER_EXTENDED'
-  | 'EXAM_WRITER';
+  | 'EXAM_WRITER'
+  | 'IN_CLASS';
 
 export interface UnassignedSeat {
   seat: Seat;

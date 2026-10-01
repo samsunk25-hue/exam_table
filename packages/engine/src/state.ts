@@ -77,8 +77,9 @@ export class State {
     return this.sessionLoad.get(teacherId) ?? 0;
   }
 
+  /** 누적 + 이번 시험 감독 + 이번 시험 기간 수업 */
   totalLoadOf(teacher: Teacher): number {
-    return teacher.priorLoad + this.sessionLoadOf(teacher.id);
+    return teacher.priorLoad + this.sessionLoadOf(teacher.id) + (this.ctx.classLoad.get(teacher.id) ?? 0);
   }
 
   assignmentsOf(teacherId: string): Assignment[] {
@@ -110,8 +111,9 @@ export class State {
   }
 
   loadBands(): LoadBands {
+    // 임시 감독자는 형평성 기준에서 뺀다 (누적 0점이라 늘 부담하위로 잡히지 않게)
     const loads = this.ctx.teachers
-      .filter(isEligibleTeacher)
+      .filter((t) => isEligibleTeacher(t) && !t.temporary)
       .map((t) => this.totalLoadOf(t))
       .sort((a, b) => a - b);
     const n = loads.length;
@@ -140,7 +142,8 @@ export class State {
     }
 
     const load = this.totalLoadOf(teacher);
-    if (load <= bands.low + EPS) add(w.lowLoad, '부담하위');
+    if (teacher.temporary) add(-80, '임시 감독자');
+    else if (load <= bands.low + EPS) add(w.lowLoad, '부담하위');
     else if (load >= bands.high - EPS) add(w.highLoad, '부담상위');
 
     if (teacher.homeroom === null || teacher.homeroom.grade !== seat.grade) {

@@ -56,6 +56,12 @@ export interface TeacherDoc {
   active: boolean;
   /** 같은 학년도 안의 누적 업무점수 (같은 학년도 학기에서 명단을 불러오면 이어받는다) */
   cumulativeLoad: number;
+  /** 임시 감독자 (교사 명단에 없는 사람, 이 시험 프로젝트에서만) */
+  temporary?: boolean;
+  /** 임시 감독자가 쓰이는 시험 프로젝트 ID */
+  onlySession?: string;
+  /** 임시 감독자 메모 (예: 학부모, 강사) */
+  note?: string | null;
   /** 소속 학교·학기. 없으면 예전(학기 미지정) 자료 */
   term?: string;
   school?: string;

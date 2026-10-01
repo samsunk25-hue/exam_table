@@ -9,7 +9,7 @@ import { Alert, Button } from '@/components/ui';
 import { commitOps, ref, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
 import { undoable } from '@/lib/undo';
-import { guessBreak, recalcPeriods, withAddedPeriod } from '@/lib/periodTimes';
+import { guessBreak, withAddedPeriod } from '@/lib/periodTimes';
 import { updateSessionSettings, type ExamSession, type PeriodTime } from '@/lib/sessions';
 
 type Slot = WithId<SlotDoc>;
@@ -45,7 +45,6 @@ export function ExamGridEditor({
     for (const s of slots) if (!t[s.period] && s.startTime) t[s.period] = { start: s.startTime, end: s.endTime ?? '' };
     return t;
   });
-  const [breakMin, setBreakMin] = useState(() => guessBreak(times));
   const grades = useMemo(() => {
     const g = new Set<number>([1, 2, 3]);
     rooms.forEach((r) => r.grade && g.add(r.grade));
@@ -158,7 +157,7 @@ export function ExamGridEditor({
         <section>
           <h3 className="mb-2 font-bold">2. 교시별 시간</h3>
           <div className="mb-3">
-            <BreakTimeBar value={breakMin} onChange={setBreakMin} onRecalc={() => setTimes(recalcPeriods(times, periods, breakMin))} canRecalc={Boolean(times[1]?.start && times[1]?.end)} />
+            <BreakTimeBar times={times} count={periods} onChange={setTimes} />
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: periods }, (_, i) => i + 1).map((p) => (
@@ -171,7 +170,7 @@ export function ExamGridEditor({
           </div>
           <div className="mt-2 flex gap-2">
             {periods < 8 && (
-              <Button variant="ghost" onClick={() => (setTimes(withAddedPeriod(times, periods, breakMin)), setPeriods(periods + 1))}>
+              <Button variant="ghost" onClick={() => (setTimes(withAddedPeriod(times, periods, guessBreak(times))), setPeriods(periods + 1))}>
                 + 교시 추가
               </Button>
             )}

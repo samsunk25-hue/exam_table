@@ -3,7 +3,7 @@ import { SPACE_TYPE_LABEL, nextId, termFields, termLabel, type RoomDoc, type Spa
 import { Modal } from '@/components/Modal';
 import { UndoHistory } from '@/components/UndoHistory';
 import { RosterImportDialog, useTerm } from '@/components/TermRoster';
-import { Alert, Button, Card, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
+import { Alert, Button, Card, Field, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
 import { ClassroomSetupCard } from './ClassroomSetupCard';
@@ -152,9 +152,10 @@ export function RoomsPage() {
 
   return (
     <>
-      <PageTitle sub={`${choice.current ? `${termLabel(choice.current)} · ` : ''}시험실 ${data.length}개 · 한 교시에 필요한 감독 ${seats}명 (모든 시험실 사용 시)`}>
-        시험실 관리
-      </PageTitle>
+      <div className="mb-4">
+        <h2 className="text-xl font-bold">시험실</h2>
+        <p className="text-muted">{`${choice.current ? `${termLabel(choice.current)} · ` : ''}시험실 ${data.length}개 · 한 교시에 필요한 감독 ${seats}명 (모든 시험실 사용 시)`}</p>
+      </div>
 
       {!choice.loading && !choice.current && (
         <div className="mb-4">

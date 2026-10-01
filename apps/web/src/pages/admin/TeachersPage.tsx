@@ -15,7 +15,7 @@ import {
 import { Modal } from '@/components/Modal';
 import { UndoHistory } from '@/components/UndoHistory';
 import { RosterImportDialog, useTerm } from '@/components/TermRoster';
-import { Alert, Button, Card, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
+import { Alert, Button, Card, Field, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
 
@@ -273,7 +273,10 @@ export function TeachersPage() {
 
   return (
     <>
-      <PageTitle sub={choice.current ? `${termLabel(choice.current)} · 사용 중 ${activeCount}명 / 전체 ${data.length}명` : '교사 명단'}>교사 관리</PageTitle>
+      <div className="mb-4">
+        <h2 className="text-xl font-bold">교사 명단</h2>
+        <p className="text-muted">{choice.current ? `${termLabel(choice.current)} · 사용 중 ${activeCount}명 / 전체 ${data.length}명` : '교사 명단'}</p>
+      </div>
 
       {!choice.loading && !choice.current && (
         <div className="mb-4">
@@ -328,6 +331,7 @@ export function TeachersPage() {
                 <Td className="font-bold">
                   {t.name}
                   {!t.active && <span className="ml-2 text-sm font-normal">(사용 안 함)</span>}
+                  {t.temporary && <span className="ml-2 rounded-full bg-bg px-2 py-0.5 text-xs font-normal text-muted">임시 감독자{t.note ? ` · ${t.note}` : ''}</span>}
                 </Td>
                 <Td>{t.email ?? <span className="text-alert">없음</span>}</Td>
                 <Td>{t.subject}</Td>

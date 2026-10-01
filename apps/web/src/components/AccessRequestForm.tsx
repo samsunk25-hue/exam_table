@@ -74,7 +74,8 @@ export function AccessRequestForm({ kinds = ['TEACHER', 'ADMIN'] }: { kinds?: Ac
   if (request?.status === 'PENDING' && kinds.includes(request.kind)) {
     return (
       <Alert tone="info">
-        <p className="font-semibold">{ACCESS_KIND_LABEL[request.kind]} 승인 대기 중입니다.</p>
+        <p className="text-lg font-bold">승인을 기다리는 중입니다.</p>
+        <p className="mt-1">{ACCESS_KIND_LABEL[request.kind]} 신청</p>
         <p className="mt-1">
           {request.name}
           {request.subject ? ` · ${request.subject}` : ''} · {request.email}

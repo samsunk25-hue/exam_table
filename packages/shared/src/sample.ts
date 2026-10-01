@@ -1,4 +1,5 @@
-// 통합 양식 샘플: 교사 25명 중학교, 3일 × 하루 3교시(1·2교시 시험, 3교시 자습), 45분 시험 + 15분 휴식
+// 통합 양식 샘플: 교사 25명 중학교(3학년 × 3반), 3일 × 하루 3교시(1·2교시 시험, 3교시 자습), 45분 시험 + 15분 휴식
+// 교실마다 정감독 1 + 부감독 1 (복도 감독 없음)
 import { slotIdOf, type BaseTimetableDoc, type Placement, type RoomDoc, type SlotDoc, type TeacherDoc, type TimetableEntry, type WithId } from './model';
 
 export interface SampleSchool {
@@ -10,7 +11,7 @@ export interface SampleSchool {
 }
 
 const GRADES = 3;
-const CLASSES = 4;
+const CLASSES = 3;
 
 // 이름 · 과목 (가상 인물)
 const STAFF: [string, string][] = [
@@ -63,15 +64,15 @@ export function nextWeekdays(startDate: string, n: number): string[] {
 export function buildSampleSchool(startDate = '2026-10-19'): SampleSchool {
   const teachers: WithId<TeacherDoc>[] = STAFF.map(([name, subject], i) => {
     const n = i + 1;
-    // 앞쪽 교과 교사 12명이 담임 (1-1 … 3-4), 정보·진로 교사는 복도전담
-    const homeroomIdx = i < 12 ? i : -1;
+    // 앞쪽 교과 교사 9명이 담임 (1-1 … 3-3)
+    const homeroomIdx = i < GRADES * CLASSES ? i : -1;
     return {
       id: `S${String(n).padStart(2, '0')}`,
       name,
       email: `t${String(n).padStart(2, '0')}@sample.school.kr`,
       subject,
       homeroom: homeroomIdx >= 0 ? { grade: (homeroomIdx % GRADES) + 1, classNo: Math.floor(homeroomIdx / GRADES) + 1 } : null,
-      defaultRole: subject === '정보' || subject === '진로' ? 'HALLWAY' : 'NORMAL',
+      defaultRole: 'NORMAL',
       active: true,
       cumulativeLoad: 0,
     };
@@ -80,15 +81,13 @@ export function buildSampleSchool(startDate = '2026-10-19'): SampleSchool {
   const rooms: WithId<RoomDoc>[] = [];
   for (let g = 1; g <= GRADES; g++) {
     for (let c = 1; c <= CLASSES; c++) {
-      rooms.push({ id: `SR${g}${c}`, name: `${g}-${c}`, spaceType: 'CLASSROOM', grade: g, classNo: c, chiefCount: 1, assistantCount: 0 });
+      rooms.push({ id: `SR${g}${c}`, name: `${g}-${c}`, spaceType: 'CLASSROOM', grade: g, classNo: c, chiefCount: 1, assistantCount: 1 });
     }
-    rooms.push({ id: `SH${g}`, name: `${g}학년 복도`, spaceType: 'HALLWAY', grade: g, classNo: null, chiefCount: 1, assistantCount: 0 });
   }
   rooms.push({ id: 'SSEP', name: '별도시험장', spaceType: 'SEPARATE', grade: null, classNo: null, chiefCount: 1, assistantCount: 1 });
 
   const classrooms = (g: number): Placement[] =>
     rooms.filter((r) => r.grade === g && r.spaceType === 'CLASSROOM').map((r) => ({ roomId: r.id, classNo: r.classNo, headcount: 25, roomType: 'NORMAL' as const }));
-  const hallway = (g: number): Placement => ({ roomId: `SH${g}`, classNo: null, headcount: null, roomType: 'NORMAL' });
 
   const slots: WithId<SlotDoc>[] = [];
   nextWeekdays(startDate, 3).forEach((date, day) => {
@@ -96,7 +95,7 @@ export function buildSampleSchool(startDate = '2026-10-19'): SampleSchool {
       for (const period of [1, 2, 3]) {
         const t = SAMPLE_PERIOD_TIMES[String(period) as '1' | '2' | '3'];
         const study = period === 3;
-        const placements = study ? classrooms(g) : [...classrooms(g), hallway(g)];
+        const placements = classrooms(g);
         // 1학년 1교시 시험은 별도시험장(시간 연장) 함께 운영
         if (!study && g === 1 && period === 1) placements.push({ roomId: 'SSEP', classNo: null, headcount: 2, roomType: 'EXTENDED', startTime: '09:00', endTime: '10:10' }); // 연장 시간이 2교시와 겹치는 예시
         slots.push({

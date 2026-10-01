@@ -1,5 +1,6 @@
 import type { Transaction } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { classLoadOf, classTimes } from '@sim/engine';
 import { findTransition, isSessionStatus, sumLoads, type SessionStatus } from '@sim/shared';
 import { db, increment, requireAdmin, serverTimestamp } from './common';
 import { notifyTeachers } from './notify';
@@ -9,7 +10,28 @@ import { recordOp } from './undo';
  * 세션 업무점수를 loadLedger에 기록하고 교사 누적 점수를 증감한다.
  * 같은 세션을 다시 기록하면(잠금 시 재계산) 이전 기록과의 차이만 반영된다.
  */
-async function writeLedger(tx: Transaction, sessionId: string): Promise<void> {
+/** 시험 기간 수업 업무 점수 (시험 없는 학년 수업, 기본 켜짐·기초시간표가 있을 때) */
+async function classLoadFor(sessionId: string): Promise<Map<string, number>> {
+  const firestore = db();
+  const session = await firestore.doc(`sessions/${sessionId}`).get();
+  if (session.get('settings.classDuringExam') === false) return new Map();
+  const [slots, timetable] = await Promise.all([
+    firestore.collection(`sessions/${sessionId}/slots`).get(),
+    firestore.collection(`sessions/${sessionId}/baseTimetable`).get(),
+  ]);
+  const entries = timetable.docs.flatMap((d) =>
+    ((d.get('entries') as { weekday: number; period: number; grade: number }[] | undefined) ?? []).map((e) => ({ ...e, teacherId: d.id })),
+  );
+  if (!entries.length) return new Map();
+  return classLoadOf(
+    classTimes(
+      slots.docs.map((d) => ({ date: d.get('date') as string, period: d.get('period') as number, grade: d.get('grade') as number })),
+      entries,
+    ),
+  );
+}
+
+async function writeLedger(tx: Transaction, sessionId: string, classLoad: Map<string, number>): Promise<void> {
   const firestore = db();
   const [assignSnap, ledgerSnap] = await Promise.all([
     tx.get(firestore.collection(`sessions/${sessionId}/assignments`)),
@@ -19,6 +41,8 @@ async function writeLedger(tx: Transaction, sessionId: string): Promise<void> {
   const next = sumLoads(
     assignSnap.docs.map((d) => ({ teacherId: d.get('teacherId') as string, weight: d.get('weight') as number })),
   );
+  // 시험 없는 학년 수업 시간도 이번 시험 업무 점수에 더한다
+  for (const [t, load] of classLoad) next.set(t, Math.round(((next.get(t) ?? 0) + load) * 1000) / 1000);
   const prev = new Map<string, number>(
     ledgerSnap.docs.map((d) => [d.get('teacherId') as string, d.get('load') as number]),
   );
@@ -48,6 +72,7 @@ export const transitionSession = onCall(async (req) => {
 
   // 되돌리기 기록: 세션 상태 + (확정·잠금이면) 누적 점수 원장과 교사 점수
   const before = await ref.get();
+  const classLoad = await classLoadFor(sessionId);
   const from0 = before.get('status') as SessionStatus | undefined;
   const t0 = from0 ? findTransition(from0, to) : undefined;
   if (t0) {
@@ -60,6 +85,7 @@ export const transitionSession = onCall(async (req) => {
       const teacherIds = new Set([
         ...assignSnap.docs.map((d) => d.get('teacherId') as string),
         ...ledgerSnap.docs.map((d) => d.get('teacherId') as string),
+        ...classLoad.keys(),
       ]);
       for (const id of teacherIds) refs.push(db().doc(`teachers/${id}`), db().doc(`loadLedger/${sessionId}_${id}`));
     }
@@ -85,7 +111,7 @@ export const transitionSession = onCall(async (req) => {
 
     // 최초 확정과 잠금 시 누적 점수 반영 (잠금 해제로 CONFIRMED가 될 때는 제외)
     if ((to === 'CONFIRMED' && from !== 'LOCKED') || to === 'LOCKED') {
-      await writeLedger(tx, sessionId);
+      await writeLedger(tx, sessionId, classLoad);
     }
 
     tx.update(ref, {

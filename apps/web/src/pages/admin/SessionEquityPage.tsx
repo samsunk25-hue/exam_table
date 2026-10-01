@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { SEAT_ROLE_LABEL, type AssignmentDoc, type SeatRole, type TeacherDoc } from '@sim/shared';
+import { DEFAULT_CLASS_WEIGHT, classLoadOf, classTimes } from '@sim/engine';
+import { SEAT_ROLE_LABEL, type AssignmentDoc, type BaseTimetableDoc, type SeatRole, type SlotDoc } from '@sim/shared';
 import { Alert, Button, Card, DownloadButton, Spinner, Table, Td } from '@/components/ui';
 import { useCollection } from '@/lib/data';
-import { sessionTitle, termWhere } from '@/lib/sessions';
+import { sessionTitle, useSessionTeachers } from '@/lib/sessions';
 import { downloadWorkbook } from '@/lib/xlsx';
 import { FairnessReportCard } from '@/components/AiCards';
 import { useCurrentSession } from './SessionPage';
@@ -21,6 +22,8 @@ interface Row {
   load: number;
   /** 같은 날 이어지는 교시 감독 쌍 수 */
   consecutive: number;
+  /** 시험 없는 학년 수업 시간 */
+  classHours: number;
   /** 이번 시험 전까지 학년도 누적 */
   prior: number;
   total: number;
@@ -32,8 +35,16 @@ interface Row {
  */
 export function SessionEquityPage() {
   const session = useCurrentSession();
-  const teachers = useCollection<TeacherDoc>('teachers', termWhere(session));
+  const teachers = useSessionTeachers(session);
   const assignments = useCollection<AssignmentDoc>(`sessions/${session.id}/assignments`);
+  const slots = useCollection<SlotDoc>(`sessions/${session.id}/slots`);
+  const timetable = useCollection<BaseTimetableDoc>(`sessions/${session.id}/baseTimetable`);
+  // 시험 없는 학년 수업 시간 (기본 켜짐, 기초시간표가 있을 때) — 업무 점수에 더한다
+  const classHours = useMemo(() => {
+    if (session.settings.classDuringExam === false) return new Map<string, number>();
+    const entries = timetable.data.flatMap((d) => d.entries.map((e) => ({ ...e, teacherId: d.id })));
+    return classLoadOf(classTimes(slots.data, entries), 1);
+  }, [slots.data, timetable.data, session.settings.classDuringExam]);
   const [sort, setSort] = useState<'load' | 'total' | 'name'>('load');
   // 확정 이후에는 교사 누적 점수에 이번 시험이 이미 들어 있다
   const confirmed = session.status === 'CONFIRMED' || session.status === 'LOCKED';
@@ -46,7 +57,8 @@ export function SessionEquityPage() {
       .map((t) => {
         const mine = byTeacher.get(t.id) ?? [];
         const roles = Object.fromEntries(ROLES.map((r) => [r, mine.filter((a) => a.role === r).length])) as Record<SeatRole, number>;
-        const load = round(mine.reduce((s, a) => s + a.weight, 0));
+        const hours = classHours.get(t.id) ?? 0;
+        const load = round(mine.reduce((s, a) => s + a.weight, 0) + hours * DEFAULT_CLASS_WEIGHT);
         const times = new Set(mine.map((a) => `${a.date}|${a.period}`));
         const consecutive = [...times].filter((k) => {
           const [d, p] = k.split('|');
@@ -54,11 +66,11 @@ export function SessionEquityPage() {
         }).length;
         const cumulative = t.cumulativeLoad ?? 0;
         const prior = round(confirmed ? cumulative - load : cumulative);
-        return { id: t.id, name: t.name, subject: t.subject, count: mine.length, roles, load, consecutive, prior, total: round(prior + load) };
+        return { id: t.id, name: t.name, subject: t.subject, count: mine.length, roles, load, consecutive, classHours: hours, prior, total: round(prior + load) };
       });
-  }, [teachers.data, assignments.data, confirmed]);
+  }, [teachers.data, assignments.data, confirmed, classHours]);
 
-  if (teachers.loading || assignments.loading) return <Spinner />;
+  if (teachers.loading || assignments.loading || slots.loading || timetable.loading) return <Spinner />;
   const error = teachers.error ?? assignments.error;
   if (error) return <Alert>{error}</Alert>;
 
@@ -80,8 +92,8 @@ export function SessionEquityPage() {
       {
         name: '업무 점수',
         rows: [
-          ['교사', '교과', '감독 횟수', ...ROLES.map((r) => SEAT_ROLE_LABEL[r]), '연속 감독', '이번 시험 점수', '이전 누적', '학년도 누적'],
-          ...sorted.map((r) => [r.name, r.subject ?? '', r.count, ...ROLES.map((x) => r.roles[x]), r.consecutive, r.load, r.prior, r.total]),
+          ['교사', '교과', '감독 횟수', ...ROLES.map((r) => SEAT_ROLE_LABEL[r]), '연속 감독', '수업 시간', '이번 시험 점수', '이전 누적', '학년도 누적'],
+          ...sorted.map((r) => [r.name, r.subject ?? '', r.count, ...ROLES.map((x) => r.roles[x]), r.consecutive, r.classHours, r.load, r.prior, r.total]),
         ],
       },
     ]);
@@ -91,7 +103,7 @@ export function SessionEquityPage() {
       <Card>
         <h2 className="text-lg font-bold">업무 점수 (형평성)</h2>
         <p className="mt-1 text-muted">
-          업무 점수 = 맡은 감독의 역할 가중치 합 (정감독 1.0, 부감독 0.8, 연장감독 1.5 등). 학년도 누적은 같은 학년도에 확정된 시험 점수를 더한 값으로, 자동 배정은
+          업무 점수 = 맡은 감독의 역할 가중치 합 (정감독 1.0, 부감독 0.8, 연장감독 1.5 등) + 시험 없는 학년 수업 1시간당 0.8. 학년도 누적은 같은 학년도에 확정된 시험 점수를 더한 값으로, 자동 배정은
           누적이 낮은 교사에게 먼저 배정합니다.
         </p>
         <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -146,7 +158,7 @@ export function SessionEquityPage() {
         {rows.length === 0 ? (
           <p className="text-muted">이 학교·학기 교사 명단이 없습니다.</p>
         ) : (
-          <Table head={['교사', '감독', '역할', '연속', '이번', '누적', '학년도 누적 (막대)']}>
+          <Table head={['교사', '감독', '역할', '연속', '수업', '이번', '누적', '학년도 누적 (막대)']}>
             {sorted.map((r) => {
               const b = band(r.total);
               return (
@@ -163,6 +175,9 @@ export function SessionEquityPage() {
                       .join(' · ')}
                   </Td>
                   <Td className={r.consecutive ? 'font-semibold' : 'text-muted'}>{r.consecutive}</Td>
+                  <Td className={r.classHours ? 'font-semibold' : 'text-muted'}>
+                    {r.classHours ? `${r.classHours}시간` : 0}
+                  </Td>
                   <Td className="font-bold">{r.load}</Td>
                   <Td>{r.total}</Td>
                   <Td className="w-[32%] min-w-40">

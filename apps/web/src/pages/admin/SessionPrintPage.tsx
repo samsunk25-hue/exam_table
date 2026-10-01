@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import type { AssignmentDoc, RoomDoc, SlotDoc, TeacherDoc } from '@sim/shared';
+import type { AssignmentDoc, RoomDoc, SlotDoc } from '@sim/shared';
 import { FullTimetable, PersonalTimetable } from '@/components/TimetableViews';
 import { Alert, Button, Card, DownloadButton, Select, Spinner } from '@/components/ui';
 import { useCollection } from '@/lib/data';
-import { sessionTitle, termWhere } from '@/lib/sessions';
+import { sessionTitle, termWhere, useSessionTeachers } from '@/lib/sessions';
 import { downloadCalendar, downloadFullTimetable, downloadPersonalTimetable, dutiesOf, type TimetableData } from '@/lib/timetable';
 import { useCurrentSession } from './SessionPage';
 
@@ -13,7 +13,7 @@ export function SessionPrintPage() {
   const sid = session.id;
   const slots = useCollection<SlotDoc>(`sessions/${sid}/slots`);
   const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
-  const teachers = useCollection<TeacherDoc>('teachers', termWhere(session));
+  const teachers = useSessionTeachers(session);
   const assignments = useCollection<AssignmentDoc>(`sessions/${sid}/assignments`);
   const [view, setView] = useState<'full' | 'personal'>('full');
   const [teacherId, setTeacherId] = useState('');

@@ -133,7 +133,7 @@ export function ReasonPicker({ value, onChange }: { value: string; onChange: (v:
   const [custom, setCustom] = useState(!AVAILABILITY_REASONS.includes(value as never) && value !== '');
   return (
     <fieldset>
-      <legend className="mb-2 font-semibold">사유</legend>
+      <legend className="mb-2 font-semibold">사유 <span className="font-normal text-muted">(선택)</span></legend>
       <div className="flex flex-wrap gap-2">
         {AVAILABILITY_REASONS.map((r) => {
           const active = r === '기타' ? custom : !custom && value === r;
@@ -161,7 +161,7 @@ export function ReasonPicker({ value, onChange }: { value: string; onChange: (v:
       {custom && (
         <input
           className="mt-2 min-h-12 w-full rounded-xl border border-line px-4 outline-none focus:border-primary"
-          placeholder="사유를 입력하세요 (예: 학부모 상담)"
+          placeholder="사유 (선택) — 예: 학부모 상담"
           value={value}
           maxLength={40}
           onChange={(e) => onChange(e.target.value)}

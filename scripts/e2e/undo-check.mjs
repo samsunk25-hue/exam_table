@@ -44,11 +44,16 @@ const { browser, page, errors } = await openApp();
 await page.evaluate((k) => localStorage.setItem('sim.term', k), TERM.term);
 
 async function editSubject(v) {
-  await go(page, '/admin/teachers');
+  await go(page, `/admin/sessions/${SID}/teachers`);
   await page.locator('tr', { hasText: '김국어' }).getByRole('button', { name: '수정' }).click();
   await page.getByLabel('담당교과').fill(v);
   await page.getByRole('button', { name: '저장', exact: true }).click();
-  await until(async () => (await subject()) === v);
+  // 창이 닫힐 때까지 (자료 저장 + 되돌리기 기록 저장이 끝난 뒤 닫힌다)
+  await page.getByRole('dialog').waitFor({ state: 'detached', timeout: 15000 }).catch(() => {});
+  if (!(await until(async () => (await subject()) === v, 8000))) {
+    await page.screenshot({ path: `scripts/e2e/out/undo-edit-${v}.png` });
+    console.log('EDIT FAILED', v, (await page.locator('[role=dialog]').innerText().catch(() => '')).slice(0, 300));
+  }
 }
 async function openSchoolHistory() {
   await page.getByRole('button', { name: '↶ 작업 기록·되돌리기' }).click();

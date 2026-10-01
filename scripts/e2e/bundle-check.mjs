@@ -87,12 +87,12 @@ await page.getByRole('link', { name: '시험 일정', exact: true }).click();
 await page.getByText('시험별 시험실 배치').waitFor();
 await page.getByText('배치 없음').first().waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
 let setupText = await page.locator('main').innerText();
-await page.getByRole('link', { name: '기초시간표', exact: true }).click();
-await page.getByText(/김국어/).first().waitFor();
+await page.getByRole('link', { name: '개요', exact: true }).click();
+await page.getByText(/기초시간표: /).waitFor();
 setupText += await page.locator('main').innerText();
 check('시험 2건 표시', setupText.includes('국어') && setupText.includes('수학'));
 check('시험실 자동 배치됨', !setupText.includes('배치 없음'));
-check('기초시간표 반영', /김국어 2/.test(setupText));
+check('기초시간표 반영 (배정 설정에 표시)', /교사 1명 · 수업 2건/.test(setupText));
 await page.screenshot({ path: `${OUT}/bundle-after.png`, fullPage: true });
 
 check('콘솔 오류 없음', errors.length === 0, errors.join(' / '));

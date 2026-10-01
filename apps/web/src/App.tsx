@@ -23,8 +23,6 @@ import { TeachersPage } from '@/pages/admin/TeachersPage';
 
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: '대시보드', end: true },
-  { to: '/admin/teachers', label: '교사 관리' },
-  { to: '/admin/rooms', label: '시험실 관리' },
   { to: '/admin/admins', label: '관리자 관리' },
 ];
 
@@ -77,14 +75,17 @@ const router = createBrowserRouter([
           { path: 'admins', element: <AdminsPage /> },
           // 예전 주소: 시험 일정은 각 프로젝트 안으로 옮김
           { path: 'schedule', element: <Navigate to="/admin" replace /> },
-          { path: 'teachers', element: <TeachersPage /> },
-          { path: 'rooms', element: <RoomsPage /> },
+          // 예전 주소: 교사·시험실은 각 프로젝트 안으로 옮김
+          { path: 'teachers', element: <Navigate to="/admin" replace /> },
+          { path: 'rooms', element: <Navigate to="/admin" replace /> },
           {
             path: 'sessions/:sid',
             element: <SessionLayout />,
             children: [
               { index: true, element: <SessionOverview /> },
               { path: 'schedule', element: <SessionSchedulePage /> },
+              { path: 'teachers', element: <TeachersPage /> },
+              { path: 'rooms', element: <RoomsPage /> },
               { path: 'setup', element: <SessionSetupPage /> },
               {
                 path: 'availability',

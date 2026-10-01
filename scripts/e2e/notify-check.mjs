@@ -22,7 +22,7 @@ const check = (label, ok, detail = '') => {
 };
 
 await db.recursiveDelete(db.collection('notifications'));
-const base = { schoolName: '점검중학교', year: 2026, semester: 2, settings: { useBaseTimetable: false }, updatedBy: 'seed' };
+const base = { schoolName: '점검중학교', year: 2026, semester: 2, settings: { useBaseTimetable: false, autoApproveAvailability: false }, updatedBy: 'seed' };
 for (const id of ['E2E_NOTE', 'E2E_NOTE2']) await db.recursiveDelete(db.doc(`sessions/${id}`));
 await db.doc('sessions/E2E_NOTE').set({ ...base, examName: '알림 공개 점검', status: 'REVIEW', createdAt: new Date(Date.now() + 400_000) });
 await db.doc('sessions/E2E_NOTE2').set({ ...base, examName: '알림 불가 점검', status: 'DRAFT', createdAt: new Date(Date.now() + 500_000) });
@@ -41,7 +41,7 @@ await db.doc('sessions/E2E_NOTE/assignments/2026-10-12_1_1__RNT_CHIEF_1').set({
 // 1. 공개 알림
 const A = await openApp();
 await go(A.page, '/admin/sessions/E2E_NOTE');
-await A.page.getByRole('button', { name: '교사에게 공개', exact: true }).click();
+await A.page.getByRole('button', { name: /^교사에게 공개/ }).first().click();
 await A.page.getByRole('button', { name: '확인', exact: true }).click();
 for (let i = 0; i < 40; i++) {
   if ((await db.collection('notifications').where('teacherId', '==', 'T001').get()).size) break;

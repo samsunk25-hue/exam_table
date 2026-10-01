@@ -29,7 +29,7 @@ import { dateLabel } from '@/components/AvailabilityGrid';
 import { Modal } from '@/components/Modal';
 import { AdminSwapCard } from '@/components/SwapRequests';
 import { toast } from '@/components/Toast';
-import { Alert, Button, Card, Select, Spinner, Table, Td } from '@/components/ui';
+import { Alert, Button, Card, Select, Spinner, Table, Td, CardTitle } from '@/components/ui';
 import { useCollection } from '@/lib/data';
 import { callApplyChanges, errorMessage } from '@/lib/firebase';
 import { termWhere, updateSessionSettings, type ExamSession, useSessionTeachers } from '@/lib/sessions';
@@ -425,7 +425,7 @@ export function SessionEditorPage() {
   return (
     <div className="grid gap-6">
       <Card>
-        <h2 className="text-lg font-bold">시간표 편집</h2>
+        <CardTitle icon="🗓️">시간표 편집</CardTitle>
         <p className="mt-1 text-muted">
           칸을 누르면 감독 교사를 바꾸거나, 1:1이 안 될 때 여러 교사가 이어서 바꾸는 연쇄 교환 경로를 찾을 수 있습니다. 모든 변경은 저장 전에 하드 조건을 다시 검사합니다.
         </p>

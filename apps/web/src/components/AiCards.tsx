@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { toast } from '@/components/Toast';
-import { Alert, Button, Card, Spinner } from '@/components/ui';
+import { Alert, Button, Card, Spinner, CardTitle } from '@/components/ui';
 import { callAiExplainDuties, callAiFairnessReport, callApplyChanges, errorMessage } from '@/lib/firebase';
 
 /** AI 답(짧은 문단과 "- " 목록)을 그대로 보여 준다 */
@@ -50,7 +50,7 @@ export function ExplainDutiesCard({ sessionId }: { sessionId: string }) {
   return (
     <Card className="no-print">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-bold">🤖 왜 이렇게 배정됐나요?</h2>
+        <CardTitle icon="🤖">왜 이렇게 배정됐나요?</CardTitle>
         <Button variant={text ? 'secondary' : 'primary'} onClick={() => void ask()} disabled={busy}>
           {busy ? 'AI가 살펴보는 중…' : text ? '다시 설명 듣기' : 'AI에게 설명 듣기'}
         </Button>
@@ -106,7 +106,7 @@ export function FairnessReportCard({ sessionId, canApply }: { sessionId: string;
   return (
     <Card>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-bold">🤖 AI 공정성 점검 리포트</h2>
+        <CardTitle icon="🤖">AI 공정성 점검 리포트</CardTitle>
         <Button variant={report ? 'secondary' : 'primary'} onClick={() => void run()} disabled={busy}>
           {busy ? 'AI가 점검하는 중…' : report ? '다시 점검' : '리포트 만들기'}
         </Button>

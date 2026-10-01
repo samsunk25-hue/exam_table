@@ -1,28 +1,26 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useOutletContext, useParams } from 'react-router';
 import {
-  EXAM_WRITER_RULE_LABEL,
   STATUS_LABEL,
+  SESSION_STATUSES,
   TRANSITIONS,
-  isSetupEditable,
   sessionTerm,
   termKey,
   type AssignmentDoc,
-  type ExamWriterRule,
   type RoomDoc,
+  type SessionStatus,
   type SlotDoc,
   type Transition,
 } from '@sim/shared';
 import { StatusBadge } from '@/components/StatusStepper';
 import { useTerm } from '@/components/TermRoster';
 import { UndoConfirm, useUndoOps } from '@/components/UndoHistory';
-import { BundleSection, TimetableUpload } from './BundleCard';
-import { AiRulesCard } from './AiRulesCard';
-import { TempStaffCard } from './TempStaffCard';
-import { Alert, Button, Card, PageTitle, Spinner, Toggle } from '@/components/ui';
+import { BundleSection } from './BundleCard';
+import { AutoPlacer } from './AutoPlacer';
+import { Alert, Button, Card, PageTitle, Spinner } from '@/components/ui';
 import { useCollection } from '@/lib/data';
 import { callTransitionSession, errorMessage } from '@/lib/firebase';
-import { sessionTitle, termWhere, updateSessionSettings, useSession, useSessionTeachers, type ExamSession } from '@/lib/sessions';
+import { sessionTitle, termWhere, useSession, useSessionTeachers, type ExamSession } from '@/lib/sessions';
 
 /** 프로젝트 메뉴: 4단계(준비 → 배정 → 점검 → 공개·출력), 단계 안에 세부 화면 */
 const STEPS: { label: string; tabs: { to: string; label: string }[] }[] = [
@@ -30,9 +28,9 @@ const STEPS: { label: string; tabs: { to: string; label: string }[] }[] = [
     label: '① 준비',
     tabs: [
       { to: '', label: '개요' },
-      { to: 'schedule', label: '시험 일정' },
       { to: 'teachers', label: '교사 명단' },
       { to: 'rooms', label: '시험실' },
+      { to: 'schedule', label: '시험 일정' },
       { to: 'availability', label: '불가시간' },
     ],
   },
@@ -64,6 +62,17 @@ function SyncTerm({ session }: { session: ExamSession }) {
   return null;
 }
 
+/** 단계 색: ① 준비 파랑 · ② 배정 민트 · ③ 점검 보라 · ④ 공개·출력 주황 (Tailwind가 찾도록 클래스를 통째로 적는다) */
+const STEP_COLORS = [
+  { solid: 'bg-primary text-white', soft: 'bg-primary-soft text-primary-strong', hover: 'hover:border-primary hover:bg-primary-soft', tab: 'border-primary text-primary-strong', banner: 'border-primary bg-primary-soft/70', text: 'text-primary-strong', btn: 'bg-primary hover:bg-primary-strong' },
+  { solid: 'bg-step2 text-white', soft: 'bg-step2-soft text-step2', hover: 'hover:border-step2 hover:bg-step2-soft', tab: 'border-step2 text-step2', banner: 'border-step2 bg-step2-soft/70', text: 'text-step2', btn: 'bg-step2 hover:brightness-95' },
+  { solid: 'bg-step3 text-white', soft: 'bg-step3-soft text-step3', hover: 'hover:border-step3 hover:bg-step3-soft', tab: 'border-step3 text-step3', banner: 'border-step3 bg-step3-soft/70', text: 'text-step3', btn: 'bg-step3 hover:brightness-95' },
+  { solid: 'bg-step4 text-white', soft: 'bg-step4-soft text-step4', hover: 'hover:border-step4 hover:bg-step4-soft', tab: 'border-step4 text-step4', banner: 'border-step4 bg-step4-soft/70', text: 'text-step4', btn: 'bg-step4 hover:brightness-95' },
+] as const;
+
+/** 진행 상태 → 단계: 초안=준비, 배정 완료=배정, 검토=점검, 공개·확정=공개·출력 */
+const progressOf = (s: SessionStatus) => ({ DRAFT: 0, AUTO_ASSIGNED: 1, REVIEW: 2, PUBLISHED: 3, SWAP: 3, CONFIRMED: 3, LOCKED: 3 })[s];
+
 /** 지금 상태에서 할 일 하나 (큰 버튼) */
 function NextAction({ session }: { session: ExamSession }) {
   const slots = useCollection<SlotDoc>(`sessions/${session.id}/slots`);
@@ -79,31 +88,30 @@ function NextAction({ session }: { session: ExamSession }) {
   const s = session.status;
   const next =
     s === 'DRAFT' || s === 'AUTO_ASSIGNED'
-      ? slots.data.length === 0
-        ? go('schedule', '시험 일정 입력하기', '먼저 시험 일정을 넣으세요 (달력·표·엑셀·학교 문서 AI 읽기).')
-        : activeTeachers === 0
-          ? go('teachers', '교사 명단 입력하기', '감독할 교사가 없습니다. 교사 명단을 넣으세요 (엑셀·지난 학기 이어받기·직접 입력).')
-          : rooms.data.length === 0
-            ? go('rooms', '시험실 등록하기', '시험실이 없습니다. 교실·특별실을 등록하세요.')
+      ? activeTeachers === 0
+        ? go('teachers', '교사 명단 입력하기', '감독할 교사가 없습니다. 교사 명단을 넣으세요 (엑셀·지난 학기 이어받기·직접 입력).')
+        : rooms.data.length === 0
+          ? go('rooms', '시험실 등록하기', '시험실이 없습니다. 교실·특별실을 등록하세요.')
+          : slots.data.length === 0
+            ? go('schedule', '시험 일정 입력하기', '시험 일정을 넣으세요 (달력·표·엑셀·학교 문서 AI 읽기). 시험실은 자동으로 배치됩니다.')
             : !placed
-              ? go('schedule', '시험실 배치하기', '시험마다 어느 시험실에서 보는지 정해야 감독 자리가 생깁니다. 시험 일정에서 시험실을 배치하세요.')
+              ? go('schedule', '시험실 확인하기', '시험에 배치할 수 있는 교실이 없습니다. 시험실의 학년·반이 시험 학년과 맞는지 확인하세요.')
               : assignments.data.length === 0
           ? go('assign', '자동 배정하기', `시험 ${slots.data.length}건이 준비되었습니다. 불가시간을 받은 뒤 자동 배정하세요.`)
-          : s === 'DRAFT'
-            ? step('AUTO_ASSIGNED', '배정 완료로 표시', '배정이 들어 있습니다. 배정을 마쳤으면 다음 단계로 넘어가세요.')
-            : step('REVIEW', '검토 시작하기', '배정을 마쳤습니다. 업무 점수·AI 점검으로 확인한 뒤 검토를 시작하세요.')
+          : step('PUBLISHED', '교사에게 공개하기', '배정을 마쳤습니다. ③ 점검에서 업무 점수를 확인한 뒤 교사에게 공개하세요.')
       : s === 'REVIEW'
         ? step('PUBLISHED', '교사에게 공개하기', '검토가 끝나면 교사에게 공개하세요. 공개 중에는 교사가 교환을 요청할 수 있습니다.')
         : s === 'PUBLISHED' || s === 'SWAP'
           ? step('CONFIRMED', '최종 확정하기', '교환 요청을 정리했으면 최종 확정하세요. 확정하면 업무 점수가 누적됩니다.')
           : go('print', '시간표 출력하기', s === 'LOCKED' ? '변경이 잠긴 완료 상태입니다.' : '확정되었습니다. 시간표를 출력·배포하세요.');
   if (next.kind === 'step' && !next.t) return null;
+  const color = STEP_COLORS[progressOf(session.status)]!;
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-card border-2 border-primary bg-primary-soft/60 px-4 py-3 no-print" aria-label="다음 할 일">
-      <span className="font-bold text-primary-strong">다음 할 일</span>
+    <div className={`anim-fade mb-4 flex flex-wrap items-center gap-3 rounded-card border-2 px-4 py-3 shadow-[var(--shadow-card)] no-print ${color.banner}`} aria-label="다음 할 일">
+      <span className={`font-bold ${color.text}`}>다음 할 일</span>
       <span className="min-w-0 flex-1 text-sm">{next.text}</span>
       {next.kind === 'link' ? (
-        <Link to={next.to} className="inline-flex min-h-12 items-center rounded-xl bg-primary px-5 font-semibold text-white hover:bg-primary-strong">
+        <Link to={next.to} className={`inline-flex min-h-12 items-center rounded-xl px-5 font-semibold text-white shadow-sm transition-all active:scale-[0.98] ${color.btn}`}>
           {next.label} →
         </Link>
       ) : (
@@ -125,10 +133,9 @@ export function SessionLayout() {
   // 지금 화면이 속한 단계
   const sub = pathname.split(`/sessions/${session.id}`)[1]?.replace(/^\//, '').split('/')[0] ?? '';
   const current = Math.max(0, STEPS.findIndex((st) => st.tabs.some((t) => t.to === sub)));
-  // 진행 상태 → 단계: 초안=준비, 배정 완료=배정, 검토=점검, 공개·확정=공개·출력
-  const progress = { DRAFT: 0, AUTO_ASSIGNED: 1, REVIEW: 2, PUBLISHED: 3, SWAP: 3, CONFIRMED: 3, LOCKED: 3 }[session.status];
+  const progress = progressOf(session.status);
   const tabClass = ({ isActive }: { isActive: boolean }) =>
-    `flex min-h-12 shrink-0 items-center border-b-2 px-4 font-semibold ${isActive ? 'border-primary text-primary-strong' : 'border-transparent text-muted hover:text-ink'}`;
+    `flex min-h-12 shrink-0 items-center border-b-[3px] px-4 font-semibold transition-colors ${isActive ? STEP_COLORS[current]!.tab : 'border-transparent text-muted hover:text-ink'}`;
 
   return (
     <>
@@ -138,6 +145,7 @@ export function SessionLayout() {
       <PageTitle sub={session.schoolName}>{sessionTitle(session)}</PageTitle>
       <SyncTerm session={session} />
       <NextAction session={session} />
+      <AutoPlacer session={session} />
       <nav className="flex gap-2 overflow-x-auto" aria-label="시험 프로젝트 단계">
         {STEPS.map((st, i) => {
           // 진행 상태도 이 단계 탭으로 보여 준다: 지난 단계 ✓, 지금 단계 "진행 중"
@@ -147,13 +155,13 @@ export function SessionLayout() {
               key={st.label}
               to={st.tabs[0]!.to || '.'}
               aria-current={i === current ? 'page' : undefined}
-              className={`flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-5 text-lg font-bold ${
-                i === current ? 'bg-primary text-white' : 'bg-surface text-ink border border-line hover:border-primary hover:bg-primary-soft'
+              className={`flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-5 text-lg font-bold transition-all ${
+                i === current ? `${STEP_COLORS[i]!.solid} shadow-sm` : `border border-line bg-surface text-ink ${STEP_COLORS[i]!.hover}`
               }`}
             >
               {done ? `✓ ${st.label.slice(2)}` : st.label}
               {i === progress && (
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${i === current ? 'bg-white/25' : 'bg-primary-soft text-primary-strong'}`}>진행 중</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${i === current ? 'bg-white/25' : STEP_COLORS[i]!.soft}`}>진행 중</span>
               )}
             </Link>
           );
@@ -250,51 +258,15 @@ function TransitionButton({ session, t, label }: { session: ExamSession; t: Tran
   );
 }
 
+/** "다음 할 일"이 맡는 앞으로 가는 단계인지 (잠금은 여기서). 교환 기간은 공개 중 언제나 가능해서 버튼 없음 */
+const isForward = (from: SessionStatus, to: SessionStatus) => to !== 'LOCKED' && SESSION_STATUSES.indexOf(to) > SESSION_STATUSES.indexOf(from);
+
 export function useCurrentSession(): ExamSession {
   return useOutletContext<ExamSession>();
 }
 
 export function SessionOverview() {
   const session = useCurrentSession();
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const editable = isSetupEditable(session.status);
-
-  const toggleBase = async (v: boolean) => {
-    setSaving(true);
-    setError(null);
-    try {
-      await updateSessionSettings(session.id, { ...session.settings, useBaseTimetable: v });
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveSetting = async (patch: Partial<ExamSession['settings']>) => {
-    setSaving(true);
-    setError(null);
-    try {
-      await updateSessionSettings(session.id, { ...session.settings, ...patch });
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveWriter = async (v: ExamWriterRule) => {
-    setSaving(true);
-    setError(null);
-    try {
-      await updateSessionSettings(session.id, { ...session.settings, examWriter: v });
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <div className="grid gap-6">
@@ -306,8 +278,8 @@ export function SessionOverview() {
           <p className="mt-3 text-sm text-muted">최근 변경 사유: {session.lastChangeReason}</p>
         )}
         <div className="mt-5 flex flex-wrap gap-2">
-          {TRANSITIONS[session.status].filter((t) => t.to !== 'SWAP').map((t) => (
-            // 교환은 공개 중 언제나 가능하므로 "교환 기간 시작" 단계는 버튼으로 보이지 않는다
+          {TRANSITIONS[session.status].filter((t) => !isForward(session.status, t.to)).map((t) => (
+            // 앞으로 가는 단계(공개·확정)는 위 "다음 할 일" 버튼 한 곳에서만. 여기는 되돌리기·잠금만
             <TransitionButton key={t.to} session={session} t={t} />
           ))}
           <PrevStepButton sessionId={session.id} />
@@ -318,56 +290,6 @@ export function SessionOverview() {
       </Card>
 
       <BundleSection session={session} />
-      <TempStaffCard session={session} />
-
-      <Card>
-        <h2 className="mb-2 text-lg font-bold">배정 설정</h2>
-        <Toggle
-          label="기초시간표 반영"
-          hint="켜면 시험 시간에 해당 반을 원래 가르치던 교사에게 가점(+50)을 줍니다. 켜면 아래에서 기초시간표를 올립니다."
-          checked={session.settings.useBaseTimetable}
-          disabled={!editable || saving}
-          onChange={(v) => void toggleBase(v)}
-        />
-        {session.settings.useBaseTimetable && (
-          <>
-            <TimetableUpload session={session} />
-            <div className="mt-3 ml-8">
-              <Toggle
-                label="시험 없는 학년은 수업 (수업 중인 교사는 감독 제외·수업 시간도 업무 점수)"
-                hint="같은 시간에 시험을 보지 않는 학년은 수업한다고 보고, 그 시간 그 학년 수업이 있는 교사는 감독에서 빼고 수업 1시간을 0.8점으로 셉니다. 기본 켜짐."
-                checked={session.settings.classDuringExam !== false}
-                disabled={!editable || saving}
-                onChange={(v) => void saveSetting({ classDuringExam: v })}
-              />
-            </div>
-          </>
-        )}
-        <label className="mt-4 grid max-w-xl gap-1">
-          <span className="font-semibold">출제 교사 (자기 과목 시험 시간)</span>
-          <select
-            aria-label="출제 교사 규칙"
-            className="min-h-12 rounded-xl border border-line bg-surface px-3 disabled:bg-bg"
-            value={session.settings.examWriter ?? 'NONE'}
-            disabled={!editable || saving}
-            onChange={(e) => void saveWriter(e.target.value as ExamWriterRule)}
-          >
-            {Object.entries(EXAM_WRITER_RULE_LABEL).map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
-          <span className="text-sm text-muted">담당 교과가 시험 과목과 같은 교사를 출제 교사로 봅니다. 시험 중 문항 질의에 대응하도록 복도 대기를 맡깁니다.</span>
-        </label>
-        {!editable && <p className="mt-2 text-sm text-muted">교사 공개 이후에는 설정을 바꿀 수 없습니다.</p>}
-        {error && (
-          <div className="mt-3">
-            <Alert>{error}</Alert>
-          </div>
-        )}
-      </Card>
-      <AiRulesCard session={session} editable={editable} />
     </div>
   );
 }

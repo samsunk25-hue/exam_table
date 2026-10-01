@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DEFAULT_WEIGHTS, buildEngineInput, runAssignment, type EngineInput, type Metrics, type Weights } from '@sim/engine';
 import type { AssignmentDoc, AvailabilityDoc, BaseTimetableDoc, ConstraintDoc, RoomDoc, SlotDoc } from '@sim/shared';
-import { Alert, Button, Card, Spinner } from '@/components/ui';
+import { Alert, Button, Card, Spinner, CardTitle } from '@/components/ui';
 import { useCollection } from '@/lib/data';
 import { termWhere, type ExamSession, useSessionTeachers } from '@/lib/sessions';
 
@@ -123,7 +123,7 @@ export function WeightSimulator({
 
   return (
     <Card>
-      <h2 className="text-lg font-bold">가중치 시뮬레이션</h2>
+      <CardTitle icon="🎚️">가중치 시뮬레이션</CardTitle>
       <p className="mt-1 text-muted">
         조건별 중요도를 슬라이더로 바꾸면 바로 다시 계산해 기본 설정과 비교합니다. 하드 조건(불가시간·동시간 중복 등)은 항상 지킵니다. 마음에 들면 그 설정으로 자동 배정을
         실행하세요.

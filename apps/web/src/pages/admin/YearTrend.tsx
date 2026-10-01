@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { AssignmentDoc, TeacherDoc, WithId } from '@sim/shared';
-import { Card, Spinner, Table, Td } from '@/components/ui';
+import { Card, Spinner, Table, Td, CardTitle } from '@/components/ui';
 import { useCollection } from '@/lib/data';
 import { useSessions, type ExamSession } from '@/lib/sessions';
 
@@ -87,7 +87,7 @@ export function YearTrend({ session, teachers, assignments }: { session: ExamSes
 
   return (
     <Card>
-      <h2 className="text-lg font-bold">학년도 추이와 피로도 예측</h2>
+      <CardTitle icon="📈">학년도 추이와 피로도 예측</CardTitle>
       <p className="mt-1 text-muted">
         {session.year}학년도 {session.schoolName}에서 확정된 시험 {model.past.length}개와 이번 시험을 이어 봅니다. 피로도는 학년도 누적 부담, 이번 시험 연속 감독, 하루 최다 감독
         수로 예측합니다.

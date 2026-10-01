@@ -8,8 +8,9 @@
 
   --color-bg: #f8f9fa;
   --color-surface: #ffffff;
-  --color-ink: #333333;
-  --color-muted: #6b7280;
+  /* 글자 대비를 높였다 (본문 #1f2937, 흐린 글자 #5b6472 — 흰 바탕에서 AA 이상) */
+  --color-ink: #1f2937;
+  --color-muted: #5b6472;
   --color-line: #e5e7eb;
   --color-primary: #4a90e2;
   --color-primary-strong: #2f74c8;
@@ -18,8 +19,17 @@
   --color-mint-soft: #e8f8ef;
   --color-alert: #ff6b6b;
   --color-alert-soft: #fff0f0;
+  /* 단계 색: ① 준비 파랑 · ② 배정 민트 · ③ 점검 보라 · ④ 공개·출력 주황 */
+  --color-step2: #1f9d5c;
+  --color-step2-soft: #e6f6ee;
+  --color-step3: #7c5cd6;
+  --color-step3-soft: #f1ecfc;
+  --color-step4: #d9731a;
+  --color-step4-soft: #fdf1e5;
 
-  --radius-card: 1rem;
+  --radius-card: 1.25rem;
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 4px 16px rgb(16 24 40 / 0.06);
+  --shadow-lift: 0 2px 4px rgb(16 24 40 / 0.06), 0 10px 28px rgb(16 24 40 / 0.1);
 }
 
 html {
@@ -54,10 +64,107 @@ html {
 }
 
 body {
-  background: var(--color-bg);
+  /* 위쪽만 아주 옅은 파랑이 번지는 배경 (머리글 그림과 이어지게) */
+  background: linear-gradient(180deg, #edf4fd 0, var(--color-bg) 420px) no-repeat, var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+/* 숫자는 폭을 고르게 (표·점수가 세로로 줄 맞게) */
+table,
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 데이터 표: 줄마다 옅은 배경, 머리글은 스크롤해도 위에 */
+.data-table tbody tr:nth-child(even) {
+  background: #f7f9fc;
+}
+.data-table tbody tr:hover {
+  background: var(--color-primary-soft);
+}
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface);
+}
+
+/* 부드러운 움직임 */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes shimmer {
+  from {
+    background-position: -320px 0;
+  }
+  to {
+    background-position: 320px 0;
+  }
+}
+.anim-rise {
+  animation: rise-in 0.18s ease-out both;
+}
+.anim-fade {
+  animation: fade-in 0.15s ease-out both;
+}
+.anim-slide {
+  animation: slide-in-right 0.2s ease-out both;
+}
+/* 불러오는 중: 회색 막대가 은은하게 반짝임 */
+.skeleton {
+  border-radius: 0.6rem;
+  background: linear-gradient(90deg, #eceff3 0, #f6f8fa 40%, #eceff3 80%) #eceff3;
+  background-size: 640px 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+/* 마우스를 올리면 살짝 떠오르는 카드 (링크 카드) */
+.lift {
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+
+/* 움직임 줄이기를 켠 사용자에게는 움직임을 끈다 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* 메뉴 오른쪽 동물 행진 (AnimalParade) */

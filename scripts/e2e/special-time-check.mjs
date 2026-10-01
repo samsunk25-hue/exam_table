@@ -34,9 +34,10 @@ await db.doc(`sessions/${SID}/slots/2026-10-12_2_2`).set(slot(2, 2, '10:00', '10
 const { browser, page, errors } = await openApp();
 await go(page, `/admin/sessions/${SID}/schedule`);
 
-// 목록은 교시순: 0 = 1교시 1학년, 1 = 2교시 2학년
+// 달력에서 10월 12일 → 그날 시험 목록의 "배치" (0 = 1교시 1학년, 1 = 2교시 2학년)
 async function openPlacement(row) {
-  await page.locator('section', { has: page.getByRole('heading', { name: /10월 12일/ }) }).locator('tbody tr').nth(row).getByRole('button', { name: '배치' }).click();
+  await page.getByRole('button', { name: /^10월 12일/ }).click();
+  await page.locator('li', { hasText: row === 0 ? '1교시 · 1학년' : '2교시 · 2학년' }).getByRole('button', { name: '배치', exact: true }).click();
   return page.getByRole('dialog', { name: /시험실 배치/ });
 }
 async function pickTime(dlg, label, hour, minute) {
@@ -57,14 +58,17 @@ await dlg.getByRole('button', { name: /^저장/ }).click();
 await dlg.waitFor({ state: 'detached' });
 let p = null;
 for (let i = 0; i < 30 && !p?.endTime; i++) {
-  p = (await db.doc(`sessions/${SID}/slots/2026-10-12_1_1`).get()).get('rooms')?.[0];
+  p = ((await db.doc(`sessions/${SID}/slots/2026-10-12_1_1`).get()).get('rooms') ?? []).find((r) => r.roomId === 'SPX');
   if (!p?.endTime) await new Promise((r) => setTimeout(r, 300));
 }
 check('별도 시간 저장 (09:00~10:10)', p?.startTime === '09:00' && p?.endTime === '10:10', JSON.stringify(p));
 check('목록에 별도 시간 표시', await page.getByText(/특별실X 09:00~10:10/).isVisible());
 
 // 2교시 2학년에 같은 특별실 → 1교시 쪽 별도 시간이 겹치므로 1교시 배치를 다시 저장하면 막힌다
-await db.doc(`sessions/${SID}/slots/2026-10-12_2_2`).update({ rooms: [{ roomId: 'SPX', classNo: null, headcount: null, roomType: 'NORMAL' }] });
+{
+  const r2 = (await db.doc(`sessions/${SID}/slots/2026-10-12_2_2`).get()).get('rooms') ?? [];
+  await db.doc(`sessions/${SID}/slots/2026-10-12_2_2`).update({ rooms: [...r2, { roomId: 'SPX', classNo: null, headcount: null, roomType: 'NORMAL' }] });
+}
 dlg = await openPlacement(0);
 await dlg.getByRole('button', { name: /^저장/ }).click();
 check('겹치는 교시에 같은 특별실이 쓰이면 저장 막음', await dlg.getByText(/2교시와 겹치는데/).isVisible({ timeout: 5000 }).catch(() => false));

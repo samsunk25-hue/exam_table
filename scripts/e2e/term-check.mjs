@@ -2,7 +2,7 @@
 // 1) 교사 관리는 선택한 학교·학기 명단만 보여 준다 (처음 값 = 가장 최근 프로젝트 학기)
 // 2) 같은 학년도 학기에서 불러오면 누적점수·담임 유지, 다른 학년도면 0점·담임 비움
 // 3) 학기 미지정(예전) 자료는 ID 그대로 이 학기로 지정
-// 4) 프로젝트 개요: 명단이 비면 다른 학기 시험실 불러오기
+// 4) 시험실: 다른 학기 시험실 불러오기 (개요의 명단 카드는 없앰 — 새 프로젝트는 자동 이어받기)
 // 5) 교사 로그인은 가장 최근 학기 문서로 연결
 import { createRequire } from 'node:module';
 import { go, openApp } from './session.mjs';
@@ -85,9 +85,9 @@ await go(page, '/admin/sessions/TERM_26_1/teachers');
 await page.getByRole('cell', { name: '일학기쌤' }).waitFor();
 check('학기 바꾸기 → 그 학기 명단만 (1학기 2명)', (await page.locator('tbody tr').count()) === 2);
 
-// 프로젝트 개요: 시험실이 비어 있으면 불러오기
-await go(page, '/admin/sessions/TERM_26_2');
-await page.getByRole('button', { name: '시험실 불러오기' }).click();
+// 준비 > 시험실: 다른 학기 시험실 불러오기
+await go(page, '/admin/sessions/TERM_26_2/rooms');
+await page.getByRole('button', { name: '다른 학기에서 불러오기' }).click();
 const rd = page.getByRole('dialog', { name: '다른 학기 시험실 불러오기' });
 await rd.getByRole('button', { name: /2026학년도 1학기/ }).click();
 await rd.getByRole('button', { name: /^\d+(명|개) 불러오기$/ }).click();
@@ -97,7 +97,7 @@ for (let i = 0; i < 20 && rooms !== 1; i++) {
   rooms = (await db.collection('rooms').where('term', '==', `${SCHOOL}|2026|2`).get()).size;
   if (rooms !== 1) await new Promise((r) => setTimeout(r, 300));
 }
-check('개요: 다른 학기 시험실 불러오기', rooms === 1);
+check('시험실: 다른 학기 시험실 불러오기', rooms === 1);
 check('관리자 화면 콘솔 오류 없음', errors.length === 0, errors.join(' / '));
 await browser.close();
 

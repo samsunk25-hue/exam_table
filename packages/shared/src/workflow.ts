@@ -31,8 +31,13 @@ export interface Transition {
 
 /** 허용되는 상태 전환. 확정(CONFIRMED) 이후 이전 단계로는 돌아갈 수 없다. */
 export const TRANSITIONS: Record<SessionStatus, Transition[]> = {
-  DRAFT: [{ to: 'AUTO_ASSIGNED', label: '자동 배정 완료로 표시', requiresReason: false }],
+  // 배정을 마치면 바로 공개할 수 있다 (검토 단계는 건너뛰어도 됨)
+  DRAFT: [
+    { to: 'PUBLISHED', label: '교사에게 공개', requiresReason: false },
+    { to: 'AUTO_ASSIGNED', label: '자동 배정 완료로 표시', requiresReason: false },
+  ],
   AUTO_ASSIGNED: [
+    { to: 'PUBLISHED', label: '교사에게 공개', requiresReason: false },
     { to: 'REVIEW', label: '검토 시작', requiresReason: false },
     { to: 'DRAFT', label: '초안으로 되돌리기', requiresReason: false },
   ],

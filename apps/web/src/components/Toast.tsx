@@ -29,13 +29,14 @@ export function Toaster() {
   }, []);
 
   return (
-    <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex flex-col items-center gap-2 px-4">
+    <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex flex-col items-center gap-2 px-4 sm:inset-x-auto sm:right-6 sm:items-end">
       {items.map((t) => (
         <div
           key={t.id}
           role="status"
-          className={`pointer-events-auto max-w-lg rounded-xl px-5 py-3 font-semibold text-white shadow-lg ${
-            t.tone === 'alert' ? 'bg-[#c0392b]' : 'bg-ink'
+          // 오른쪽 아래에서 미끄러져 나온다. 성공은 민트 띠, 오류는 빨간 띠
+          className={`anim-slide pointer-events-auto max-w-lg rounded-xl border border-line border-l-[6px] bg-surface px-5 py-3 font-semibold text-ink shadow-[var(--shadow-lift)] ${
+            t.tone === 'alert' ? 'border-l-alert' : 'border-l-mint'
           }`}
         >
           {t.text}

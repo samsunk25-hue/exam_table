@@ -16,13 +16,15 @@ import {
 } from '@sim/shared';
 import { dateLabel } from '@/components/AvailabilityGrid';
 import { toast } from '@/components/Toast';
-import { Alert, Button, Card, Spinner, Table, Td, Toggle } from '@/components/ui';
+import { Alert, Button, Card, Spinner, Table, Td, CardTitle } from '@/components/ui';
 import { useCollection } from '@/lib/data';
 import { termWhere, useSessionTeachers } from '@/lib/sessions';
 import { callApplyRun, callRunAssignment, errorMessage } from '@/lib/firebase';
 import { sortRooms } from './RoomsPage';
 import { useCurrentSession } from './SessionPage';
 import { WeightSimulator } from './WeightSimulator';
+import { AiRulesCard } from './AiRulesCard';
+import { AssignSettingsCard } from './AssignSettingsCard';
 
 type Run = WithId<RunDoc & { createdAt?: Timestamp; appliedAt?: Timestamp }>;
 
@@ -57,7 +59,7 @@ function ScenarioCompare({
   ];
   return (
     <Card>
-      <h2 className="text-lg font-bold">다중 시나리오 비교</h2>
+      <CardTitle icon="⚖️">다중 시나리오 비교</CardTitle>
       <p className="mt-1 text-muted">같은 조건에서 목표를 달리해 만든 전체 배정안입니다. 모든 안은 하드 조건을 지킵니다. 초록색은 해당 지표에서 가장 좋은 안입니다.</p>
       <div className="mt-3">
         <Table head={['지표', ...runs.map((r) => r.scenarioLabel ?? r.scenario)]}>
@@ -182,8 +184,8 @@ export function SessionAssignPage() {
   const slots = useCollection<SlotDoc>(`sessions/${sid}/slots`);
   const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
   const teachers = useSessionTeachers(session);
-  const [keepManual, setKeepManual] = useState(true);
-  const [withScenarios, setWithScenarios] = useState(true);
+  // 수동 배정은 늘 유지하고, 대안 3개도 늘 함께 계산한다 (고를 것을 줄임)
+  const keepManual = true;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<'grid' | 'load'>('grid');
   const [busy, setBusy] = useState<'run' | 'apply' | null>(null);
@@ -209,7 +211,7 @@ export function SessionAssignPage() {
     setBusy('run');
     setError(null);
     try {
-      const { data } = await callRunAssignment({ sessionId: sid, keepManual, scenarios: withScenarios });
+      const { data } = await callRunAssignment({ sessionId: sid, keepManual, scenarios: true });
       setSelectedId(data.runId);
       toast(
         data.runs.length > 1
@@ -259,31 +261,19 @@ export function SessionAssignPage() {
 
   return (
     <div className="grid gap-6">
+      <AssignSettingsCard session={session} />
+      <AiRulesCard session={session} editable={editable} />
       <Card>
-        <h2 className="text-lg font-bold">자동 배정 실행</h2>
+        <CardTitle icon="🪄">자동 배정 실행</CardTitle>
         <p className="mt-1 text-muted">
           하드 조건(동시간 중복, 불가시간, 연장 감독 직후)을 지키면서 점수(기초시간표 일치, 부담 형평성, 연속 배정 등)가 높은 교사를 배정합니다.
-          실행 결과를 확인한 뒤 "적용"을 눌러야 실제 배정이 바뀝니다.
+          기본안과 대안 3개를 함께 계산해 가장 좋은 안을 바로 적용하고, 시간표 편집에서 직접 정한 배정은 그대로 둡니다.
         </p>
         <div className="mt-3 grid gap-2">
           {pendingCount > 0 && <Alert tone="info">승인 대기 중인 불가시간 {pendingCount}건도 "불가"로 보고 배정합니다.</Alert>}
           <p className="text-sm text-muted">
-            현재 적용된 배정: {assignments.data.length}석{manualCount ? ` (수동 ${manualCount})` : ''} · 기초시간표 반영 {session.settings.useBaseTimetable ? '켜짐' : '꺼짐'}
+            현재 적용된 배정: {assignments.data.length}석{manualCount ? ` (수동 ${manualCount}석은 유지)` : ''}
           </p>
-          <Toggle
-            label="수동 배정 유지"
-            hint="시간표 편집에서 직접 정한 배정은 그대로 두고 나머지만 다시 배정합니다."
-            checked={keepManual}
-            onChange={setKeepManual}
-            disabled={!editable}
-          />
-          <Toggle
-            label="대안 시나리오 3개도 만들기 (다중 시나리오)"
-            hint="A안 형평성 극대화 · B안 연속 배정 배제 · C안 출제 교사 복도 대기 우선을 함께 계산해 기본안과 비교합니다."
-            checked={withScenarios}
-            onChange={setWithScenarios}
-            disabled={!editable}
-          />
         </div>
         {!editable && <p className="mt-2 text-muted">교사 공개 이후에는 자동 배정을 다시 실행할 수 없습니다.</p>}
         {error && (
@@ -293,16 +283,22 @@ export function SessionAssignPage() {
         )}
         <div className="mt-4">
           <Button onClick={() => void quick()} disabled={!editable || busy !== null || slots.data.length === 0}>
-            {busy === 'run' ? '배정 계산 중…' : busy === 'apply' ? '적용 중…' : '자동 배정하고 바로 적용 (추천)'}
+            {busy === 'run' ? '배정 계산 중…' : busy === 'apply' ? '적용 중…' : '자동 배정하고 바로 적용'}
           </Button>
-          <Button variant="secondary" className="ml-2" onClick={() => void execute()} disabled={!editable || busy !== null || slots.data.length === 0}>
-            자동 배정 실행
-          </Button>
-          <span className="ml-2 text-sm text-muted">← 결과를 비교한 뒤 직접 고르기</span>
           {slots.data.length === 0 && <Link to="../schedule" relative="path" className="ml-3 font-semibold text-primary-strong underline underline-offset-2">시험 일정을 먼저 입력하세요 →</Link>}
         </div>
       </Card>
 
+      {/* 고급: 직접 비교해서 고르기, 가중치 조정 (대부분은 위 버튼 하나로 충분) */}
+      <details className="rounded-card border border-line bg-surface p-4 open:pb-6">
+        <summary className="min-h-11 cursor-pointer content-center text-lg font-bold">고급 — 안을 직접 비교해 고르기 · 가중치 조정</summary>
+        <div className="mt-4 grid gap-6">
+          <div>
+            <Button variant="secondary" onClick={() => void execute()} disabled={!editable || busy !== null || slots.data.length === 0}>
+              자동 배정 실행
+            </Button>
+            <span className="ml-2 text-sm text-muted">기본안·대안을 만든 뒤 아래 비교표에서 골라 "이 결과 적용"</span>
+          </div>
       <WeightSimulator
         session={session}
         keepManual={keepManual}
@@ -321,6 +317,8 @@ export function SessionAssignPage() {
           }
         }}
       />
+        </div>
+      </details>
 
       {run && batch.length > 1 && (
         <ScenarioCompare runs={batch} selectedId={run.id} appliedRunId={appliedRunId} onSelect={setSelectedId} />
@@ -393,7 +391,7 @@ export function SessionAssignPage() {
 
       {sortedRuns.length > 1 && (
         <Card>
-          <h2 className="text-lg font-bold">실행 기록</h2>
+          <CardTitle icon="🕘">실행 기록</CardTitle>
           <div className="mt-3 flex flex-wrap gap-2">
             {sortedRuns.slice(0, 10).map((r) => (
               <Button key={r.id} variant={r.id === run?.id ? 'primary' : 'secondary'} onClick={() => setSelectedId(r.id)}>

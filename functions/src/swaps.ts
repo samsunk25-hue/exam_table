@@ -49,7 +49,7 @@ async function load(sessionId: string, who: Caller, req: CallableRequest) {
     }
   }
   const status = snap.get('status') as SessionStatus;
-  const { data, current } = await loadData(sessionId, snap.get('settings.useBaseTimetable') === true);
+  const { data, current } = await loadData(sessionId, true);
   const input = buildEngineInput(data);
   const seats = new Map(buildSeats(input, DEFAULT_ROLE_WEIGHTS).map((s) => [s.id, s]));
   const names = new Map(data.teachers.map((t) => [t.id, t.name]));

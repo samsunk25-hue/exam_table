@@ -69,7 +69,7 @@ export const notifyAvailability = onDocumentWritten('sessions/{sid}/availability
     const t = await db().doc(`teachers/${after.teacherId as string}`).get();
     const name = (t.get('name') as string | undefined) ?? '교사';
     // "교사 제출 바로 반영"이면 승인 없이 바로 반영 (관리자는 문제 있는 것만 반려)
-    const auto = session.get('settings.autoApproveAvailability') === true;
+    const auto = session.get('settings.autoApproveAvailability') !== false;
     if (auto) await event.data!.after.ref.update({ status: 'APPROVED', adminNote: '자동 반영', updatedBy: 'system' });
     await notifyAdmins({
       key: `avail_${sid}_${after.teacherId as string}`,

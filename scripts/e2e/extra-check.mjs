@@ -43,8 +43,8 @@ await db.doc(`sessions/${SID}/assignments/2026-10-12_1_1__REX_CHIEF_1`).set({
 });
 const A = await openApp();
 
-// 임시 감독자
-await go(A.page, `/admin/sessions/${SID}`);
+// 임시 감독자: 교사 명단 화면에서
+await go(A.page, `/admin/sessions/${SID}/teachers`);
 await A.page.getByLabel('임시 감독자 이름').fill('학부모가');
 await A.page.getByLabel('임시 감독자 메모').fill('학부모');
 await A.page.getByRole('button', { name: '+ 추가' }).click();
@@ -52,7 +52,9 @@ const temp = await until(async () => (await db.collection('teachers').where('onl
 const tdoc = (await db.collection('teachers').where('onlySession', '==', SID).get()).docs[0]?.data();
 check('임시 감독자 추가 (이 프로젝트만)', temp && tdoc?.temporary === true && tdoc?.note === '학부모');
 
-// 배정 설정의 기초시간표 올리기
+// 배정 설정(자동 배정 화면)의 기초시간표 올리기
+await go(A.page, `/admin/sessions/${SID}/assign`);
+await A.page.getByRole('button', { name: '기초시간표 올리기' }).waitFor();
 check('배정 설정에 기초시간표 올리기', await A.page.getByRole('button', { name: '기초시간표 올리기' }).isVisible());
 check('프로젝트 탭에 기초시간표 탭 없음', (await A.page.getByRole('navigation', { name: '시험 프로젝트 메뉴' }).getByText('기초시간표').count()) === 0);
 

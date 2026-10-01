@@ -23,12 +23,12 @@ export function Modal({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
+    <div className="anim-fade fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 backdrop-blur-[2px] sm:items-center sm:p-4" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`flex max-h-[92dvh] w-full flex-col rounded-t-card bg-surface shadow-xl sm:rounded-card ${wide ? 'sm:max-w-5xl' : 'sm:max-w-lg'}`}
+        className={`anim-rise flex max-h-[92dvh] w-full flex-col rounded-t-card bg-surface shadow-[var(--shadow-lift)] sm:rounded-card ${wide ? 'sm:max-w-5xl' : 'sm:max-w-lg'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">

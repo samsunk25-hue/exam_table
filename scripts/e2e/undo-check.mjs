@@ -55,9 +55,12 @@ async function editSubject(v) {
     console.log('EDIT FAILED', v, (await page.locator('[role=dialog]').innerText().catch(() => '')).slice(0, 300));
   }
 }
+// 교사·시험실 작업 기록은 ④ 변경 이력(학교 공통)에서
 async function openSchoolHistory() {
-  await page.getByRole('button', { name: '↶ 작업 기록·되돌리기' }).click();
-  return page.getByRole('dialog', { name: '작업 기록·되돌리기' });
+  await page.getByRole('link', { name: '↶ 작업 기록·되돌리기' }).click();
+  await page.waitForFunction(() => location.search.includes('scope=school'));
+  await page.getByText('작업 기록·되돌리기 (학교 공통: 교사·시험실)').waitFor();
+  return page.locator('main');
 }
 
 // 1. 교사 수정 → 되돌리기
@@ -68,7 +71,7 @@ let confirm = page.getByRole('dialog', { name: '작업 되돌리기' });
 await confirm.getByRole('button', { name: '되돌리기', exact: true }).click();
 await confirm.waitFor({ state: 'detached', timeout: 30000 });
 check('교사 수정 되돌리기 → 원래 값', await until(async () => (await subject()) === '국어'), await subject());
-await page.keyboard.press('Escape');
+await go(page, `/admin/sessions/${SID}/teachers`);
 
 // 2. 두 번 수정 → 첫 작업 되돌리면 둘 다
 await editSubject('국어B');
@@ -83,13 +86,13 @@ await page.screenshot({ path: `${OUT}/undo-confirm.png` });
 await confirm.getByRole('button', { name: '되돌리기', exact: true }).click();
 await confirm.waitFor({ state: 'detached', timeout: 30000 });
 check('앞 작업 되돌리기 → 뒤 작업도 함께 (국어C → 국어)', await until(async () => (await subject()) === '국어'), await subject());
-await page.keyboard.press('Escape');
 
 // 3. 진행 단계
 const status = async () => (await db.doc(`sessions/${SID}`).get()).get('status');
 async function step(label, reason) {
   await go(page, `/admin/sessions/${SID}`);
-  await page.getByRole('button', { name: label, exact: true }).click();
+  // 앞으로 가는 단계는 "다음 할 일" 버튼(예: "교사에게 공개하기 →"), 되돌리기는 현재 상태 카드
+  await page.getByRole('button', { name: new RegExp(`^${label}`) }).first().click();
   if (reason) await page.locator('textarea').fill(reason);
   await page.getByRole('button', { name: '확인', exact: true }).click();
 }
@@ -100,25 +103,27 @@ async function prevStep() {
   await c.getByRole('button', { name: '되돌리기', exact: true }).click();
   await c.waitFor({ state: 'detached', timeout: 30000 });
 }
-await step('자동 배정 완료로 표시');
-await until(async () => (await status()) === 'AUTO_ASSIGNED');
-await step('검토 시작');
-await until(async () => (await status()) === 'REVIEW');
+// 검토 단계에서 시작 (배정 없이도 "다음 할 일"에 공개 버튼이 보이게)
+await db.doc(`sessions/${SID}`).set({ status: 'REVIEW' }, { merge: true });
+await step('교사에게 공개');
+await until(async () => (await status()) === 'PUBLISHED');
 await prevStep();
-check('이전 단계로: 검토 → 자동배정', await until(async () => (await status()) === 'AUTO_ASSIGNED'), await status());
-await prevStep();
-check('이전 단계로 한 번 더: → 초안', await until(async () => (await status()) === 'DRAFT'), await status());
+check('이전 단계로: 공개 → 검토', await until(async () => (await status()) === 'REVIEW'), await status());
 
 // 되돌리기를 다시 되돌리기 (복구)
 await go(page, `/admin/sessions/${SID}/history`);
-await page.getByRole('button', { name: /^되돌리기: 단계 변경: 자동 배정 완료로 표시/ }).first().click();
+await page.getByRole('button', { name: /^되돌리기: 단계 변경: 교사에게 공개/ }).first().click();
 confirm = page.getByRole('dialog', { name: '작업 되돌리기' });
 await confirm.getByRole('button', { name: '되돌리기', exact: true }).click();
 await confirm.waitFor({ state: 'detached', timeout: 30000 });
-check('되돌리기 취소 → 다시 자동배정', await until(async () => (await status()) === 'AUTO_ASSIGNED'), await status());
+check('되돌리기 취소 → 다시 공개', await until(async () => (await status()) === 'PUBLISHED'), await status());
 await page.screenshot({ path: `${OUT}/undo-history.png`, fullPage: true });
 
 // 4. 통합 양식 업로드 = 작업 하나
+await step('공개 취소', '점검');
+await until(async () => (await status()) === 'REVIEW');
+await step('검토 이전으로 되돌리기');
+await until(async () => (await status()) === 'AUTO_ASSIGNED');
 await step('초안으로 되돌리기');
 await until(async () => (await status()) === 'DRAFT');
 const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /샘플 양식/ }).click()]);

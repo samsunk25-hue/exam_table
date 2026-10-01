@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { classroomName, configFromRooms, planClassrooms, type ClassroomConfig, type RoomDoc, type TermFields, type WithId } from '@sim/shared';
-import { Alert, Button, Card } from '@/components/ui';
+import { Alert, Button, Card, CardTitle } from '@/components/ui';
 import { commitOps, ref, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
 import { toast } from '@/components/Toast';
@@ -103,7 +103,7 @@ export function ClassroomSetupCard({ rooms, term, takenIds }: { rooms: WithId<Ro
     <Card className="mb-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-lg font-bold">학급 교실 한 번에 만들기</h2>
+          <CardTitle icon="🏫">학급 교실 한 번에 만들기</CardTitle>
           <p className="text-muted">학년별 학급 수를 입력하고, 시험을 치는 교실만 체크하세요.</p>
         </div>
         {!open && (

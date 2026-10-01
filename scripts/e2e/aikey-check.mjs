@@ -17,7 +17,7 @@ const check = (label, ok, detail = '') => {
 const KEY = 'sk-ant-test-abcdefghijklmnopqrstuvwxyz9876';
 const A = await openApp();
 await go(A.page, '/admin/admins');
-const ui = A.page.getByRole('heading', { name: '🔑 내 AI 키 (Claude)' }).locator('..');
+const ui = A.page.getByRole('heading', { name: '내 AI 키 (Claude)' }).locator('..');
 if (await ui.getByRole('button', { name: '삭제' }).isVisible().catch(() => false)) await ui.getByRole('button', { name: '삭제' }).click();
 check('잘못된 형식은 거절', await (async () => {
   await ui.getByLabel('Claude API 키').fill('abc');

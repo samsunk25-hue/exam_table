@@ -82,17 +82,22 @@ await dialog.getByText('저장했습니다.').waitFor();
 check('저장 결과', true, (await dialog.locator('ul').innerText()).replace(/\n/g, ' / '));
 await dialog.getByRole('button', { name: '닫기' }).first().click();
 
-// 5. 화면 반영 확인 (준비 > 시험 일정 / 기초시간표)
-await page.getByRole('link', { name: '시험 일정', exact: true }).click();
-await page.getByText('시험별 시험실 배치').waitFor();
-await page.getByText('배치 없음').first().waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
-let setupText = await page.locator('main').innerText();
-await page.getByRole('link', { name: '개요', exact: true }).click();
+// 5. 화면 반영 확인: 시험은 저장되고 시험실은 자동 배치, 기초시간표는 자동 배정 화면의 배정 설정에 표시
+const sid = page.url().split('/sessions/')[1].split('/')[0];
+{
+  const { getFirestore } = createRequire(import.meta.url)('firebase-admin/firestore');
+  let slots = [];
+  for (let i = 0; i < 40; i++) {
+    slots = (await getFirestore().collection(`sessions/${sid}/slots`).get()).docs.map((d) => d.data());
+    if (slots.length && slots.every((x) => x.rooms?.length)) break;
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  check('시험 2건 저장', slots.length === 2 && slots.some((x) => x.subject === '국어') && slots.some((x) => x.subject === '수학'), slots.map((x) => x.subject).join(','));
+  check('시험실 자동 배치됨', slots.every((x) => x.rooms?.length > 0));
+}
+await go(page, `/admin/sessions/${sid}/assign`);
 await page.getByText(/기초시간표: /).waitFor();
-setupText += await page.locator('main').innerText();
-check('시험 2건 표시', setupText.includes('국어') && setupText.includes('수학'));
-check('시험실 자동 배치됨', !setupText.includes('배치 없음'));
-check('기초시간표 반영 (배정 설정에 표시)', /교사 1명 · 수업 2건/.test(setupText));
+check('기초시간표 반영 (자동 배정 > 배정 설정에 표시)', await page.getByText(/교사 1명 · 수업 2건/).waitFor({ timeout: 15000 }).then(() => true).catch(() => false), (await page.getByText(/기초시간표: /).innerText()).replace(/s+/g, ' '));
 await page.screenshot({ path: `${OUT}/bundle-after.png`, fullPage: true });
 
 check('콘솔 오류 없음', errors.length === 0, errors.join(' / '));

@@ -41,11 +41,13 @@ const steps = await A.page.getByRole('navigation', { name: '시험 프로젝트 
 check('4단계 탭 (준비·배정·점검·공개·출력)', ['① 준비', '② 배정', '③ 점검', '④ 공개·출력'].every((x) => steps.includes(x)));
 check('진행 상태는 단계 탭에 함께 (중복 단계표 없음)', steps.includes('진행 중') && (await A.page.locator('ol').count()) === 0 && (await A.page.getByText('현재 상태').isVisible()));
 const next = A.page.getByLabel('다음 할 일');
-check('다음 할 일: 시험 일정 입력', (await next.innerText()).includes('시험 일정 입력하기'));
-await next.getByRole('link', { name: /시험 일정 입력하기/ }).click();
-await A.page.waitForURL(/\/schedule$/);
-const oneScreen = await A.page.getByText('시험별 시험실 배치').waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
-check('(1) 시험 일정 한 화면: 달력 입력 + 시험실 배치', oneScreen && (await A.page.getByRole('button', { name: '시험 시간표 표로 입력' }).isVisible()));
+const nextText = await next.innerText();
+check('다음 할 일: 준비 순서(교사 → 시험실 → 시험 일정) 중 하나', ['교사 명단 입력하기', '시험실 등록하기', '시험 일정 입력하기'].some((x) => nextText.includes(x)), nextText.replace(/\s+/g, ' '));
+const prep = await A.page.getByRole('navigation', { name: '시험 프로젝트 메뉴' }).innerText().catch(() => '');
+check('준비 탭 순서: 교사 명단 → 시험실 → 시험 일정', prep.indexOf('교사 명단') < prep.indexOf('시험실') && prep.indexOf('시험실') < prep.indexOf('시험 일정'), prep.replace(/\s+/g, ' '));
+await go(A.page, `/admin/sessions/${SID}/schedule`);
+await A.page.getByRole('button', { name: '시험 시간표 표로 입력' }).waitFor();
+check('(1) 시험 일정 한 화면: 달력 하나 (중복 시험 목록·배치 표 없음)', (await A.page.getByText('시험별 시험실 배치').count()) === 0);
 await A.page.screenshot({ path: 'scripts/e2e/out/simplify-schedule.png', fullPage: true });
 
 // (2) 학교·학기 선택 없음: 교사·시험실은 프로젝트 안에서 그 학기 명단
@@ -64,19 +66,20 @@ await db.doc(`sessions/${SID}/slots/2026-10-12_1_1`).set({
   rooms: [{ roomId: 'RSIM', classNo: 1, headcount: null, roomType: 'NORMAL' }], updatedBy: 'seed',
 });
 await go(A.page, `/admin/sessions/${SID}/assign`);
-await A.page.getByRole('button', { name: '자동 배정하고 바로 적용 (추천)' }).click();
+await A.page.getByRole('button', { name: '자동 배정하고 바로 적용' }).waitFor();
+check('자동 배정 화면: 수동 배정 유지·대안 토글 없음', (await A.page.getByText('수동 배정 유지').count()) === 0 && (await A.page.getByText('대안 시나리오 3개도').count()) === 0);
+check('배정 설정·고려사항이 자동 배정 화면에', await A.page.getByRole('heading', { name: '배정 설정' }).isVisible());
+await A.page.getByRole('button', { name: '자동 배정하고 바로 적용' }).click();
 const applied = await until(async () => (await db.collection(`sessions/${SID}/assignments`).get()).size === 1, 60000);
 const status = (await db.doc(`sessions/${SID}`).get()).get('status');
 check('(4) 자동 배정하고 바로 적용 → 배정 1석, 배정 완료', applied && status === 'AUTO_ASSIGNED', status);
 await go(A.page, `/admin/sessions/${SID}`);
-check('다음 할 일: 검토 시작', (await A.page.getByLabel('다음 할 일').innerText()).includes('검토 시작하기'));
+check('다음 할 일: 바로 교사에게 공개 (검토 단계 버튼 없음)', (await A.page.getByLabel('다음 할 일').innerText()).includes('교사에게 공개하기') && (await A.page.getByRole('button', { name: '검토 시작', exact: true }).count()) === 0);
 
 // (7) 교사 제출 바로 반영
 await go(A.page, `/admin/sessions/${SID}/availability`);
-const autoBox = A.page.getByRole('checkbox', { name: /교사 제출 바로 반영/ });
-await A.page.getByText('교사 제출 바로 반영').waitFor({ timeout: 15000 });
-if (!(await autoBox.isChecked())) await A.page.getByText('교사 제출 바로 반영').click();
-await until(async () => (await db.doc(`sessions/${SID}`).get()).get('settings.autoApproveAvailability') === true);
+await A.page.getByText('시간대별 인력 현황').waitFor({ timeout: 15000 });
+check('(7) "교사 제출 바로 반영" 스위치 없음 (늘 바로 반영)', (await A.page.getByText('교사 제출 바로 반영').count()) === 0);
 const K = await openApp({ email: 'kim@test.kr' });
 await go(K.page, '/me/availability');
 await K.page.getByRole('button', { name: /단순화 점검/ }).click({ timeout: 3000 }).catch(() => {});
@@ -95,8 +98,8 @@ await A.page.getByLabel('학교명').fill('점검중학교');
 await A.page.getByLabel('학년도', { exact: true }).fill('2027');
 await A.page.getByLabel('학기', { exact: true }).fill('1');
 await A.page.getByLabel('시험명').fill('이어받기 점검');
-const carry = A.page.getByText(/지난 학기 명단 이어받기 — 점검중학교 · 2026학년도 2학기/);
-check('(6) 지난 학기 명단 이어받기 표시', await carry.waitFor({ timeout: 10000 }).then(() => true).catch(() => false));
+const carry = A.page.getByText(/지난 학기 명단을 자동으로 이어받습니다 — 점검중학교 · 2026학년도 2학기/);
+check('(6) 지난 학기 명단 자동 이어받기 안내 (체크박스·기초시간표 스위치 없음)', (await carry.waitFor({ timeout: 10000 }).then(() => true).catch(() => false)) && (await A.page.getByRole('checkbox').count()) === 0);
 await A.page.getByRole('button', { name: '만들기' }).click();
 await A.page.waitForURL(/\/admin\/sessions\/[^/]+$/);
 const newSid = A.page.url().split('/').pop();

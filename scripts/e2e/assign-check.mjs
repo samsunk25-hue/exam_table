@@ -2,7 +2,7 @@
 // 실행: node scripts/e2e/assign-check.mjs (에뮬레이터 실행 중)
 import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { go, openApp } from './session.mjs';
+import { go, openApp, runCompare } from './session.mjs';
 
 process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
 const require = createRequire(import.meta.url);
@@ -59,10 +59,15 @@ for (const date of ['2026-10-12', '2026-10-13']) {
 
 const { browser, page, errors } = await openApp();
 await go(page, `/admin/sessions/${SID}/assign`);
-await page.getByRole('button', { name: '자동 배정 실행', exact: true }).click();
+await runCompare(page);
 await page.getByText('다중 시나리오 비교').waitFor({ timeout: 60000 });
 const compare = page.locator('section', { hasText: '다중 시나리오 비교' }).first();
-const heads = await compare.locator('thead th').allInnerTexts();
+// 실행 기록 4개가 화면에 다 들어올 때까지 (기본안이 먼저 보이고 대안이 이어서 들어온다)
+let heads = [];
+for (let i = 0; i < 50 && heads.length < 5; i++) {
+  heads = await compare.locator('thead th').allInnerTexts();
+  if (heads.length < 5) await page.waitForTimeout(200);
+}
 check('4개 안 비교표', heads.length === 5 && heads.some((h) => h.includes('A안')) && heads.some((h) => h.includes('C안')), heads.join(' | '));
 await page.screenshot({ path: `${OUT}/assign-compare.png`, fullPage: true });
 

@@ -14,8 +14,9 @@ import { ClockTimePicker } from '@/components/ClockTimePicker';
 import { ExamGridEditor } from '@/components/ExamGridEditor';
 import { ScheduleImportDialog } from '@/components/ScheduleImportDialog';
 import { Modal } from '@/components/Modal';
+import { PlacementEditor } from './SessionSetupPage';
 import { toast } from '@/components/Toast';
-import { Alert, Button, Card, Spinner } from '@/components/ui';
+import { Alert, Button, Card, Spinner, Empty } from '@/components/ui';
 import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
 import { guessBreak, periodTimesFromSlots, withAddedPeriod } from '@/lib/periodTimes';
@@ -68,7 +69,6 @@ function ExamForm({
       ]),
     ),
   );
-  const [autoPlace, setAutoPlace] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,7 +115,7 @@ function ExamForm({
       for (const g of chosen) {
         const id = slotIdOf(date, period, g);
         let placements = editing && g === editing.grade ? editing.rooms : [];
-        if (!placements.length && autoPlace) {
+        if (!placements.length) {
           placements = autoPlacements({ grade: g }, rooms).filter((p) => !used.has(p.roomId));
           placements.forEach((p) => used.add(p.roomId));
         }
@@ -226,12 +226,6 @@ function ExamForm({
           </datalist>
         </fieldset>
 
-        {!editing && (
-          <label className="flex min-h-12 cursor-pointer items-center gap-3">
-            <input type="checkbox" className="size-5 accent-primary" checked={autoPlace} onChange={(e) => setAutoPlace(e.target.checked)} />
-            <span>같은 학년 교실·복도를 시험실로 자동 배치 (특별실은 준비 &gt; 시험실에서 추가)</span>
-          </label>
-        )}
         {error && <Alert>{error}</Alert>}
         <div className="flex gap-2">
           <Button onClick={() => void save()} disabled={busy}>
@@ -254,6 +248,7 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
   const [month, setMonth] = useState(() => new Date());
   const [form, setForm] = useState<{ editing: Slot | null } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [placing, setPlacing] = useState<Slot | null>(null);
   const [grid, setGrid] = useState<{ dates: string[] } | null>(null);
   const [importing, setImporting] = useState(false);
   // 기간 선택: 시작일 → 종료일 두 번 누른다
@@ -406,7 +401,9 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
                 {editable && <Button onClick={() => setForm({ editing: null })}>+ 시험 추가</Button>}
               </div>
               {dayExams.length === 0 ? (
-                <p className="mt-4 text-muted">이 날은 시험이 없습니다.</p>
+                <Empty icon="📅" title="이 날은 시험이 없습니다">
+                  {editable ? '"+ 시험 추가"로 넣거나, 기간을 골라 표로 한 번에 입력하세요.' : undefined}
+                </Empty>
               ) : (
                 <ul className="mt-4 grid gap-2">
                   {dayExams.map((s) => (
@@ -417,8 +414,14 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
                           {s.type === 'STUDY' && <span className="ml-1 text-sm font-normal text-muted">(자습)</span>}
                         </div>
                         <div className="text-sm text-muted">
-                          {s.startTime ? `${s.startTime}~${s.endTime ?? ''}` : '시간 미정'} · 시험실 {s.rooms.length}개
-                          {s.rooms.length > 0 && ` (${s.rooms.slice(0, 3).map((p) => roomName.get(p.roomId) ?? '?').join(', ')}${s.rooms.length > 3 ? ' …' : ''})`}
+                          {s.startTime ? `${s.startTime}~${s.endTime ?? ''}` : '시간 미정'} ·{' '}
+                          {s.rooms.length === 0 ? <span className="font-semibold text-alert">시험실 없음</span> : `시험실 ${s.rooms.length}개`}
+                          {s.rooms.length > 0 &&
+                            ` (${[...s.rooms]
+                              .sort((a, b) => Number(!!b.endTime) - Number(!!a.endTime))
+                              .slice(0, 3)
+                              .map((p) => `${roomName.get(p.roomId) ?? '?'}${p.startTime && p.endTime ? ` ${p.startTime}~${p.endTime}` : ''}`)
+                              .join(', ')}${s.rooms.length > 3 ? ' …' : ''})`}
                         </div>
                       </div>
                       {editable &&
@@ -433,6 +436,9 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
                           </div>
                         ) : (
                           <div className="flex gap-1">
+                            <Button variant="ghost" onClick={() => setPlacing(s)} title="교실·복도·특별실 배치, 특별실 별도 시간">
+                              배치
+                            </Button>
                             <Button variant="ghost" onClick={() => setForm({ editing: s })}>
                               수정
                             </Button>
@@ -452,6 +458,7 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
 
 
       {importing && <ScheduleImportDialog session={session} slots={slots.data} rooms={rooms.data} onClose={() => setImporting(false)} />}
+      {placing && <PlacementEditor sid={session.id} slot={slots.data.find((x) => x.id === placing.id) ?? placing} slots={slots.data} rooms={rooms.data} onClose={() => setPlacing(null)} />}
       {grid && <ExamGridEditor session={session} slots={slots.data} rooms={rooms.data} initialDates={grid.dates} onClose={() => setGrid(null)} />}
       {form && selected && (
         <ExamForm session={session} date={selected} slots={slots.data} rooms={rooms.data} editing={form.editing} grades={grades} onClose={() => setForm(null)} />

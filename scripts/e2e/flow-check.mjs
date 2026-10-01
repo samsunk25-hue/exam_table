@@ -3,7 +3,7 @@
 // → 교사 확인 → 최종 확정(누적 점수) → 변경 잠금 → 잠금 해제(사유) → 확정 후 변경(사유) → 변경 이력
 import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { go, openApp } from './session.mjs';
+import { go, openApp, runCompare } from './session.mjs';
 
 process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
 const require = createRequire(import.meta.url);
@@ -22,7 +22,8 @@ const check = (label, ok, detail = '') => {
 // 단계 전환: 버튼 → (사유) → 확인, 그리고 DB 상태가 실제로 바뀔 때까지 기다린다
 const step = async (adminPage, label, expect, reason) => {
   await go(adminPage, `/admin/sessions/${sid}`);
-  await adminPage.getByRole('button', { name: label, exact: true }).click();
+  // 앞으로 가는 단계는 "다음 할 일" 버튼(예: "교사에게 공개하기 →"), 되돌리기·잠금은 현재 상태 카드
+  await adminPage.getByRole('button', { name: new RegExp(`^${label}`) }).first().click();
   if (reason) await adminPage.locator('textarea').fill(reason);
   await adminPage.getByRole('button', { name: '확인', exact: true }).click();
   for (let i = 0; i < 60; i++) {
@@ -60,21 +61,23 @@ await up.getByRole('button', { name: '닫기' }).first().click();
 await A.page.getByText('자동 배정을 실행할 준비가 되었습니다').waitFor();
 check('2. 기초 자료 입력 → 점검 통과', true);
 
-// 3. 교사(김민준 t01) 불가시간 제출 → 관리자 승인
+// 3. 교사(김민준 t01) 불가시간 제출 → 승인 없이 바로 반영
 const T = await openApp({ email: 't01@sample.school.kr' });
 await go(T.page, '/me/availability');
 await T.page.getByRole('button', { name: /^1교시/ }).first().click();
 await T.page.getByRole('button', { name: '출장', exact: true }).click();
 await T.page.getByRole('button', { name: '1칸 제출' }).click();
 await T.page.getByRole('status').filter({ hasText: '제출했습니다' }).waitFor();
-await go(A.page, `/admin/sessions/${sid}/availability`);
-await A.page.getByRole('button', { name: '대기 1건 모두 승인' }).click();
-await A.page.getByRole('status').filter({ hasText: '승인했습니다' }).waitFor();
-check('3. 교사 불가시간 제출 → 관리자 승인', true);
+let approved = false;
+for (let i = 0; i < 40 && !approved; i++) {
+  approved = (await db.collection(`sessions/${sid}/availability`).where('status', '==', 'APPROVED').get()).size > 0;
+  if (!approved) await new Promise((r) => setTimeout(r, 500));
+}
+check('3. 교사 불가시간 제출 → 바로 반영 (승인 단계 없음)', approved);
 
 // 4. 자동 배정(대안 포함) → 기본안 적용
 await go(A.page, `/admin/sessions/${sid}/assign`);
-await A.page.getByRole('button', { name: '자동 배정 실행', exact: true }).click();
+await runCompare(A.page);
 await A.page.getByText('다중 시나리오 비교').waitFor({ timeout: 90000 });
 await A.page.getByRole('button', { name: '이 결과 적용' }).click();
 await A.page.getByText('현재 적용됨').waitFor({ timeout: 60000 });
@@ -83,8 +86,7 @@ const firstDate = (await db.collection(`sessions/${sid}/slots`).orderBy('date').
 const clash = await db.collection(`sessions/${sid}/assignments`).where('teacherId', '==', t01).where('date', '==', firstDate).where('period', '==', 1).get();
 check('4. 자동 배정 적용 (불가시간 지킴)', clash.empty);
 
-// 5. 검토 → 교사 공개 → 교사 화면
-await step(A.page, '검토 시작', 'REVIEW');
+// 5. 배정 후 바로 교사 공개 → 교사 화면
 await step(A.page, '교사에게 공개', 'PUBLISHED');
 await go(T.page, '/me');
 await T.page.getByText(/감독 \d+회/).waitFor();

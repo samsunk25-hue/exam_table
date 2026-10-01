@@ -5,7 +5,6 @@ import {
   capacityByTime,
   examTimes,
   groupByDate,
-  isSetupEditable,
   type AvailabilityDoc,
   type RoomDoc,
   type SlotDoc,
@@ -13,10 +12,10 @@ import {
 import { AvailabilityGrid, GridLegend, ReasonPicker, dateLabel } from '@/components/AvailabilityGrid';
 import { Modal } from '@/components/Modal';
 import { toast } from '@/components/Toast';
-import { Alert, Button, Card, Select, Spinner, Table, Td, Toggle } from '@/components/ui';
+import { Alert, Button, Card, Select, Spinner, Table, Td, CardTitle } from '@/components/ui';
 import { cellKey, deleteAvailability, reviewAvailability, sortAvailability, submitAvailability, type Availability } from '@/lib/availability';
 import { useCollection } from '@/lib/data';
-import { termWhere, updateSessionSettings, useSessionTeachers } from '@/lib/sessions';
+import { termWhere, useSessionTeachers } from '@/lib/sessions';
 import { errorMessage } from '@/lib/firebase';
 import { useCurrentSession } from './SessionPage';
 
@@ -25,7 +24,7 @@ function CapacityCard({ rows }: { rows: ReturnType<typeof capacityByTime> }) {
   const short = rows.filter((r) => r.available < r.need);
   return (
     <Card>
-      <h2 className="text-lg font-bold">시간대별 인력 현황</h2>
+      <CardTitle icon="👥">시간대별 인력 현황</CardTitle>
       <p className="mt-1 text-muted">가용 인원 = 감독 가능한 교사 − 불가시간(승인·대기) 교사. 자동 배정 전에 부족한 시간이 없는지 확인하세요.</p>
       {short.length > 0 && (
         <div className="mt-3">
@@ -91,7 +90,7 @@ function RequestsCard({ sid, list, nameOf }: { sid: string; list: Availability[]
   return (
     <Card>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-bold">제출된 불가 시간</h2>
+        <CardTitle icon="📮">제출된 불가 시간</CardTitle>
         <div className="flex flex-wrap gap-2">
           <Button variant={filter === 'PENDING' ? 'primary' : 'secondary'} onClick={() => setFilter('PENDING')}>
             승인 대기 {pending.length}
@@ -229,7 +228,7 @@ function ProxyCard({ sid, teachers, times, all }: { sid: string; teachers: { id:
 
   return (
     <Card>
-      <h2 className="text-lg font-bold">대리 입력</h2>
+      <CardTitle icon="✍️">대리 입력</CardTitle>
       <p className="mt-1 text-muted">교사 대신 불가 시간을 입력합니다. 관리자가 입력한 항목은 바로 승인됩니다.</p>
       <div className="mt-3 max-w-sm">
         <Select
@@ -303,15 +302,7 @@ export function SessionAvailabilityPage() {
 
   return (
     <div className="grid gap-6">
-      <Card>
-        <Toggle
-          label="교사 제출 바로 반영"
-          hint="켜면 교사가 낸 불가시간이 승인 없이 바로 반영됩니다. 관리자는 아래 목록에서 문제 있는 것만 반려하면 됩니다."
-          checked={session.settings.autoApproveAvailability === true}
-          disabled={!isSetupEditable(session.status)}
-          onChange={(v) => void updateSessionSettings(session.id, { ...session.settings, autoApproveAvailability: v }).catch((e: unknown) => toast(errorMessage(e), 'alert'))}
-        />
-      </Card>
+      {/* 교사가 낸 불가시간은 승인 없이 바로 반영된다 (관리자는 아래 목록에서 문제 있는 것만 반려) */}
       <CapacityCard rows={capacity} />
       <RequestsCard sid={sid} list={availability.data} nameOf={nameOf} />
       {times.length > 0 && <ProxyCard sid={sid} teachers={activeTeachers} times={times} all={availability.data} />}

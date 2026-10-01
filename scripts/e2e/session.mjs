@@ -36,3 +36,10 @@ export async function go(page, path) {
   await page.goto(`${BASE}${path}`);
   await page.locator('main h1').first().waitFor();
 }
+
+/** 자동 배정 화면 "고급"을 열고 "자동 배정 실행"(적용 없이 기본안·대안 비교)을 누른다 */
+export async function runCompare(page) {
+  const adv = page.locator('details', { hasText: '고급 — 안을 직접 비교해 고르기' });
+  if (!(await adv.evaluate((d) => d.open))) await adv.locator('summary').click();
+  await adv.getByRole('button', { name: '자동 배정 실행', exact: true }).click();
+}

@@ -224,7 +224,7 @@ async function loadSession(sessionId: string, req: CallableRequest, admin: boole
       throw new HttpsError('permission-denied', '다른 학교·학기 시험입니다.');
     }
   }
-  const { data, current } = await loadData(sessionId, snap.get('settings.useBaseTimetable') === true);
+  const { data, current } = await loadData(sessionId, true);
   const input = buildEngineInput(data);
   const seats = new Map(buildSeats(input, DEFAULT_ROLE_WEIGHTS).map((s) => [s.id, s]));
   return { snap, status: snap.get('status') as SessionStatus, data, current, input, seats };

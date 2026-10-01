@@ -1,4 +1,4 @@
-// 출제 교사 규칙 설정: 개요 → 배정 설정에서 고르면 저장되고 되돌리기 목록에 남는다
+// 출제 교사 규칙 설정: 자동 배정 → 배정 설정에서 고르면 저장되고 되돌리기 목록에 남는다
 import { createRequire } from 'node:module';
 import { go, openApp } from './session.mjs';
 
@@ -21,7 +21,7 @@ await db.doc(`sessions/${SID}`).set({
   settings: { useBaseTimetable: false }, createdAt: new Date(), updatedBy: 'seed',
 });
 const A = await openApp();
-await go(A.page, `/admin/sessions/${SID}`);
+await go(A.page, `/admin/sessions/${SID}/assign`);
 await A.page.getByLabel('출제 교사 규칙').selectOption('NO_ROOM');
 let v;
 for (let i = 0; i < 30 && v !== 'NO_ROOM'; i++) {
@@ -29,7 +29,6 @@ for (let i = 0; i < 30 && v !== 'NO_ROOM'; i++) {
   if (v !== 'NO_ROOM') await new Promise((r) => setTimeout(r, 300));
 }
 check('설정 저장 (교실 감독 제외)', v === 'NO_ROOM', v);
-check('기초시간표 설정은 그대로', (await db.doc(`sessions/${SID}`).get()).get('settings.useBaseTimetable') === false);
 check('콘솔 오류 없음', A.errors.length === 0, A.errors.join(' / '));
 await A.browser.close();
 await db.recursiveDelete(db.doc(`sessions/${SID}`));

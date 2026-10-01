@@ -22,6 +22,8 @@ const SID = 'E2E_SAMPLE';
 
 const A = await openApp();
 await go(A.page, `/admin/sessions/${SID}/assign`);
+// 가중치 시뮬레이션은 접힌 "고급" 안에 있다
+await A.page.locator('details', { hasText: '고급 — 안을 직접 비교해 고르기' }).locator('summary').click();
 await A.page.getByRole('heading', { name: '가중치 시뮬레이션' }).waitFor();
 const table = A.page.getByRole('table', { name: '시뮬레이션 결과' });
 const row = (label) => table.locator('tr', { hasText: label });

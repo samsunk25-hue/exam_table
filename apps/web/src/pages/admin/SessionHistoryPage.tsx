@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router';
 import { useMemo, useState } from 'react';
 import type { RoomDoc, TeacherDoc } from '@sim/shared';
 import { Alert, Button, Card, DownloadButton, Spinner, Table, Td } from '@/components/ui';
@@ -18,7 +19,9 @@ function when(log: AuditLog) {
 /** 변경 이력: 이 시험 프로젝트 / 학교 공통(교사·시험실·관리자) */
 export function SessionHistoryPage() {
   const session = useCurrentSession();
-  const [scope, setScope] = useState<'session' | 'school'>('session');
+  // 교사 명단·시험실에서 오면 학교 공통 기록으로 연다 (?scope=school)
+  const [params] = useSearchParams();
+  const [scope, setScope] = useState<'session' | 'school'>(params.get('scope') === 'school' ? 'school' : 'session');
   const [type, setType] = useState<string>('ALL');
   const logs = useAuditLogs(scope === 'session' ? `sessions/${session.id}/auditLogs` : 'auditLogs', scope);
   const users = useCollection<{ email: string }>('users');

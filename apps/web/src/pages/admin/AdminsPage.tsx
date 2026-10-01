@@ -1,7 +1,7 @@
 import { collection, onSnapshot, orderBy, query, type Timestamp } from 'firebase/firestore';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '@/auth/AuthProvider';
-import { Alert, Button, Card, Field, PageTitle, Spinner } from '@/components/ui';
+import { Alert, Button, Card, Field, PageTitle, Spinner, CardTitle } from '@/components/ui';
 import { callAddAdmin, callRemoveAdmin, db, errorMessage } from '@/lib/firebase';
 import { AccessRequestsCard } from './AccessRequestsCard';
 import { AiKeyCard } from './AiKeyCard';
@@ -139,7 +139,7 @@ export function AdminsPage() {
       </Card>
 
       <Card>
-        <h2 className="text-lg font-bold">현재 관리자</h2>
+        <CardTitle icon="🛡️">현재 관리자</CardTitle>
         {loading && <Spinner />}
         {error && <Alert>{error}</Alert>}
         <ul>

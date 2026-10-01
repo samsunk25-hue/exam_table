@@ -1,7 +1,7 @@
 // 샘플 양식 점검: 샘플 다운로드 → 그대로 업로드 → 저장 → 자동 배정 100%
 import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { go, openApp } from './session.mjs';
+import { go, openApp, runCompare } from './session.mjs';
 
 process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
 const require = createRequire(import.meta.url);
@@ -65,9 +65,8 @@ check('특별실 + 자동 배치가 합쳐짐 (1학년 1교시: 교실 3 + 별�
 check('모든 시험에 시험실 배치', slotDocs.docs.every((d) => d.get('rooms').length > 0));
 
 await go(page, `/admin/sessions/${SID}/assign`);
-await page.getByRole('checkbox', { name: /대안 시나리오/ }).uncheck();
-await page.getByRole('button', { name: '자동 배정 실행', exact: true }).click();
-await page.getByText(/^성공률$/).waitFor({ timeout: 60000 });
+await runCompare(page);
+await page.getByText(/^성공률$/).first().waitFor({ timeout: 60000 });
 const metrics = await page.locator('main').innerText();
 check('자동 배정 성공률 100%', /성공률\s*100%/.test(metrics));
 

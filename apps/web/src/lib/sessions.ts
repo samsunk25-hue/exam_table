@@ -76,6 +76,14 @@ interface Live<T> {
   error: string | null;
 }
 
+/**
+ * 설정 기본값: 기초시간표는 올리기만 하면 반영(없으면 영향 없음), 교사가 낸 불가시간은 바로 반영(관리자는 예외만 반려).
+ * 예전에 꺼 둔 값이 있어도 이제 켜는 스위치가 없으므로 항상 이 값으로 본다.
+ */
+export function withDefaults(s: ExamSession): ExamSession {
+  return { ...s, settings: { ...s.settings, useBaseTimetable: true, autoApproveAvailability: s.settings?.autoApproveAvailability !== false } };
+}
+
 export function useSessions(): Live<ExamSession[]> {
   const [state, setState] = useState<Live<ExamSession[]>>({ data: [], loading: true, error: null });
   useEffect(
@@ -84,7 +92,7 @@ export function useSessions(): Live<ExamSession[]> {
         query(collection(db, 'sessions'), orderBy('createdAt', 'desc')),
         (snap) =>
           setState({
-            data: snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ExamSession),
+            data: snap.docs.map((d) => withDefaults({ id: d.id, ...d.data() } as ExamSession)),
             loading: false,
             error: null,
           }),
@@ -103,7 +111,7 @@ export function useSession(id: string | undefined): Live<ExamSession | null> {
       doc(db, 'sessions', id),
       (snap) =>
         setState({
-          data: snap.exists() ? ({ id: snap.id, ...snap.data() } as ExamSession) : null,
+          data: snap.exists() ? withDefaults({ id: snap.id, ...snap.data() } as ExamSession) : null,
           loading: false,
           error: null,
         }),
@@ -142,7 +150,7 @@ export function useMySessions(term: TermRef | null): Live<ExamSession[]> {
         setState({
           // 색인 없이 조회하려고 정렬은 화면에서 (최신순)
           data: snap.docs
-            .map((d) => ({ id: d.id, ...d.data() }) as ExamSession)
+            .map((d) => withDefaults({ id: d.id, ...d.data() } as ExamSession))
             .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0)),
           loading: false,
           error: null,

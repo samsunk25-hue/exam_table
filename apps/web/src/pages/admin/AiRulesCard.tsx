@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { nextId, type ConstraintDoc, type TeacherDoc } from '@sim/shared';
 import { toast } from '@/components/Toast';
-import { Alert, Button, Card } from '@/components/ui';
+import { Alert, Button, Card, CardTitle } from '@/components/ui';
 import { commitOps, ref, useCollection } from '@/lib/data';
 import { callAiRules, errorMessage } from '@/lib/firebase';
 import type { ExamSession } from '@/lib/sessions';
@@ -74,7 +74,7 @@ export function AiRulesCard({ session, editable }: { session: ExamSession; edita
 
   return (
     <Card>
-      <h2 className="text-lg font-bold">글로 쓰는 고려사항 (AI)</h2>
+      <CardTitle icon="✨">글로 쓰는 고려사항 (AI)</CardTitle>
       <p className="mt-1 text-muted">
         미리 정해 둔 설정에 없는 사정을 문장으로 적으면 AI가 배정 규칙으로 바꿉니다. 저장 전에 미리보기로 확인합니다. (관리자 관리 &gt; 내 AI 키 필요)
       </p>

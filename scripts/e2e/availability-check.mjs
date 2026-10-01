@@ -26,7 +26,7 @@ await db.recursiveDelete(db.doc(`sessions/${SID}`));
 await db.doc('rooms/RE2E').set({ name: 'E2E-1', spaceType: 'CLASSROOM', grade: 1, classNo: 9, chiefCount: 1, assistantCount: 1, ...TERM, updatedBy: 'seed' });
 await db.doc(`sessions/${SID}`).set({
   schoolName: '점검중학교', year: 2026, semester: 2, examName: '불가시간 점검', status: 'DRAFT',
-  settings: { useBaseTimetable: false }, createdAt: new Date(), ...TERM, updatedBy: 'seed',
+  settings: { useBaseTimetable: false, autoApproveAvailability: false }, createdAt: new Date(), ...TERM, updatedBy: 'seed',
 });
 for (const period of [1, 2]) {
   await db.doc(`sessions/${SID}/slots/2026-10-12_${period}_1`).set({

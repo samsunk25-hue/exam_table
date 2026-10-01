@@ -1,6 +1,6 @@
 import { checkSchedule, type BaseTimetableDoc, type RoomDoc, type SetupIssue, type SlotDoc, type TeacherDoc, type WithId } from '@sim/shared';
 import { Link } from 'react-router';
-import { Alert, Card } from '@/components/ui';
+import { Alert, Card, CardTitle } from '@/components/ui';
 import type { ExamSession } from '@/lib/sessions';
 
 type Slot = WithId<SlotDoc>;
@@ -27,39 +27,20 @@ export function Readiness({ session, slots, rooms, teachers, timetable }: {
   const active = teachers.filter((t) => t.active && t.defaultRole !== 'EXCLUDED');
   if (active.length === 0) issues.unshift({ level: 'error', message: '감독 가능한 교사가 없습니다.' });
   if (rooms.length === 0) issues.unshift({ level: 'error', message: '등록된 시험실이 없습니다.' });
-  if (session.settings.useBaseTimetable && timetable.length === 0) {
-    issues.push({ level: 'warning', message: '기초시간표 반영이 켜져 있지만 기초시간표가 없습니다.' });
-  }
-
-  // 교시별 필요 감독 수 vs 가용 교사 수 (불가시간 반영 전 개략치)
-  const roomById = new Map(rooms.map((r) => [r.id, r]));
-  const need = new Map<string, number>();
-  for (const s of slots) {
-    const key = `${s.date} ${s.period}교시`;
-    const n = s.rooms.reduce((sum, p) => {
-      const r = roomById.get(p.roomId);
-      return sum + (r ? r.chiefCount + r.assistantCount : 0);
-    }, 0);
-    need.set(key, (need.get(key) ?? 0) + n);
-  }
-  const peak = [...need.entries()].sort((a, b) => b[1] - a[1])[0];
-  if (peak && peak[1] > active.length) {
-    issues.push({ level: 'error', message: `${peak[0]}에 감독 ${peak[1]}명이 필요하지만 감독 가능한 교사는 ${active.length}명입니다 (교사를 늘리거나 임시 감독자 추가).` });
-  }
+  // 시간대별 감독 인원이 모자라는지는 불가시간까지 넣어 ① 불가시간 탭 "시간대별 인력 현황" 한 곳에서 본다
 
   const errors = issues.filter((i) => i.level === 'error');
   const placements = slots.reduce((n, s) => n + s.rooms.length, 0);
 
   return (
     <Card>
-      <h2 className="text-lg font-bold">기초 자료 점검</h2>
-      <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <CardTitle icon="✅">기초 자료 점검</CardTitle>
+      <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           ['감독 가능 교사', `${active.length}명`],
           ['시험실', `${rooms.length}개`],
           ['시험', `${slots.length}건`],
           ['시험실 배치', `${placements}건`],
-          ['최대 동시 감독', peak ? `${peak[1]}명` : '-'],
         ].map(([k, v]) => (
           <div key={k} className="rounded-xl bg-bg px-3 py-2">
             <dt className="text-sm text-muted">{k}</dt>

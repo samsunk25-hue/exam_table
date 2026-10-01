@@ -2,7 +2,7 @@ import { doc, onSnapshot, type Timestamp } from 'firebase/firestore';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '@/auth/AuthProvider';
 import { toast } from '@/components/Toast';
-import { Alert, Button, Card } from '@/components/ui';
+import { Alert, Button, Card, CardTitle } from '@/components/ui';
 import { callClearMyAiKey, callSetMyAiKey, db, errorMessage } from '@/lib/firebase';
 
 /**
@@ -55,7 +55,7 @@ export function AiKeyCard() {
 
   return (
     <Card className="mb-6">
-      <h2 className="text-lg font-bold">🔑 내 AI 키 (Claude)</h2>
+      <CardTitle icon="🔑">내 AI 키 (Claude)</CardTitle>
       <p className="mt-1 text-muted">
         AI 기능(학교 문서 읽기, 공정성 리포트, 교사용 배정 설명)에 쓰는 내 Claude API 키입니다. 키는 서버의 비공개 저장소에만 저장되어 앱·코드·다른 관리자·교사에게
         보이지 않으며, 관리자마다 자기 키를 넣습니다. 교사용 설명은 그 시험 프로젝트를 만든 관리자의 키로 처리됩니다.

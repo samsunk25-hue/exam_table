@@ -34,7 +34,7 @@ async function loadSession(sessionId: string) {
   if (!isSetupEditable(status)) {
     throw new HttpsError('failed-precondition', '교사 공개 이후에는 자동 배정을 다시 실행하거나 적용할 수 없습니다.');
   }
-  return { ref, status, useBaseTimetable: snap.get('settings.useBaseTimetable') === true };
+  return { ref, status, useBaseTimetable: true }; // 기초시간표는 올리면 반영 (없으면 영향 없음)
 }
 
 export async function loadData(sessionId: string, useBaseTimetable: boolean) {

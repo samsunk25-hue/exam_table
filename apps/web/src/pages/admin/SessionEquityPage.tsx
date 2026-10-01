@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { DEFAULT_CLASS_WEIGHT, classLoadOf, classTimes } from '@sim/engine';
 import { SEAT_ROLE_LABEL, type AssignmentDoc, type BaseTimetableDoc, type SeatRole, type SlotDoc } from '@sim/shared';
-import { Alert, Button, Card, DownloadButton, Spinner, Table, Td } from '@/components/ui';
+import { Alert, Button, Card, DownloadButton, Spinner, Table, Td, CardTitle } from '@/components/ui';
 import { useCollection } from '@/lib/data';
 import { sessionTitle, useSessionTeachers } from '@/lib/sessions';
 import { downloadWorkbook } from '@/lib/xlsx';
@@ -101,7 +101,7 @@ export function SessionEquityPage() {
   return (
     <div className="grid gap-6">
       <Card>
-        <h2 className="text-lg font-bold">업무 점수 (형평성)</h2>
+        <CardTitle icon="📊">업무 점수 (형평성)</CardTitle>
         <p className="mt-1 text-muted">
           업무 점수 = 맡은 감독의 역할 가중치 합 (정감독 1.0, 부감독 0.8, 연장감독 1.5 등) + 시험 없는 학년 수업 1시간당 0.8. 학년도 누적은 같은 학년도에 확정된 시험 점수를 더한 값으로, 자동 배정은
           누적이 낮은 교사에게 먼저 배정합니다.

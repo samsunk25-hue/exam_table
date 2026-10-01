@@ -36,7 +36,7 @@ export const applyAssignmentChanges = onCall({ timeoutSeconds: 60 }, async (req)
   if (status === 'LOCKED') throw new HttpsError('failed-precondition', '변경 잠금 상태입니다. 개요에서 잠금을 해제한 뒤 수정하세요.');
   if (status === 'CONFIRMED' && !reasonText) throw new HttpsError('invalid-argument', '최종 확정 이후 변경에는 사유가 필요합니다.');
 
-  const { data, current } = await loadData(sessionId, sessionSnap.get('settings.useBaseTimetable') === true);
+  const { data, current } = await loadData(sessionId, true);
   const input = buildEngineInput(data);
   const seatById = new Map(buildSeats(input, DEFAULT_ROLE_WEIGHTS).map((s) => [s.id, s]));
   for (const c of list) if (!seatById.has(c.seatId)) throw new HttpsError('invalid-argument', `존재하지 않는 좌석입니다: ${c.seatId}`);

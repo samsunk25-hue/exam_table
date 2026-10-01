@@ -18,7 +18,7 @@ import { MySchedulePage } from '@/pages/teacher/MySchedulePage';
 import { AdminRequestPage } from '@/pages/teacher/AdminRequestPage';
 import { SessionPrintPage } from '@/pages/admin/SessionPrintPage';
 import { SessionHistoryPage } from '@/pages/admin/SessionHistoryPage';
-import { SessionSchedulePage, SessionSetupPage } from '@/pages/admin/SessionSetupPage';
+import { SessionSchedulePage } from '@/pages/admin/SessionSetupPage';
 import { TeachersPage } from '@/pages/admin/TeachersPage';
 
 const ADMIN_NAV: NavItem[] = [
@@ -86,7 +86,8 @@ const router = createBrowserRouter([
               { path: 'schedule', element: <SessionSchedulePage /> },
               { path: 'teachers', element: <TeachersPage /> },
               { path: 'rooms', element: <RoomsPage /> },
-              { path: 'setup', element: <SessionSetupPage /> },
+              // 예전 기초시간표 화면: 기초시간표는 개요의 통합 양식·배정 설정에서 올린다
+              { path: 'setup', element: <Navigate to=".." relative="path" replace /> },
               {
                 path: 'availability',
                 element: <SessionAvailabilityPage />,

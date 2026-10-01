@@ -1,6 +1,6 @@
 // 준비가 덜 된 프로젝트: 교사·시험실·시험실 배치가 없으면 "다음 할 일"이 그것부터 안내하고, 자동 배정은 막는다
 import { createRequire } from 'node:module';
-import { go, openApp } from './session.mjs';
+import { go, openApp, runCompare } from './session.mjs';
 
 process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
 const require = createRequire(import.meta.url);
@@ -40,22 +40,29 @@ await db.doc('teachers/RDY1').set({ name: '준비교사', email: null, subject: 
 await page.waitForFunction(() => document.querySelector('[aria-label="다음 할 일"]')?.textContent?.includes('시험실 등록하기'), null, { timeout: 15000 }).catch(() => {});
 check('시험실 없음 → 시험실 등록 안내', (await say()).includes('시험실 등록하기'), await say());
 
-await db.doc('rooms/RDYR').set({ name: '1-1', spaceType: 'CLASSROOM', grade: 1, classNo: 1, chiefCount: 1, assistantCount: 0, ...TERM, updatedBy: 'seed' });
-await page.waitForFunction(() => document.querySelector('[aria-label="다음 할 일"]')?.textContent?.includes('시험실 배치하기'), null, { timeout: 15000 }).catch(() => {});
-check('배치 없음 → 시험실 배치 안내', (await say()).includes('시험실 배치하기'), await say());
+// 학년이 맞지 않는 시험실만 있으면: 자동 배치할 수 없다는 안내, 자동 배정은 서버에서 막힘
+await db.doc('rooms/RDYR').set({ name: '2-1', spaceType: 'CLASSROOM', grade: 2, classNo: 1, chiefCount: 1, assistantCount: 0, ...TERM, updatedBy: 'seed' });
+await page.waitForFunction(() => document.querySelector('[aria-label="다음 할 일"]')?.textContent?.includes('시험실 확인하기'), null, { timeout: 15000 }).catch(() => {});
+check('배치할 교실 없음 → 시험실 확인 안내', (await say()).includes('시험실 확인하기'), await say());
 
 await go(page, `/admin/sessions/${SID}/editor`);
 await page.getByText('아직 감독 자리가 없습니다.').waitFor();
 check('시간표 편집: 무엇을 먼저 할지 링크', await page.getByRole('link', { name: '시험 일정에서 시험실 배치하기 →' }).isVisible());
 
-// 자동 배정은 서버에서 막힌다
 await go(page, `/admin/sessions/${SID}/assign`);
-await page.getByRole('button', { name: '자동 배정 실행', exact: true }).click();
+await runCompare(page);
 const msg = await page.getByText('감독 자리가 없습니다').first().waitFor({ timeout: 30000 }).then(() => true).catch(() => false);
 check('자리 없으면 자동 배정 거부 안내', msg);
 
-await db.doc(`sessions/${SID}/slots/2026-12-09_1_1`).set({ rooms: [{ roomId: 'RDYR', classNo: 1, headcount: null, roomType: 'NORMAL' }] }, { merge: true });
+// 맞는 학년 교실을 등록하면 따로 배치하지 않아도 자동 배치 → 바로 자동 배정 안내
+await db.doc('rooms/RDYR2').set({ name: '1-1', spaceType: 'CLASSROOM', grade: 1, classNo: 1, chiefCount: 1, assistantCount: 0, ...TERM, updatedBy: 'seed' });
 await go(page, `/admin/sessions/${SID}`);
+let placed = [];
+for (let i = 0; i < 40 && !placed.length; i++) {
+  placed = (await db.doc(`sessions/${SID}/slots/2026-12-09_1_1`).get()).get('rooms') ?? [];
+  if (!placed.length) await new Promise((r) => setTimeout(r, 300));
+}
+check('시험실 자동 배치 (배치 단계 없음)', placed.some((p) => p.roomId === 'RDYR2'), JSON.stringify(placed));
 await page.waitForFunction(() => document.querySelector('[aria-label="다음 할 일"]')?.textContent?.includes('자동 배정하기'), null, { timeout: 15000 }).catch(() => {});
 check('모두 준비 → 자동 배정 안내', (await say()).includes('자동 배정하기'), await say());
 check('콘솔 오류 없음', errors.filter((e) => !e.includes('감독 자리가 없습니다') && !e.includes('failed-precondition') && !e.includes('400 (Bad Request)')).length === 0, errors.join(' | '));
@@ -63,4 +70,5 @@ await browser.close();
 await db.recursiveDelete(db.doc(`sessions/${SID}`));
 await db.doc('teachers/RDY1').delete();
 await db.doc('rooms/RDYR').delete();
+await db.doc('rooms/RDYR2').delete();
 process.exit(failures ? 1 : 0);

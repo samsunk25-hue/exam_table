@@ -3,7 +3,7 @@ import { useEffect, useState, type ButtonHTMLAttributes, type InputHTMLAttribute
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-primary text-white hover:bg-primary-strong',
+  primary: 'bg-primary text-white shadow-sm hover:bg-primary-strong hover:shadow-md',
   secondary: 'bg-surface text-ink border border-line hover:border-primary hover:bg-primary-soft hover:text-primary-strong',
   danger: 'bg-surface text-alert border border-alert hover:bg-alert-soft',
   ghost: 'text-ink hover:bg-primary-soft',
@@ -17,7 +17,7 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
   return (
     <button
-      className={`inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-xl px-5 font-semibold transition-all active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 ${VARIANTS[variant]} ${className}`}
+      className={`inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-xl px-5 font-semibold transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 ${VARIANTS[variant]} ${className}`}
       {...props}
     />
   );
@@ -73,7 +73,33 @@ export function DownloadButton({
 }
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-card border border-line bg-surface p-5 shadow-sm ${className}`}>{children}</section>;
+  return <section className={`rounded-card border border-line/60 bg-surface p-5 shadow-[var(--shadow-card)] md:p-6 ${className}`}>{children}</section>;
+}
+
+/** 카드 제목: 앞에 작은 아이콘 (읽는 이름에는 들어가지 않음) */
+export function CardTitle({ icon, children, className = '' }: { icon: string; children: ReactNode; className?: string }) {
+  return (
+    <h2 className={`flex items-center gap-2 text-lg font-bold ${className}`}>
+      <span aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-base">
+        {icon}
+      </span>
+      {children}
+    </h2>
+  );
+}
+
+/** 빈 화면: 그림 + 한 줄 안내 + 다음 할 일 버튼 */
+export function Empty({ icon, title, children, action }: { icon: string; title: string; children?: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
+      <span aria-hidden className="flex size-16 items-center justify-center rounded-full bg-primary-soft text-3xl">
+        {icon}
+      </span>
+      <p className="mt-1 text-lg font-bold">{title}</p>
+      {children && <p className="max-w-md text-muted">{children}</p>}
+      {action && <div className="mt-2">{action}</div>}
+    </div>
+  );
 }
 
 export function PageTitle({ children, sub }: { children: ReactNode; sub?: ReactNode }) {
@@ -128,7 +154,7 @@ export function Select({
 export function Table({ head, children }: { head: ReactNode[]; children: ReactNode }) {
   return (
     <div className="-mx-5 overflow-x-auto px-5">
-      <table className="w-full min-w-max border-collapse text-left">
+      <table className="data-table w-full min-w-max border-collapse text-left">
         <thead>
           <tr className="border-b-2 border-line text-sm text-muted">
             {head.map((h, i) => (
@@ -179,15 +205,19 @@ export function Toggle({
 }
 
 export function Alert({ children, tone = 'alert' }: { children: ReactNode; tone?: 'alert' | 'info' }) {
-  const cls = tone === 'alert' ? 'border-alert bg-alert-soft' : 'border-primary bg-primary-soft';
-  return <div className={`rounded-xl border px-4 py-3 ${cls}`}>{children}</div>;
+  // 왼쪽 굵은 띠로 종류를 구분 (빨강 = 고칠 것, 파랑 = 안내)
+  const cls = tone === 'alert' ? 'border-alert/40 border-l-alert bg-alert-soft' : 'border-primary/30 border-l-primary bg-primary-soft';
+  return <div className={`anim-fade rounded-xl border border-l-4 px-4 py-3 ${cls}`}>{children}</div>;
 }
 
 export function Spinner({ label = '불러오는 중…' }: { label?: string }) {
   return (
-    <div className="flex items-center gap-3 py-10 text-muted" role="status">
-      <span className="size-5 animate-spin rounded-full border-2 border-line border-t-primary" />
-      {label}
+    // 빙글 도는 표시 대신 내용 자리에 은은한 회색 막대 (화면이 덜컹거리지 않게)
+    <div className="grid gap-3 py-6" role="status" aria-label={label}>
+      <span className="sr-only">{label}</span>
+      <div className="skeleton h-7 w-1/3" />
+      <div className="skeleton h-24 w-full" />
+      <div className="skeleton h-24 w-full" />
     </div>
   );
 }

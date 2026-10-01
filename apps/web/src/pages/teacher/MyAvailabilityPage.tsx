@@ -10,7 +10,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { AvailabilityGrid, GridLegend, ReasonPicker, dateLabel } from '@/components/AvailabilityGrid';
 import { Modal } from '@/components/Modal';
 import { toast } from '@/components/Toast';
-import { Alert, Button, Card, PageTitle, Spinner, Table, Td } from '@/components/ui';
+import { Alert, Button, Card, PageTitle, Spinner, Table, Td, CardTitle } from '@/components/ui';
 import { cellKey, deleteAvailability, submitAvailability, type Availability } from '@/lib/availability';
 import { useCollection } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
@@ -80,7 +80,7 @@ function MyAvailabilityForm({ session, teacherId }: { session: ExamSession; teac
   return (
     <div className="grid gap-6">
       <Card>
-        <h2 className="text-lg font-bold">근무할 수 없는 시간을 누르세요</h2>
+        <CardTitle icon="🗓️">근무할 수 없는 시간을 누르세요</CardTitle>
         <p className="mt-1 text-muted">
           여러 칸을 고른 뒤 사유를 선택하고 제출합니다. 이미 제출한 칸을 누르면 취소할 수 있습니다 (승인된 것도 교사 공개 전까지 취소 가능).
         </p>
@@ -113,7 +113,7 @@ function MyAvailabilityForm({ session, teacherId }: { session: ExamSession; teac
       )}
 
       <Card>
-        <h2 className="text-lg font-bold">내 제출 내역</h2>
+        <CardTitle icon="📮">내 제출 내역</CardTitle>
         {sortedMine.length === 0 ? (
           <p className="mt-2 text-muted">제출한 불가 시간이 없습니다.</p>
         ) : (

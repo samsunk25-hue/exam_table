@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { Modal } from '@/components/Modal';
 import { StatusBadge } from '@/components/StatusStepper';
 import { toast } from '@/components/Toast';
-import { Alert, Button, Card, Field, PageTitle, Spinner, Toggle } from '@/components/ui';
+import { Alert, Button, Card, Field, PageTitle, Spinner, Toggle, Empty } from '@/components/ui';
 import { callDeleteSession, errorMessage } from '@/lib/firebase';
 import { createSession, sessionTitle, useSessions, type ExamSession } from '@/lib/sessions';
 import { commitOps, ref, useCollection } from '@/lib/data';
@@ -66,9 +66,7 @@ function CreateSessionForm({ onDone }: { onDone: () => void }) {
   const [year, setYear] = useState(currentSchoolYear());
   const [semester, setSemester] = useState(new Date().getMonth() >= 7 ? 2 : 1);
   const [examName, setExamName] = useState('');
-  const [useBaseTimetable, setUseBaseTimetable] = useState(true);
-  // 같은 학교 지난 학기 교사·시험실을 이어받기 (기본 켜짐)
-  const [carryRoster, setCarryRoster] = useState(true);
+  // 같은 학교 지난 학기 교사·시험실은 자동으로 이어받는다 (예외는 교사 명단·시험실의 "다른 학기에서 불러오기")
   const allTeachers = useCollection<TeacherDoc>('teachers');
   const allRooms = useCollection<RoomDoc>('rooms');
   const target = { school: schoolName.trim(), year, semester };
@@ -88,9 +86,10 @@ function CreateSessionForm({ onDone }: { onDone: () => void }) {
         year,
         semester,
         examName: examName.trim(),
-        settings: { useBaseTimetable },
+        // 기초시간표는 올리면 반영, 출제 교사는 자기 과목 시험 시간에 복도 대기 우선
+        settings: { useBaseTimetable: true, examWriter: 'PREFER_HALLWAY' },
       });
-      if (carryRoster && prev) {
+      if (prev) {
         const copy = (kind: 'teachers' | 'rooms', p: typeof prevTeachers, all: typeof allTeachers.data | typeof allRooms.data) =>
           p
             ? rosterCopyOps({
@@ -138,25 +137,14 @@ function CreateSessionForm({ onDone }: { onDone: () => void }) {
           value={semester}
           onChange={(e) => setSemester(Number(e.target.value))}
         />
-        <div className="md:col-span-2">
-          <Toggle
-            label="기초시간표 반영"
-            hint="켜면 시험 시간에 해당 반을 원래 가르치던 교사에게 가점(+50)을 줍니다. 끄면 기초시간표 업로드가 필요 없습니다."
-            checked={useBaseTimetable}
-            onChange={setUseBaseTimetable}
-          />
-        </div>
         {prev && (
-          <label className="flex min-h-12 cursor-pointer items-start gap-3 rounded-xl bg-bg p-3 md:col-span-2">
-            <input type="checkbox" className="mt-1 size-5 accent-primary" checked={carryRoster} onChange={(e) => setCarryRoster(e.target.checked)} />
-            <span>
-              <span className="font-semibold">지난 학기 명단 이어받기 — {termLabel(prev.term)}</span>
-              <span className="block text-sm text-muted">
-                교사 {prevTeachers?.docs.length ?? 0}명 · 시험실 {prevRooms?.docs.length ?? 0}개를 이 학기로 가져옵니다.
-                {prev.term.year === year ? ' 같은 학년도라 누적 업무점수를 이어받습니다.' : ' 새 학년도라 누적 점수는 0점, 담임은 비웁니다.'} 일부만 바꾸려면 나중에 교사 관리에서 고치세요.
-              </span>
+          <p className="rounded-xl bg-bg p-3 md:col-span-2">
+            <span className="font-semibold">지난 학기 명단을 자동으로 이어받습니다 — {termLabel(prev.term)}</span>
+            <span className="block text-sm text-muted">
+              교사 {prevTeachers?.docs.length ?? 0}명 · 시험실 {prevRooms?.docs.length ?? 0}개.
+              {prev.term.year === year ? ' 같은 학년도라 누적 업무점수를 이어받습니다.' : ' 새 학년도라 누적 점수는 0점, 담임은 비웁니다.'} 바뀐 것만 교사 명단·시험실에서 고치세요.
             </span>
-          </label>
+          </p>
         )}
         {error && (
           <div className="md:col-span-2">
@@ -233,7 +221,9 @@ export function DashboardPage() {
       {error && <Alert>{error}</Alert>}
       {!loading && !error && sessions.length === 0 && (
         <Card>
-          <p className="text-muted">{hiddenCount ? '보이는 시험 프로젝트가 없습니다 (숨긴 프로젝트만 있음).' : '아직 시험 프로젝트가 없습니다.'}</p>
+          <Empty icon="📝" title={hiddenCount ? '보이는 시험 프로젝트가 없습니다' : '아직 시험 프로젝트가 없습니다'}>
+            {hiddenCount ? '아래 "숨긴 프로젝트 보기"로 숨긴 프로젝트를 볼 수 있습니다.' : '위의 "+ 새 시험 프로젝트"로 이번 시험을 시작하세요. 지난 학기 명단은 자동으로 이어받습니다.'}
+          </Empty>
         </Card>
       )}
 
@@ -279,7 +269,7 @@ export function DashboardPage() {
                 </div>
                 <Link
                   to={`/admin/sessions/${s.id}`}
-                  className={`block rounded-card border border-line bg-surface p-5 shadow-sm transition-colors hover:border-primary ${s.hidden ? 'opacity-60' : ''}`}
+                  className={`lift block rounded-card border border-line/60 bg-surface p-5 shadow-[var(--shadow-card)] hover:border-primary ${s.hidden ? 'opacity-60' : ''}`}
                 >
                   <div className="text-sm text-muted">{s.schoolName}</div>
                   <div className="mt-1 pr-28 text-lg font-bold">{sessionTitle(s)}</div>

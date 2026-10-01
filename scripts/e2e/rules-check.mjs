@@ -1,6 +1,6 @@
 // 글로 쓴 고려사항 → AI 규칙 (에뮬레이터 가짜 응답) → 미리보기 → 저장 → 자동 배정 반영 → 삭제
 import { createRequire } from 'node:module';
-import { go, openApp } from './session.mjs';
+import { go, openApp, runCompare } from './session.mjs';
 
 process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
 const require = createRequire(import.meta.url);
@@ -31,7 +31,8 @@ const kim = teachers.find((d) => d.get('name')?.startsWith('김')) ?? teachers[0
 const kimName = kim.get('name');
 
 const { browser, page, errors } = await openApp();
-await go(page, `/admin/sessions/${SID}`);
+// 글로 쓰는 고려사항은 자동 배정 화면 위에 있다
+await go(page, `/admin/sessions/${SID}/assign`);
 const card = page.getByRole('heading', { name: '글로 쓰는 고려사항 (AI)' });
 await card.waitFor();
 await page.getByLabel('고려사항').fill(`${kimName} 선생님은 11/3 1교시에 병원 진료라 빼 주세요.`);
@@ -53,7 +54,7 @@ check('원래 문장도 함께 저장', String(docs[0]?.get('sourceText')).inclu
 
 // 자동 배정: 그 교사는 그 자리에 오지 않는다
 await go(page, `/admin/sessions/${SID}/assign`);
-await page.getByRole('button', { name: '자동 배정 실행', exact: true }).click();
+await runCompare(page);
 await page.getByText('다중 시나리오 비교').waitFor({ timeout: 60000 });
 await page.locator('section', { hasText: '다중 시나리오 비교' }).first().getByRole('button', { name: '자세히' }).first().click();
 await page.getByRole('button', { name: '이 결과 적용' }).click();
@@ -62,7 +63,7 @@ const who = (await db.collection(`sessions/${SID}/assignments`).get()).docs.map(
 check('자동 배정에서 그 교사는 빠짐', who.length > 0 && !who.includes(kim.id), JSON.stringify(who));
 
 // 삭제
-await go(page, `/admin/sessions/${SID}`);
+await go(page, `/admin/sessions/${SID}/assign`);
 await page.getByRole('button', { name: /삭제$/ }).filter({ hasText: '×' }).first().click();
 let left = 1;
 for (let i = 0; i < 40 && left; i++) {

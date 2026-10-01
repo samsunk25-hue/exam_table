@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { nextId, sessionTerm, termFields, type TeacherDoc } from '@sim/shared';
 import { toast } from '@/components/Toast';
-import { Alert, Button, Card } from '@/components/ui';
+import { Alert, Button, Card, CardTitle } from '@/components/ui';
 import { commitOps, ref, useCollection } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
 import type { ExamSession } from '@/lib/sessions';
@@ -107,7 +107,7 @@ export function TempStaffCard({ session }: { session: ExamSession }) {
 
   return (
     <Card>
-      <h2 className="text-lg font-bold">임시 감독자 (이번 시험만)</h2>
+      <CardTitle icon="🙋">임시 감독자 (이번 시험만)</CardTitle>
       <p className="mt-1 text-muted">
         교사 명단에 없는 사람(학부모·강사 등)을 이름만으로 추가합니다. 자동 배정은 교사가 모자랄 때만 임시 감독자를 쓰고, 다른 시험·다음 학기 명단에는 나오지 않습니다.
       </p>

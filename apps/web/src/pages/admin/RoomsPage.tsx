@@ -1,9 +1,9 @@
+import { Link } from 'react-router';
 import { useMemo, useState, type FormEvent } from 'react';
 import { SPACE_TYPE_LABEL, nextId, termFields, termLabel, type RoomDoc, type SpaceType, type TermRef, type WithId } from '@sim/shared';
 import { Modal } from '@/components/Modal';
-import { UndoHistory } from '@/components/UndoHistory';
 import { RosterImportDialog, useTerm } from '@/components/TermRoster';
-import { Alert, Button, Card, Field, Select, Spinner, Table, Td } from '@/components/ui';
+import { Alert, Button, Card, Field, Select, Spinner, Table, Td, Empty } from '@/components/ui';
 import { commitOps, ref, useCollection } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
 import { ClassroomSetupCard } from './ClassroomSetupCard';
@@ -146,7 +146,6 @@ export function RoomsPage() {
   const takenIds = useMemo(() => everyone.data.map((r) => r.id), [everyone.data]);
   const [editing, setEditing] = useState<Room | 'new' | null>(null);
   const [importing, setImporting] = useState(false);
-  const [history, setHistory] = useState(false);
   const rooms = useMemo(() => sortRooms(data), [data]);
   const seats = data.reduce((s, r) => s + r.chiefCount + r.assistantCount, 0);
 
@@ -182,9 +181,10 @@ export function RoomsPage() {
               다른 학기에서 불러오기
             </Button>
           )}
-          <Button variant="ghost" onClick={() => setHistory(true)}>
+          {/* 작업 기록은 ④ 변경 이력 한 곳에서 (학교 공통 보기로 연다) */}
+          <Link to="../history?scope=school" relative="path" className="inline-flex min-h-12 items-center rounded-xl px-4 font-semibold text-ink hover:bg-bg">
             ↶ 작업 기록·되돌리기
-          </Button>
+          </Link>
         </div>
       )}
 
@@ -192,7 +192,9 @@ export function RoomsPage() {
         {loading && <Spinner />}
         {error && <Alert>{error}</Alert>}
         {!loading && data.length === 0 && (
-          <p className="py-6 text-muted">이 학기에 등록된 시험실이 없습니다. 다른 학기에서 불러오거나 위에서 학급 수를 입력해 교실을 만드세요.</p>
+          <Empty icon="🏫" title="이 학기에 등록된 시험실이 없습니다">
+            위에서 학년별 학급 수만 넣으면 교실이 한 번에 만들어집니다. 다른 학기 시험실은 "다른 학기에서 불러오기"로 가져옵니다.
+          </Empty>
         )}
         {rooms.length > 0 && (
           <Table head={['실명', '공간유형', '학년', '반', '정감독', '부감독', '']}>
@@ -219,11 +221,6 @@ export function RoomsPage() {
         <RoomForm room={editing === 'new' ? null : editing} all={data} takenIds={takenIds} term={choice.current} onClose={() => setEditing(null)} />
       )}
       {importing && choice.current && <RosterImportDialog kind="rooms" target={choice.current} all={everyone.data} onClose={() => setImporting(false)} />}
-      {history && (
-        <Modal title="작업 기록·되돌리기" onClose={() => setHistory(false)} wide>
-          <UndoHistory sessionId={null} title="학교 공통 (교사·시험실)" />
-        </Modal>
-      )}
     </>
   );
 }

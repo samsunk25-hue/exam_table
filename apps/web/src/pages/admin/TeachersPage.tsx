@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { useMemo, useState, type FormEvent } from 'react';
 import {
   DEFAULT_ROLE_LABEL,
@@ -13,11 +14,13 @@ import {
   type WithId,
 } from '@sim/shared';
 import { Modal } from '@/components/Modal';
-import { UndoHistory } from '@/components/UndoHistory';
 import { RosterImportDialog, useTerm } from '@/components/TermRoster';
-import { Alert, Button, Card, Field, Select, Spinner, Table, Td } from '@/components/ui';
+import { Alert, Button, Card, Field, Select, Spinner, Table, Td, Empty } from '@/components/ui';
 import { commitOps, ref, useCollection } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
+import { BundleUploadButton } from './BundleCard';
+import { useCurrentSession } from './SessionPage';
+import { TempStaffCard } from './TempStaffCard';
 
 type Teacher = WithId<TeacherDoc>;
 
@@ -253,14 +256,14 @@ function TeacherForm({
 export function TeachersPage() {
   const everyone = useCollection<TeacherDoc>('teachers');
   const { loading, error } = everyone;
-  const choice = useTerm(); // 머리글에서 고른 학교·학기
+  const choice = useTerm(); // 이 프로젝트의 학교·학기
+  const session = useCurrentSession();
   // 선택한 학교·학기 명단만 보여 준다
   const data = useMemo(() => everyone.data.filter((t) => t.term === choice.key), [everyone.data, choice.key]);
   const legacy = everyone.data.filter((t) => !t.term).length;
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Teacher | 'new' | null>(null);
   const [importing, setImporting] = useState(false);
-  const [history, setHistory] = useState(false);
 
   const teachers = useMemo(() => sortTeachers(data), [data]);
   const shown = teachers.filter((t) => {
@@ -293,15 +296,17 @@ export function TeachersPage() {
       {choice.current && (
         <div className="mb-4 flex flex-wrap gap-2">
           <Button onClick={() => setEditing('new')}>+ 교사 추가</Button>
+          <BundleUploadButton session={session} />
           {/* 다른 학기 명단이나 학기 미지정 예전 자료가 있을 때만 */}
           {everyone.data.some((x) => x.term !== choice.key) && (
             <Button variant="secondary" onClick={() => setImporting(true)}>
               다른 학기에서 불러오기
             </Button>
           )}
-          <Button variant="ghost" onClick={() => setHistory(true)}>
+          {/* 작업 기록은 ④ 변경 이력 한 곳에서 (학교 공통 보기로 연다) */}
+          <Link to="../history?scope=school" relative="path" className="inline-flex min-h-12 items-center rounded-xl px-4 font-semibold text-ink hover:bg-bg">
             ↶ 작업 기록·되돌리기
-          </Button>
+          </Link>
         </div>
       )}
 
@@ -322,7 +327,9 @@ export function TeachersPage() {
         {loading && <Spinner />}
         {error && <Alert>{error}</Alert>}
         {!loading && data.length === 0 && (
-          <p className="py-6 text-muted">이 학기에 등록된 교사가 없습니다. 다른 학기에서 불러오거나, 통합 양식으로 올리거나, "+ 교사 추가"로 입력하세요.</p>
+          <Empty icon="👩‍🏫" title="이 학기에 등록된 교사가 없습니다">
+            위의 "엑셀(통합 양식) 올리기"나 "+ 교사 추가"로 넣으세요. 다른 학기 명단은 "다른 학기에서 불러오기"로 가져옵니다.
+          </Empty>
         )}
         {shown.length > 0 && (
           <Table head={['이름', '이메일', '담당교과', '담임', '감독구분', '누적점수', '']}>
@@ -349,6 +356,10 @@ export function TeachersPage() {
         )}
       </Card>
 
+      <div className="mt-6">
+        <TempStaffCard session={session} />
+      </div>
+
       {editing && choice.current && (
         <TeacherForm
           teacher={editing === 'new' ? null : editing}
@@ -360,11 +371,6 @@ export function TeachersPage() {
         />
       )}
       {importing && choice.current && <RosterImportDialog kind="teachers" target={choice.current} all={everyone.data} onClose={() => setImporting(false)} />}
-      {history && (
-        <Modal title="작업 기록·되돌리기" onClose={() => setHistory(false)} wide>
-          <UndoHistory sessionId={null} title="학교 공통 (교사·시험실)" />
-        </Modal>
-      )}
     </>
   );
 }

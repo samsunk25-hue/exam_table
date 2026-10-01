@@ -77,13 +77,14 @@ export function SessionPrintPage() {
           </div>
         )}
         {session.status !== 'CONFIRMED' && session.status !== 'LOCKED' && (
-          <p className="mt-3 text-sm text-muted">아직 최종 확정 전입니다. 확정 후 다시 출력하는 것을 권장합니다.</p>
+          <p className="mt-3 text-sm text-muted">아직 최종 확정 전이라 인쇄물 제목에 "확정 전"이 붙습니다. 교사는 공개되면 앱에서 바로 보므로, 종이는 확정 후 한 번만 인쇄하면 됩니다.</p>
         )}
       </Card>
 
       <Card>
         <h2 className="mb-4 text-xl font-bold">
           {title} · {view === 'full' ? '시험 감독 시간표' : `${teacher?.name ?? ''} 선생님 감독 시간표`}
+          {session.status !== 'CONFIRMED' && session.status !== 'LOCKED' && <span className="ml-2 rounded-full border border-alert px-2 text-base text-alert">확정 전</span>}
         </h2>
         {view === 'full' ? <FullTimetable data={data} /> : <PersonalTimetable duties={duties} />}
       </Card>

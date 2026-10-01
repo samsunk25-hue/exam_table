@@ -18,7 +18,7 @@ import {
   type WithId,
 } from '@sim/shared';
 import { Modal } from '@/components/Modal';
-import { Alert, Button, Card, DownloadButton, Spinner } from '@/components/ui';
+import { Alert, Button, Card, DownloadButton, Spinner, CardTitle } from '@/components/ui';
 import { RosterImportDialog, rememberTerm, type RosterKind } from '@/components/TermRoster';
 import { useCollection } from '@/lib/data';
 import { Readiness } from './Readiness';
@@ -56,7 +56,6 @@ function BundleImportDialog({
   notes,
 }: Props & { onClose: () => void; /** AI가 문서에서 읽은 자료 (파일 선택 없이 바로 검증) */ initialSheets?: SheetData[]; notes?: string[] }) {
   const [sheets, setSheets] = useState<SheetData[] | null>(initialSheets ?? null);
-  const [autoPlace, setAutoPlace] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string[] | null>(null);
@@ -102,7 +101,7 @@ function BundleImportDialog({
     setBusy(true);
     setError(null);
     try {
-      setDone(await saveBundle(session.id, analysis.plan, ctx, { autoPlace: autoPlace && editable, mode, term: termFields(sessionTerm(session)) }));
+      setDone(await saveBundle(session.id, analysis.plan, ctx, { autoPlace: editable, mode, term: termFields(sessionTerm(session)) }));
       // 교사·시험실·시험일정 탭이 이 학기를 바로 보여 주게
       rememberTerm(termKey(sessionTerm(session)));
     } catch (e) {
@@ -200,12 +199,6 @@ function BundleImportDialog({
                   </div>
                 );
               })}
-              {editable && (
-                <label className="flex min-h-12 items-center gap-3">
-                  <input type="checkbox" className="size-5 accent-primary" checked={autoPlace} onChange={(e) => setAutoPlace(e.target.checked)} />
-                  <span>저장 후 시험실 배치가 없는 시험은 같은 학년 교실·복도로 자동 배치</span>
-                </label>
-              )}
               {!anything && <Alert>파일에서 저장할 내용을 찾지 못했습니다. 통합 양식의 시트 이름을 바꾸지 않았는지 확인해 주세요.</Alert>}
             </section>
           )}
@@ -262,36 +255,6 @@ function BundleImportDialog({
   );
 }
 
-/**
- * 이 프로젝트 학교·학기의 교사·시험실 명단이 비어 있으면, 교사 관리·시험실 관리 탭에 저장된
- * 다른 학기(또는 학기 미지정) 명단을 불러오게 한다.
- */
-function RosterLoadCard({ session, teachers, rooms }: { session: ExamSession; teachers: number; rooms: number }) {
-  const allTeachers = useCollection<TeacherDoc>('teachers');
-  const allRooms = useCollection<RoomDoc>('rooms');
-  const [kind, setKind] = useState<RosterKind | null>(null);
-  const term = sessionTerm(session);
-  const others = (list: { term?: string }[]) => list.some((d) => d.term !== termKey(term));
-  const canTeachers = teachers === 0 && others(allTeachers.data);
-  const canRooms = rooms === 0 && others(allRooms.data);
-  if (!canTeachers && !canRooms) return null;
-  return (
-    <Card>
-      <h2 className="text-lg font-bold">저장된 명단 불러오기</h2>
-      <p className="mt-1 text-muted">
-        {termLabel(term)}에 {[canTeachers && '교사', canRooms && '시험실'].filter(Boolean).join('·')} 명단이 없습니다. 교사 관리·시험실 관리에 저장된
-        다른 학기 명단을 불러와 시작할 수 있습니다.
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {canTeachers && <Button onClick={() => setKind('teachers')}>교사 명단 불러오기</Button>}
-        {canRooms && <Button onClick={() => setKind('rooms')}>시험실 불러오기</Button>}
-      </div>
-      {kind && (
-        <RosterImportDialog kind={kind} target={term} all={kind === 'teachers' ? allTeachers.data : allRooms.data} onClose={() => setKind(null)} />
-      )}
-    </Card>
-  );
-}
 
 const MAX_BYTES = 7 * 1024 * 1024;
 const TYPE_OF: Record<string, string> = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', txt: 'text/plain', csv: 'text/csv' };
@@ -442,6 +405,35 @@ function AiExtractDialog({ year, onClose, onRead }: { year: number; onClose: () 
 }
 
 /** 필요한 자료를 직접 불러오는 통합 양식 카드 (개요 탭용) */
+/** 교사 명단·시험실 화면에서 바로: 통합 양식(엑셀) 올리기 */
+export function BundleUploadButton({ session }: { session: ExamSession }) {
+  const [open, setOpen] = useState(false);
+  const termTeachers = useCollection<TeacherDoc>('teachers', termWhere(session));
+  const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
+  const slots = useCollection<SlotDoc>(`sessions/${session.id}/slots`);
+  const timetable = useCollection<BaseTimetableDoc>(`sessions/${session.id}/baseTimetable`);
+  const editable = isSetupEditable(session.status);
+  const ready = ![termTeachers, rooms, slots, timetable].some((x) => x.loading);
+  return (
+    <>
+      <Button variant="secondary" onClick={() => setOpen(true)} disabled={!editable || !ready}>
+        엑셀(통합 양식) 올리기
+      </Button>
+      {open && (
+        <BundleImportDialog
+          session={session}
+          editable={editable}
+          teachers={termTeachers.data.filter((t) => !t.temporary)}
+          rooms={rooms.data}
+          slots={slots.data}
+          timetable={timetable.data}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
 export function BundleSection({ session }: { session: ExamSession }) {
   const termTeachers = useCollection<TeacherDoc>('teachers', termWhere(session));
   // 통합 양식·점검은 정식 교사만 (임시 감독자 제외)
@@ -455,7 +447,7 @@ export function BundleSection({ session }: { session: ExamSession }) {
   if (error) return <Alert>{error}</Alert>;
   return (
     <>
-      {/* 진행 단계 바로 아래: 기초 자료 한 번에 입력 → 명단 이어받기 → 기초 자료 점검 */}
+      {/* 진행 단계 바로 아래: 기초 자료 한 번에 입력 → 기초 자료 점검 (지난 학기 명단은 프로젝트를 만들 때 자동으로 이어받음) */}
       <BundleCard
         session={session}
         editable={isSetupEditable(session.status)}
@@ -464,7 +456,6 @@ export function BundleSection({ session }: { session: ExamSession }) {
         slots={slots.data}
         timetable={timetable.data}
       />
-      <RosterLoadCard session={session} teachers={teachers.data.length} rooms={rooms.data.length} />
       <Readiness session={session} slots={slots.data} rooms={rooms.data} teachers={teachers.data} timetable={timetable.data} />
     </>
   );
@@ -498,7 +489,7 @@ export function BundleCard(props: Props) {
 
   return (
     <Card>
-      <h2 className="text-lg font-bold">기초 자료 한 번에 입력</h2>
+      <CardTitle icon="📦">기초 자료 한 번에 입력</CardTitle>
       <p className="mt-1 text-muted">
         교사 · 시험실 · 시험 일정 · 시험실 배치{session.settings.useBaseTimetable ? ' · 교사별 기초시간표' : ''}를 엑셀 파일 하나에 작성해 한 번에 올립니다.
         현재 등록된 자료가 채워진 양식이 내려받아집니다.
@@ -546,7 +537,7 @@ export function TimetableUpload({ session }: { session: ExamSession }) {
   const total = timetable.data.reduce((s, d) => s + d.entries.length, 0);
   const editable = isSetupEditable(session.status);
   return (
-    <div className="mt-2 ml-8 flex flex-wrap items-center gap-2 rounded-xl bg-bg p-3">
+    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-bg p-3">
       <span className="text-sm">
         기초시간표: {timetable.data.length ? <b>교사 {timetable.data.length}명 · 수업 {total}건</b> : <b className="text-alert">아직 없음</b>}
       </span>

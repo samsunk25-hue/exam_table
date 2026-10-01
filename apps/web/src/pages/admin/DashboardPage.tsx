@@ -6,6 +6,9 @@ import { toast } from '@/components/Toast';
 import { Alert, Button, Card, Field, PageTitle, Spinner, Toggle } from '@/components/ui';
 import { callDeleteSession, errorMessage } from '@/lib/firebase';
 import { createSession, sessionTitle, useSessions, type ExamSession } from '@/lib/sessions';
+import { commitOps, useCollection } from '@/lib/data';
+import { latestRoster, rememberTerm, rosterCopyOps, useTerm } from '@/components/TermRoster';
+import { sessionTerm, termKey, termLabel, type RoomDoc, type TeacherDoc } from '@sim/shared';
 
 type SessionItem = ExamSession;
 
@@ -57,11 +60,21 @@ function currentSchoolYear(): number {
 
 function CreateSessionForm({ onDone }: { onDone: () => void }) {
   const navigate = useNavigate();
-  const [schoolName, setSchoolName] = useState('');
+  const term = useTerm();
+  // 머리글에서 고른 학교로 미리 채운다
+  const [schoolName, setSchoolName] = useState(term.current?.school ?? '');
   const [year, setYear] = useState(currentSchoolYear());
   const [semester, setSemester] = useState(new Date().getMonth() >= 7 ? 2 : 1);
   const [examName, setExamName] = useState('');
   const [useBaseTimetable, setUseBaseTimetable] = useState(true);
+  // 같은 학교 지난 학기 교사·시험실을 이어받기 (기본 켜짐)
+  const [carryRoster, setCarryRoster] = useState(true);
+  const allTeachers = useCollection<TeacherDoc>('teachers');
+  const allRooms = useCollection<RoomDoc>('rooms');
+  const target = { school: schoolName.trim(), year, semester };
+  const prevTeachers = schoolName.trim() ? latestRoster(allTeachers.data, target) : null;
+  const prevRooms = schoolName.trim() ? latestRoster(allRooms.data, target) : null;
+  const prev = prevTeachers ?? prevRooms;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,6 +90,24 @@ function CreateSessionForm({ onDone }: { onDone: () => void }) {
         examName: examName.trim(),
         settings: { useBaseTimetable },
       });
+      if (carryRoster && prev) {
+        const copy = (kind: 'teachers' | 'rooms', p: typeof prevTeachers, all: typeof allTeachers.data | typeof allRooms.data) =>
+          p
+            ? rosterCopyOps({
+                kind,
+                all,
+                chosen: p.docs,
+                legacy: false,
+                target,
+                sameYear: p.term.year === year,
+                clearHomeroom: p.term.year !== year,
+              })
+            : [];
+        const ops = [...copy('teachers', prevTeachers, allTeachers.data), ...copy('rooms', prevRooms, allRooms.data)];
+        await commitOps(ops, '새 프로젝트: 지난 학기 명단 이어받기');
+        rememberTerm(termKey(target));
+      }
+      term.choose(termKey(target));
       onDone();
       void navigate(`/admin/sessions/${ref.id}`);
     } catch (err) {
@@ -115,6 +146,18 @@ function CreateSessionForm({ onDone }: { onDone: () => void }) {
             onChange={setUseBaseTimetable}
           />
         </div>
+        {prev && (
+          <label className="flex min-h-12 cursor-pointer items-start gap-3 rounded-xl bg-bg p-3 md:col-span-2">
+            <input type="checkbox" className="mt-1 size-5 accent-primary" checked={carryRoster} onChange={(e) => setCarryRoster(e.target.checked)} />
+            <span>
+              <span className="font-semibold">지난 학기 명단 이어받기 — {termLabel(prev.term)}</span>
+              <span className="block text-sm text-muted">
+                교사 {prevTeachers?.docs.length ?? 0}명 · 시험실 {prevRooms?.docs.length ?? 0}개를 이 학기로 가져옵니다.
+                {prev.term.year === year ? ' 같은 학년도라 누적 업무점수를 이어받습니다.' : ' 새 학년도라 누적 점수는 0점, 담임은 비웁니다.'} 일부만 바꾸려면 나중에 교사 관리에서 고치세요.
+              </span>
+            </span>
+          </label>
+        )}
         {error && (
           <div className="md:col-span-2">
             <Alert>{error}</Alert>
@@ -134,13 +177,21 @@ function CreateSessionForm({ onDone }: { onDone: () => void }) {
 }
 
 export function DashboardPage() {
-  const { data: sessions, loading, error } = useSessions();
+  const { data: all, loading, error } = useSessions();
+  const choice = useTerm();
+  const [showAll, setShowAll] = useState(false);
+  const sessions = showAll || !choice.key ? all : all.filter((s) => termKey(sessionTerm(s)) === choice.key);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<SessionItem | null>(null);
 
   return (
     <>
-      <PageTitle sub="진행 중인 시험 프로젝트를 선택하거나 새로 만드세요.">대시보드</PageTitle>
+      <PageTitle sub={choice.current && !showAll ? `${termLabel(choice.current)} 시험 프로젝트 (학교·학기는 오른쪽 위에서 바꿉니다)` : '모든 학교·학기의 시험 프로젝트'}>대시보드</PageTitle>
+      {choice.key && (
+        <div className="mb-4">
+          <Toggle label="모든 학교·학기 프로젝트 보기" checked={showAll} onChange={setShowAll} />
+        </div>
+      )}
 
       <div className="mb-6">
         {creating ? (

@@ -82,11 +82,14 @@ await dialog.getByText('저장했습니다.').waitFor();
 check('저장 결과', true, (await dialog.locator('ul').innerText()).replace(/\n/g, ' / '));
 await dialog.getByRole('button', { name: '닫기' }).first().click();
 
-// 5. 화면 반영 확인 (기본 설정 탭)
-await page.getByRole('link', { name: '기본 설정' }).click();
-await page.getByText('시험 일정과 시험실 배치').waitFor();
+// 5. 화면 반영 확인 (준비 > 시험 일정 / 기초시간표)
+await page.getByRole('link', { name: '시험 일정', exact: true }).click();
+await page.getByText('시험별 시험실 배치').waitFor();
 await page.getByText('배치 없음').first().waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
-const setupText = await page.locator('main').innerText();
+let setupText = await page.locator('main').innerText();
+await page.getByRole('link', { name: '기초시간표', exact: true }).click();
+await page.getByText(/김국어/).first().waitFor();
+setupText += await page.locator('main').innerText();
 check('시험 2건 표시', setupText.includes('국어') && setupText.includes('수학'));
 check('시험실 자동 배치됨', !setupText.includes('배치 없음'));
 check('기초시간표 반영', /김국어 2/.test(setupText));

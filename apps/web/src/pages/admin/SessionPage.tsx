@@ -1,31 +1,118 @@
-import { useState } from 'react';
-import { Link, NavLink, Outlet, useOutletContext, useParams } from 'react-router';
-import { EXAM_WRITER_RULE_LABEL, STATUS_LABEL, TRANSITIONS, isSetupEditable, type ExamWriterRule, type Transition } from '@sim/shared';
+import { useEffect, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useOutletContext, useParams } from 'react-router';
+import {
+  EXAM_WRITER_RULE_LABEL,
+  STATUS_LABEL,
+  TRANSITIONS,
+  isSetupEditable,
+  sessionTerm,
+  termKey,
+  type AssignmentDoc,
+  type ExamWriterRule,
+  type SlotDoc,
+  type Transition,
+} from '@sim/shared';
 import { StatusStepper } from '@/components/StatusStepper';
+import { useTerm } from '@/components/TermRoster';
 import { UndoConfirm, useUndoOps } from '@/components/UndoHistory';
 import { BundleSection } from './BundleCard';
 import { Alert, Button, Card, PageTitle, Spinner, Toggle } from '@/components/ui';
+import { useCollection } from '@/lib/data';
 import { callTransitionSession, errorMessage } from '@/lib/firebase';
 import { sessionTitle, updateSessionSettings, useSession, type ExamSession } from '@/lib/sessions';
 
-const TABS = [
-  { to: '', label: '개요', end: true },
-  { to: 'setup', label: '기본 설정' },
-  { to: 'availability', label: '불가시간' },
-  { to: 'assign', label: '자동 배정' },
-  { to: 'editor', label: '시간표 편집' },
-  { to: 'equity', label: '업무 점수' },
-  { to: 'print', label: '출력' },
-  { to: 'history', label: '변경 이력' },
+/** 프로젝트 메뉴: 4단계(준비 → 배정 → 점검 → 공개·출력), 단계 안에 세부 화면 */
+const STEPS: { label: string; tabs: { to: string; label: string }[] }[] = [
+  {
+    label: '① 준비',
+    tabs: [
+      { to: '', label: '개요' },
+      { to: 'schedule', label: '시험 일정' },
+      { to: 'setup', label: '기초시간표' },
+      { to: 'availability', label: '불가시간' },
+    ],
+  },
+  {
+    label: '② 배정',
+    tabs: [
+      { to: 'assign', label: '자동 배정' },
+      { to: 'editor', label: '시간표 편집' },
+    ],
+  },
+  { label: '③ 점검', tabs: [{ to: 'equity', label: '업무 점수·AI 점검' }] },
+  {
+    label: '④ 공개·출력',
+    tabs: [
+      { to: 'print', label: '출력' },
+      { to: 'history', label: '변경 이력' },
+    ],
+  },
 ];
+
+/** 프로젝트를 열면 머리글의 학교·학기도 그 프로젝트 학기로 */
+function SyncTerm({ session }: { session: ExamSession }) {
+  const { key, choose } = useTerm();
+  const want = termKey(sessionTerm(session));
+  useEffect(() => {
+    // choose는 렌더마다 새 함수라 의존성에서 뺀다
+    if (key !== want) choose(want);
+  }, [key, want]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+/** 지금 상태에서 할 일 하나 (큰 버튼) */
+function NextAction({ session }: { session: ExamSession }) {
+  const slots = useCollection<SlotDoc>(`sessions/${session.id}/slots`);
+  const assignments = useCollection<AssignmentDoc>(`sessions/${session.id}/assignments`);
+  if (slots.loading || assignments.loading) return null;
+  const transition = (to: string) => TRANSITIONS[session.status].find((t) => t.to === to);
+  const go = (to: string, label: string, text: string) => ({ kind: 'link' as const, to, label, text });
+  const step = (to: string, label: string, text: string) => ({ kind: 'step' as const, t: transition(to)!, label, text });
+  const s = session.status;
+  const next =
+    s === 'DRAFT' || s === 'AUTO_ASSIGNED'
+      ? slots.data.length === 0
+        ? go('schedule', '시험 일정 입력하기', '먼저 시험 일정을 넣으세요 (달력·표·엑셀·학교 문서 AI 읽기).')
+        : assignments.data.length === 0
+          ? go('assign', '자동 배정하기', `시험 ${slots.data.length}건이 준비되었습니다. 불가시간을 받은 뒤 자동 배정하세요.`)
+          : s === 'DRAFT'
+            ? step('AUTO_ASSIGNED', '배정 완료로 표시', '배정이 들어 있습니다. 배정을 마쳤으면 다음 단계로 넘어가세요.')
+            : step('REVIEW', '검토 시작하기', '배정을 마쳤습니다. 업무 점수·AI 점검으로 확인한 뒤 검토를 시작하세요.')
+      : s === 'REVIEW'
+        ? step('PUBLISHED', '교사에게 공개하기', '검토가 끝나면 교사에게 공개하세요. 공개 중에는 교사가 교환을 요청할 수 있습니다.')
+        : s === 'PUBLISHED' || s === 'SWAP'
+          ? step('CONFIRMED', '최종 확정하기', '교환 요청을 정리했으면 최종 확정하세요. 확정하면 업무 점수가 누적됩니다.')
+          : go('print', '시간표 출력하기', s === 'LOCKED' ? '변경이 잠긴 완료 상태입니다.' : '확정되었습니다. 시간표를 출력·배포하세요.');
+  if (next.kind === 'step' && !next.t) return null;
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-card border-2 border-primary bg-primary-soft/60 px-4 py-3 no-print" aria-label="다음 할 일">
+      <span className="font-bold text-primary-strong">다음 할 일</span>
+      <span className="min-w-0 flex-1 text-sm">{next.text}</span>
+      {next.kind === 'link' ? (
+        <Link to={next.to} className="inline-flex min-h-12 items-center rounded-xl bg-primary px-5 font-semibold text-white hover:bg-primary-strong">
+          {next.label} →
+        </Link>
+      ) : (
+        <TransitionButton session={session} t={next.t} label={`${next.label} →`} />
+      )}
+    </div>
+  );
+}
 
 export function SessionLayout() {
   const { sid } = useParams();
   const { data: session, loading, error } = useSession(sid);
+  const { pathname } = useLocation();
 
   if (loading) return <Spinner />;
   if (error) return <Alert>{error}</Alert>;
   if (!session) return <Alert>시험 프로젝트를 찾을 수 없습니다.</Alert>;
+
+  // 지금 화면이 속한 단계
+  const sub = pathname.split(`/sessions/${session.id}`)[1]?.replace(/^\//, '').split('/')[0] ?? '';
+  const current = Math.max(0, STEPS.findIndex((st) => st.tabs.some((t) => t.to === sub)));
+  const tabClass = ({ isActive }: { isActive: boolean }) =>
+    `flex min-h-12 shrink-0 items-center border-b-2 px-4 font-semibold ${isActive ? 'border-primary text-primary-strong' : 'border-transparent text-muted hover:text-ink'}`;
 
   return (
     <>
@@ -33,18 +120,25 @@ export function SessionLayout() {
         ← 대시보드
       </Link>
       <PageTitle sub={session.schoolName}>{sessionTitle(session)}</PageTitle>
-      <nav className="mb-6 flex gap-1 overflow-x-auto border-b border-line" aria-label="시험 프로젝트 메뉴">
-        {TABS.map((t) => (
-          <NavLink
-            key={t.to}
-            to={t.to}
-            end={t.end}
-            className={({ isActive }) =>
-              `flex min-h-12 shrink-0 items-center border-b-2 px-4 font-semibold ${
-                isActive ? 'border-primary text-primary-strong' : 'border-transparent text-muted hover:text-ink'
-              }`
-            }
+      <SyncTerm session={session} />
+      <NextAction session={session} />
+      <nav className="flex gap-2 overflow-x-auto" aria-label="시험 프로젝트 단계">
+        {STEPS.map((st, i) => (
+          <Link
+            key={st.label}
+            to={st.tabs[0]!.to || '.'}
+            aria-current={i === current ? 'page' : undefined}
+            className={`flex min-h-12 shrink-0 items-center rounded-xl px-5 text-lg font-bold ${
+              i === current ? 'bg-primary text-white' : 'bg-surface text-ink border border-line hover:border-primary hover:bg-primary-soft'
+            }`}
           >
+            {st.label}
+          </Link>
+        ))}
+      </nav>
+      <nav className="mb-6 flex gap-1 overflow-x-auto border-b border-line" aria-label="시험 프로젝트 메뉴">
+        {STEPS[current]!.tabs.map((t) => (
+          <NavLink key={t.to} to={t.to} end={t.to === ''} className={tabClass}>
             {t.label}
           </NavLink>
         ))}
@@ -70,7 +164,7 @@ function PrevStepButton({ sessionId }: { sessionId: string }) {
   );
 }
 
-function TransitionButton({ session, t }: { session: ExamSession; t: Transition }) {
+function TransitionButton({ session, t, label }: { session: ExamSession; t: Transition; /** 버튼 글자 (없으면 단계 이름) */ label?: string }) {
   const [asking, setAsking] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -95,7 +189,7 @@ function TransitionButton({ session, t }: { session: ExamSession; t: Transition 
   if (!asking) {
     return (
       <Button variant={backward ? 'secondary' : 'primary'} onClick={() => setAsking(true)}>
-        {t.label}
+        {label ?? t.label}
       </Button>
     );
   }
@@ -176,7 +270,8 @@ export function SessionOverview() {
           <p className="mt-3 text-sm text-muted">최근 변경 사유: {session.lastChangeReason}</p>
         )}
         <div className="mt-5 flex flex-wrap gap-2">
-          {TRANSITIONS[session.status].map((t) => (
+          {TRANSITIONS[session.status].filter((t) => t.to !== 'SWAP').map((t) => (
+            // 교환은 공개 중 언제나 가능하므로 "교환 기간 시작" 단계는 버튼으로 보이지 않는다
             <TransitionButton key={t.to} session={session} t={t} />
           ))}
           <PrevStepButton sessionId={session.id} />

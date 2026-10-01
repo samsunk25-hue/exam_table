@@ -32,7 +32,7 @@ await db.doc(`sessions/${SID}/slots/2026-10-12_1_1`).set(slot(1, 1, '09:00', '09
 await db.doc(`sessions/${SID}/slots/2026-10-12_2_2`).set(slot(2, 2, '10:00', '10:45', []));
 
 const { browser, page, errors } = await openApp();
-await go(page, `/admin/sessions/${SID}/setup`);
+await go(page, `/admin/sessions/${SID}/schedule`);
 
 // 목록은 교시순: 0 = 1교시 1학년, 1 = 2교시 2학년
 async function openPlacement(row) {

@@ -29,7 +29,7 @@ await db.doc(`sessions/${SRC}/slots/2026-10-13_2_1`).set(slot('2026-10-13', 2, 1
 await db.doc(`sessions/${DST}/slots/2026-11-01_1_3`).set(slot('2026-11-01', 1, 3, '옛것', 'EXAM', []));
 
 const { browser, page, errors } = await openApp();
-await go(page, `/admin/sessions/${DST}/setup`);
+await go(page, `/admin/sessions/${DST}/schedule`);
 await page.getByRole('button', { name: '다른 프로젝트에서 불러오기' }).click();
 const dlg = page.getByRole('dialog', { name: '다른 프로젝트 시험 시간표 불러오기' });
 await dlg.getByRole('button', { name: /원본 시험/ }).click();

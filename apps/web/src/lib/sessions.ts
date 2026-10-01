@@ -23,6 +23,8 @@ export interface SessionSettings {
   useBaseTimetable: boolean;
   /** 교시별 기본 시작·종료 시각 (시험 추가 시 자동 입력) — 키는 교시 번호 */
   periodTimes?: Record<string, PeriodTime>;
+  /** 교사가 낸 불가시간을 관리자 승인 없이 바로 반영 (관리자는 문제 있는 것만 반려) */
+  autoApproveAvailability?: boolean;
   /** 출제 교사 배정 규칙 (없으면 상관없음) */
   examWriter?: ExamWriterRule;
 }

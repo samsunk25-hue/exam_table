@@ -63,7 +63,7 @@ for (const period of [1, 2]) {
   await page.getByRole('status').filter({ hasText: '승인했습니다' }).waitFor();
   check('일괄 승인', true);
 
-  await page.getByLabel('교사').selectOption({ label: '박영어' });
+  await page.getByRole('combobox', { name: /^교사/ }).selectOption({ label: '박영어' });
   await page.getByRole('button', { name: /^2교시/ }).last().click();
   await page.getByRole('button', { name: '2칸 대리 입력' }).click().catch(async () => {
     await page.getByRole('button', { name: '1칸 대리 입력' }).click();
@@ -80,6 +80,7 @@ for (const period of [1, 2]) {
 {
   const { browser, page } = await openApp({ email: 'kim@test.kr' });
   await go(page, '/me/availability');
+  await page.getByRole('button', { name: '불가시간 점검', exact: false }).first().click().catch(() => {});
   await page.getByRole('button', { name: /1교시\s*승인 · 연수/ }).waitFor();
   check('교사 화면: 승인 표시', true);
   const docs = await db.collection(`sessions/${SID}/availability`).get();

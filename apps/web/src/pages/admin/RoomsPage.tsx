@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { SPACE_TYPE_LABEL, nextId, termFields, termLabel, type RoomDoc, type SpaceType, type TermRef, type WithId } from '@sim/shared';
 import { Modal } from '@/components/Modal';
 import { UndoHistory } from '@/components/UndoHistory';
-import { RosterImportDialog, TermPicker, useTermChoice } from '@/components/TermRoster';
+import { RosterImportDialog, useTerm } from '@/components/TermRoster';
 import { Alert, Button, Card, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
@@ -139,7 +139,7 @@ function RoomForm({
 export function RoomsPage() {
   const everyone = useCollection<RoomDoc>('rooms');
   const { loading, error } = everyone;
-  const choice = useTermChoice(everyone.data);
+  const choice = useTerm(); // 머리글에서 고른 학교·학기
   // 선택한 학교·학기 시험실만 보여 준다
   const data = useMemo(() => everyone.data.filter((r) => r.term === choice.key), [everyone.data, choice.key]);
   const legacy = everyone.data.filter((r) => !r.term).length;
@@ -156,7 +156,6 @@ export function RoomsPage() {
         시험실 관리
       </PageTitle>
 
-      <TermPicker terms={choice.terms} value={choice.key} onChange={choice.choose} />
       {!choice.loading && !choice.current && (
         <div className="mb-4">
           <Alert tone="info">먼저 대시보드에서 시험 프로젝트를 만드세요. 프로젝트의 학교·학기별로 시험실을 따로 관리합니다.</Alert>

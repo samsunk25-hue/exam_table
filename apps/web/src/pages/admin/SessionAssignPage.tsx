@@ -222,6 +222,26 @@ export function SessionAssignPage() {
     }
   };
 
+  /** 한 번에: 기본안+대안을 계산해 가장 좋은 안(성공률 → 편차 → 연속 감독 순)을 바로 적용 */
+  const quick = async () => {
+    setBusy('run');
+    setError(null);
+    try {
+      const { data } = await callRunAssignment({ sessionId: sid, keepManual, scenarios: true });
+      const best = [...data.runs].sort(
+        (a, b) => b.metrics.successRate - a.metrics.successRate || a.metrics.stdDev - b.metrics.stdDev || a.metrics.consecutiveCount - b.metrics.consecutiveCount,
+      )[0]!;
+      setBusy('apply');
+      await callApplyRun({ sessionId: sid, runId: best.runId });
+      setSelectedId(best.runId);
+      toast(`추천안을 적용했습니다. 성공률 ${pct(best.metrics.successRate)}${best.unassigned ? ` (미배정 ${best.unassigned}석은 시간표 편집에서 채우세요)` : ''}. 아래에서 다른 안과 비교할 수 있습니다.`);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const apply = async () => {
     if (!run) return;
     setBusy('apply');
@@ -271,9 +291,13 @@ export function SessionAssignPage() {
           </div>
         )}
         <div className="mt-4">
-          <Button onClick={() => void execute()} disabled={!editable || busy !== null || slots.data.length === 0}>
-            {busy === 'run' ? '배정 계산 중…' : '자동 배정 실행'}
+          <Button onClick={() => void quick()} disabled={!editable || busy !== null || slots.data.length === 0}>
+            {busy === 'run' ? '배정 계산 중…' : busy === 'apply' ? '적용 중…' : '자동 배정하고 바로 적용 (추천)'}
           </Button>
+          <Button variant="secondary" className="ml-2" onClick={() => void execute()} disabled={!editable || busy !== null || slots.data.length === 0}>
+            자동 배정 실행
+          </Button>
+          <span className="ml-2 text-sm text-muted">← 결과를 비교한 뒤 직접 고르기</span>
           {slots.data.length === 0 && <span className="ml-3 text-muted">기본 설정에서 시험 일정을 먼저 등록하세요.</span>}
         </div>
       </Card>

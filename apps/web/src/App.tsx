@@ -7,7 +7,6 @@ import { LoginPage } from '@/pages/LoginPage';
 import { NoAccessPage } from '@/pages/NoAccessPage';
 import { AdminsPage } from '@/pages/admin/AdminsPage';
 import { DashboardPage } from '@/pages/admin/DashboardPage';
-import { ExamSchedulePage } from '@/pages/admin/ExamSchedulePage';
 import { RoomsPage } from '@/pages/admin/RoomsPage';
 import { SessionAssignPage } from '@/pages/admin/SessionAssignPage';
 import { SessionAvailabilityPage } from '@/pages/admin/SessionAvailabilityPage';
@@ -19,12 +18,11 @@ import { MySchedulePage } from '@/pages/teacher/MySchedulePage';
 import { AdminRequestPage } from '@/pages/teacher/AdminRequestPage';
 import { SessionPrintPage } from '@/pages/admin/SessionPrintPage';
 import { SessionHistoryPage } from '@/pages/admin/SessionHistoryPage';
-import { SessionSetupPage } from '@/pages/admin/SessionSetupPage';
+import { SessionSchedulePage, SessionSetupPage } from '@/pages/admin/SessionSetupPage';
 import { TeachersPage } from '@/pages/admin/TeachersPage';
 
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: '대시보드', end: true },
-  { to: '/admin/schedule', label: '시험일정 관리' },
   { to: '/admin/teachers', label: '교사 관리' },
   { to: '/admin/rooms', label: '시험실 관리' },
   { to: '/admin/admins', label: '관리자 관리' },
@@ -73,11 +71,12 @@ const router = createBrowserRouter([
     children: [
       {
         path: '/admin',
-        element: <AppShell nav={ADMIN_NAV} modeLabel="관리자" />,
+        element: <AppShell nav={ADMIN_NAV} modeLabel="관리자" termPicker />,
         children: [
           { index: true, element: <DashboardPage /> },
           { path: 'admins', element: <AdminsPage /> },
-          { path: 'schedule', element: <ExamSchedulePage /> },
+          // 예전 주소: 시험 일정은 각 프로젝트 안으로 옮김
+          { path: 'schedule', element: <Navigate to="/admin" replace /> },
           { path: 'teachers', element: <TeachersPage /> },
           { path: 'rooms', element: <RoomsPage /> },
           {
@@ -85,6 +84,7 @@ const router = createBrowserRouter([
             element: <SessionLayout />,
             children: [
               { index: true, element: <SessionOverview /> },
+              { path: 'schedule', element: <SessionSchedulePage /> },
               { path: 'setup', element: <SessionSetupPage /> },
               {
                 path: 'availability',

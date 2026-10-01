@@ -2,9 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   autoPlacements,
   isSetupEditable,
-  sessionTerm,
   slotIdOf,
-  termKey,
   type RoomDoc,
   type SlotDoc,
   type WithId,
@@ -15,14 +13,13 @@ import { BreakTimeBar } from '@/components/BreakTimeBar';
 import { ClockTimePicker } from '@/components/ClockTimePicker';
 import { ExamGridEditor } from '@/components/ExamGridEditor';
 import { ScheduleImportDialog } from '@/components/ScheduleImportDialog';
-import { TermPicker, useTermChoice } from '@/components/TermRoster';
 import { Modal } from '@/components/Modal';
 import { toast } from '@/components/Toast';
-import { Alert, Button, Card, PageTitle, Spinner } from '@/components/ui';
+import { Alert, Button, Card, Spinner } from '@/components/ui';
 import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
 import { guessBreak, recalcPeriods, withAddedPeriod } from '@/lib/periodTimes';
-import { sessionTitle, updateSessionSettings, useSessions, type ExamSession, type PeriodTime, termWhere } from '@/lib/sessions';
+import { updateSessionSettings, type ExamSession, type PeriodTime, termWhere } from '@/lib/sessions';
 
 type Slot = WithId<SlotDoc>;
 const MAX_PERIOD = 10;
@@ -332,7 +329,7 @@ function ExamForm({
   );
 }
 
-function ScheduleEditor({ session }: { session: ExamSession }) {
+export function ScheduleEditor({ session }: { session: ExamSession }) {
   const slots = useCollection<SlotDoc>(`sessions/${session.id}/slots`);
   const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
   const editable = isSetupEditable(session.status);
@@ -543,38 +540,5 @@ function ScheduleEditor({ session }: { session: ExamSession }) {
         <ExamForm session={session} date={selected} slots={slots.data} rooms={rooms.data} editing={form.editing} grades={grades} onClose={() => setForm(null)} />
       )}
     </div>
-  );
-}
-
-export function ExamSchedulePage() {
-  const { data: all, loading, error } = useSessions();
-  const choice = useTermChoice();
-  // 선택한 학교·학기의 프로젝트만
-  const sessions = all.filter((s) => termKey(sessionTerm(s)) === choice.key);
-  const [sid, setSid] = useState<string | null>(null);
-  const current = sessions.find((s) => s.id === sid) ?? sessions.find((s) => isSetupEditable(s.status)) ?? sessions[0];
-
-  return (
-    <>
-      <PageTitle sub="달력에서 시험 날짜를 고르고, 시계로 시작·종료 시각을 정합니다.">시험일정 관리</PageTitle>
-      <TermPicker terms={choice.terms} value={choice.key} onChange={choice.choose} />
-      {loading && <Spinner />}
-      {error && <Alert>{error}</Alert>}
-      {!loading && !current && (
-        <Card>
-          <p className="text-muted">시험 프로젝트가 없습니다. 대시보드에서 먼저 만드세요.</p>
-        </Card>
-      )}
-      {sessions.length > 1 && (
-        <div className="mb-4 flex flex-wrap gap-2">
-          {sessions.map((s) => (
-            <Button key={s.id} variant={s.id === current?.id ? 'primary' : 'secondary'} onClick={() => setSid(s.id)}>
-              {sessionTitle(s)}
-            </Button>
-          ))}
-        </div>
-      )}
-      {current && <ScheduleEditor key={current.id} session={current} />}
-    </>
   );
 }

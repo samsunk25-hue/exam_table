@@ -4,6 +4,7 @@ import {
   capacityByTime,
   examTimes,
   groupByDate,
+  isSetupEditable,
   type AvailabilityDoc,
   type RoomDoc,
   type SlotDoc,
@@ -12,10 +13,10 @@ import {
 import { AvailabilityGrid, GridLegend, ReasonPicker, dateLabel } from '@/components/AvailabilityGrid';
 import { Modal } from '@/components/Modal';
 import { toast } from '@/components/Toast';
-import { Alert, Button, Card, Select, Spinner, Table, Td } from '@/components/ui';
+import { Alert, Button, Card, Select, Spinner, Table, Td, Toggle } from '@/components/ui';
 import { cellKey, deleteAvailability, reviewAvailability, sortAvailability, submitAvailability, type Availability } from '@/lib/availability';
 import { useCollection } from '@/lib/data';
-import { termWhere } from '@/lib/sessions';
+import { termWhere, updateSessionSettings } from '@/lib/sessions';
 import { errorMessage } from '@/lib/firebase';
 import { useCurrentSession } from './SessionPage';
 
@@ -297,6 +298,15 @@ export function SessionAvailabilityPage() {
 
   return (
     <div className="grid gap-6">
+      <Card>
+        <Toggle
+          label="교사 제출 바로 반영"
+          hint="켜면 교사가 낸 불가시간이 승인 없이 바로 반영됩니다. 관리자는 아래 목록에서 문제 있는 것만 반려하면 됩니다."
+          checked={session.settings.autoApproveAvailability === true}
+          disabled={!isSetupEditable(session.status)}
+          onChange={(v) => void updateSessionSettings(session.id, { ...session.settings, autoApproveAvailability: v }).catch((e: unknown) => toast(errorMessage(e), 'alert'))}
+        />
+      </Card>
       <CapacityCard rows={capacity} />
       <RequestsCard sid={sid} list={availability.data} nameOf={nameOf} />
       {times.length > 0 && <ProxyCard sid={sid} teachers={activeTeachers} times={times} all={availability.data} />}

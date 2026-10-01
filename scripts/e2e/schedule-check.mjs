@@ -30,8 +30,7 @@ for (const g of [1, 2]) {
 }
 
 const { browser, page, errors } = await openApp();
-await go(page, '/admin/schedule');
-await page.getByRole('button', { name: /일정 점검/ }).click();
+await go(page, `/admin/sessions/${SID}/schedule`);
 
 // 1. 교시별 기본 시간 (1교시 09:00~09:45)
 const row1 = page.locator('div.grid', { hasText: '1교시' }).filter({ has: page.getByText('시작', { exact: true }) }).first();

@@ -4,10 +4,17 @@ export const APP_NAME = '쌤밸런스';
 export const APP_SUBTITLE = '시험 감독 매니저';
 export const APP_TITLE = `${APP_NAME}: ${APP_SUBTITLE}`;
 
-/** 필기체 앱 제목. size: 머리글(md) / 로그인 화면(lg) */
-export function AppTitle({ size = 'md', as: Tag = 'div' }: { size?: 'md' | 'lg'; as?: 'div' | 'h1' }) {
+const TITLE_SIZE = {
+  md: 'text-[1.55rem] sm:text-[2.1rem]',
+  lg: 'text-[2.3rem] sm:text-[2.8rem]',
+  /** 머리글: 크게 */
+  xl: 'text-[2rem] sm:text-[2.8rem] lg:text-[3.3rem]',
+};
+
+/** 필기체 앱 제목. size: 작게(md) / 로그인 화면(lg) / 머리글(xl) */
+export function AppTitle({ size = 'md', as: Tag = 'div' }: { size?: keyof typeof TITLE_SIZE; as?: 'div' | 'h1' }) {
   return (
-    <Tag className={`font-hand leading-none ${size === 'lg' ? 'text-[2.3rem] sm:text-[2.8rem]' : 'text-[1.55rem] sm:text-[2.1rem]'}`}>
+    <Tag className={`font-hand leading-none ${TITLE_SIZE[size]}`}>
       <span className="text-primary-strong">{APP_NAME}</span>
       <span className="text-ink">: {APP_SUBTITLE}</span>
     </Tag>

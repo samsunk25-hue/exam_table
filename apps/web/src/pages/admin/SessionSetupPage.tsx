@@ -23,6 +23,7 @@ import { Alert, Button, Card, Field, Select, Spinner, Table, Td } from '@/compon
 import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
 import { termWhere, type ExamSession } from '@/lib/sessions';
+import { ScheduleEditor } from './ExamSchedulePage';
 import { useCurrentSession } from './SessionPage';
 import { sortRooms } from './RoomsPage';
 
@@ -303,7 +304,20 @@ function PlacementEditor({ sid, slot, slots, rooms, onClose }: {
 
 // ───────────────────────── 시험 일정 카드 ─────────────────────────
 
-function ScheduleCard({ session, editable, slots, rooms }: { session: ExamSession; editable: boolean; slots: Slot[]; rooms: Room[] }) {
+function ScheduleCard({
+  session,
+  editable,
+  slots,
+  rooms,
+  placementOnly = false,
+}: {
+  session: ExamSession;
+  editable: boolean;
+  slots: Slot[];
+  rooms: Room[];
+  /** 시험 일정 화면에서는 입력은 위 달력이 맡고, 여기서는 시험실 배치만 */
+  placementOnly?: boolean;
+}) {
   const sid = session.id;
   const [modal, setModal] = useState<{ kind: 'slot'; slot: Slot | null } | { kind: 'placement'; slot: Slot } | { kind: 'grid' } | { kind: 'import' } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -353,16 +367,21 @@ function ScheduleCard({ session, editable, slots, rooms }: { session: ExamSessio
 
   return (
     <Card>
-      <h2 className="text-lg font-bold">시험 일정과 시험실 배치</h2>
+      <h2 className="text-lg font-bold">{placementOnly ? '시험별 시험실 배치' : '시험 일정과 시험실 배치'}</h2>
+      {placementOnly && <p className="mt-1 text-muted">시험마다 쓰는 교실·복도·특별실을 정합니다. 특별실은 "배치"에서 별도 시간도 정할 수 있습니다.</p>}
       {editable ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button onClick={() => setModal({ kind: 'grid' })}>시험 시간표 표로 입력</Button>
-          <Button variant="secondary" onClick={() => setModal({ kind: 'import' })}>
-            다른 프로젝트에서 불러오기
-          </Button>
-          <Button variant="secondary" onClick={() => setModal({ kind: 'slot', slot: null })}>
-            + 시험 1건 추가
-          </Button>
+          {!placementOnly && (
+            <>
+              <Button onClick={() => setModal({ kind: 'grid' })}>시험 시간표 표로 입력</Button>
+              <Button variant="secondary" onClick={() => setModal({ kind: 'import' })}>
+                다른 프로젝트에서 불러오기
+              </Button>
+              <Button variant="secondary" onClick={() => setModal({ kind: 'slot', slot: null })}>
+                + 시험 1건 추가
+              </Button>
+            </>
+          )}
           <Button variant="secondary" onClick={() => void autoPlace()} disabled={busy || unplaced.length === 0}>
             기본 배치 자동 생성{unplaced.length ? ` (${unplaced.length}건)` : ''}
           </Button>
@@ -493,24 +512,37 @@ function TimetableCard({ session, teachers, timetable }: {
 
 // ───────────────────────── 페이지 ─────────────────────────
 
+/** 준비 > 기초시간표 */
 export function SessionSetupPage() {
   const session = useCurrentSession();
   const sid = session.id;
-  const slots = useCollection<SlotDoc>(`sessions/${sid}/slots`);
-  const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
   const teachers = useCollection<TeacherDoc>('teachers', termWhere(session));
   const timetable = useCollection<BaseTimetableDoc>(`sessions/${sid}/baseTimetable`);
-  const editable = isSetupEditable(session.status);
 
-  const loading = slots.loading || rooms.loading || teachers.loading || timetable.loading;
-  const error = slots.error ?? rooms.error ?? teachers.error ?? timetable.error;
+  const loading = teachers.loading || timetable.loading;
+  const error = teachers.error ?? timetable.error;
   if (loading) return <Spinner />;
   if (error) return <Alert>{error}</Alert>;
 
   return (
     <div className="grid gap-6">
-      <ScheduleCard session={session} editable={editable} slots={slots.data} rooms={rooms.data} />
       <TimetableCard session={session} teachers={teachers.data} timetable={timetable.data} />
+    </div>
+  );
+}
+
+/** 준비 > 시험 일정: 달력·표·불러오기·AI 입력과 교시 시간(위) + 시험별 시험실 배치(아래)를 한 화면에 */
+export function SessionSchedulePage() {
+  const session = useCurrentSession();
+  const slots = useCollection<SlotDoc>(`sessions/${session.id}/slots`);
+  const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
+  if (slots.loading || rooms.loading) return <Spinner />;
+  const error = slots.error ?? rooms.error;
+  if (error) return <Alert>{error}</Alert>;
+  return (
+    <div className="grid gap-6">
+      <ScheduleEditor session={session} />
+      <ScheduleCard session={session} editable={isSetupEditable(session.status)} slots={slots.data} rooms={rooms.data} placementOnly />
     </div>
   );
 }

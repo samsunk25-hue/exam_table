@@ -14,7 +14,7 @@ import {
 } from '@sim/shared';
 import { Modal } from '@/components/Modal';
 import { UndoHistory } from '@/components/UndoHistory';
-import { RosterImportDialog, TermPicker, useTermChoice } from '@/components/TermRoster';
+import { RosterImportDialog, useTerm } from '@/components/TermRoster';
 import { Alert, Button, Card, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
@@ -253,7 +253,7 @@ function TeacherForm({
 export function TeachersPage() {
   const everyone = useCollection<TeacherDoc>('teachers');
   const { loading, error } = everyone;
-  const choice = useTermChoice(everyone.data);
+  const choice = useTerm(); // 머리글에서 고른 학교·학기
   // 선택한 학교·학기 명단만 보여 준다
   const data = useMemo(() => everyone.data.filter((t) => t.term === choice.key), [everyone.data, choice.key]);
   const legacy = everyone.data.filter((t) => !t.term).length;
@@ -275,7 +275,6 @@ export function TeachersPage() {
     <>
       <PageTitle sub={choice.current ? `${termLabel(choice.current)} · 사용 중 ${activeCount}명 / 전체 ${data.length}명` : '교사 명단'}>교사 관리</PageTitle>
 
-      <TermPicker terms={choice.terms} value={choice.key} onChange={choice.choose} />
       {!choice.loading && !choice.current && (
         <div className="mb-4">
           <Alert tone="info">먼저 대시보드에서 시험 프로젝트를 만드세요. 프로젝트의 학교·학기별로 교사 명단을 따로 관리합니다.</Alert>

@@ -27,7 +27,7 @@ await db.doc(`sessions/${SID}`).set({
 
 const { browser, page, errors } = await openApp();
 await page.setViewportSize({ width: 1440, height: 1000 });
-await go(page, `/admin/sessions/${SID}/setup`);
+await go(page, `/admin/sessions/${SID}/schedule`);
 await page.getByRole('button', { name: '시험 시간표 표로 입력' }).click();
 const dlg = page.getByRole('dialog', { name: '시험 시간표 표로 입력' });
 

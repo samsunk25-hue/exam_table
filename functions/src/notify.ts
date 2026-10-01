@@ -68,17 +68,21 @@ export const notifyAvailability = onDocumentWritten('sessions/{sid}/availability
   if (!before && after.source === 'TEACHER' && after.status === 'PENDING') {
     const t = await db().doc(`teachers/${after.teacherId as string}`).get();
     const name = (t.get('name') as string | undefined) ?? '교사';
+    // "교사 제출 바로 반영"이면 승인 없이 바로 반영 (관리자는 문제 있는 것만 반려)
+    const auto = session.get('settings.autoApproveAvailability') === true;
+    if (auto) await event.data!.after.ref.update({ status: 'APPROVED', adminNote: '자동 반영', updatedBy: 'system' });
     await notifyAdmins({
       key: `avail_${sid}_${after.teacherId as string}`,
       sessionId: sid,
       title: '불가시간 신청',
       body: `${name} 선생님이 불가시간을 신청했습니다.`,
-      countLabel: (n) => `${name} 선생님이 불가시간 ${n}건을 신청했습니다 (${exam}).`,
+      countLabel: (n) => `${name} 선생님이 불가시간 ${n}건을 ${auto ? '냈습니다 (바로 반영됨)' : '신청했습니다'} (${exam}).`,
       link: `/admin/sessions/${sid}/availability`,
     });
     return;
   }
-  if (before && before.status !== after.status && after.source === 'TEACHER' && (after.status === 'APPROVED' || after.status === 'REJECTED')) {
+  // 자동 반영은 교사 화면에 바로 보이므로 따로 알리지 않는다
+  if (before && before.status !== after.status && after.source === 'TEACHER' && after.adminNote !== '자동 반영' && (after.status === 'APPROVED' || after.status === 'REJECTED')) {
     await notifyTeachers([after.teacherId as string], {
       sessionId: sid,
       title: after.status === 'APPROVED' ? '불가시간 승인' : '불가시간 반려',

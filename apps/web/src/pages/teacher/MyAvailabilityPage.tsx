@@ -54,7 +54,7 @@ function MyAvailabilityForm({ session, teacherId }: { session: ExamSession; teac
         return { date: date!, period: Number(period) };
       });
       await submitAvailability(sid, teacherId, cells, reason.trim(), false);
-      toast(`불가 시간 ${cells.length}칸을 제출했습니다. 관리자 승인을 기다립니다.`);
+      toast(session.settings.autoApproveAvailability ? `불가 시간 ${cells.length}칸을 제출했습니다. 바로 반영됩니다.` : `불가 시간 ${cells.length}칸을 제출했습니다. 관리자 승인을 기다립니다.`);
       setSelected(new Set());
     } catch (e) {
       toast(errorMessage(e), 'alert');

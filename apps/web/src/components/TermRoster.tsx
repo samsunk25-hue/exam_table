@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { nextId, parseTermKey, sessionTerm, termFields, termKey, termLabel, type RoomDoc, type TeacherDoc, type TermRef, type WithId } from '@sim/shared';
 import { Modal } from '@/components/Modal';
 import { toast } from '@/components/Toast';
 import { Alert, Button } from '@/components/ui';
-import { commitOps, ref, type BatchOp } from '@/lib/data';
+import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
 import { useSessions } from '@/lib/sessions';
 
@@ -53,6 +53,45 @@ export function useTermChoice(docs: TermDoc[] = []) {
   return { terms, current, key, choose, loading: sessions.loading };
 }
 
+type TermChoice = ReturnType<typeof useTermChoice>;
+const TermContext = createContext<TermChoice | null>(null);
+
+/** 관리자 화면 전체가 같은 학교·학기를 보게 한다 (머리글에서 한 번 고름) */
+export function TermProvider({ children }: { children: ReactNode }) {
+  const teachers = useCollection<TermDoc>('teachers');
+  const rooms = useCollection<TermDoc>('rooms');
+  const docs = useMemo(() => [...teachers.data, ...rooms.data], [teachers.data, rooms.data]);
+  const choice = useTermChoice(docs);
+  return <TermContext.Provider value={choice}>{children}</TermContext.Provider>;
+}
+
+export function useTerm(): TermChoice {
+  const c = useContext(TermContext);
+  if (!c) throw new Error('TermProvider 안에서 사용해야 합니다.');
+  return c;
+}
+
+/** 머리글의 학교·학기 선택 */
+export function HeaderTermPicker() {
+  const c = useTerm();
+  if (!c.terms.length) return null;
+  return (
+    <select
+      aria-label="학교·학기"
+      title="학교·학기 (교사 관리·시험실 관리·대시보드에 적용)"
+      className="min-h-12 max-w-56 rounded-xl border border-line bg-surface px-3 text-sm font-semibold sm:max-w-72"
+      value={c.key ?? ''}
+      onChange={(e) => c.choose(e.target.value)}
+    >
+      {c.terms.map((t) => (
+        <option key={termKey(t)} value={termKey(t)}>
+          {termLabel(t)}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export function TermPicker({ terms, value, onChange }: { terms: TermRef[]; value: string | null; onChange: (key: string) => void }) {
   if (!terms.length) return null;
   return (
@@ -75,6 +114,44 @@ export function TermPicker({ terms, value, onChange }: { terms: TermRef[]; value
 }
 
 type Doc = WithId<TeacherDoc> | WithId<RoomDoc>;
+
+/**
+ * 명단 복사 작업: 다른 학기 대상은 새 ID로 복사(같은 학교·학년도면 누적점수 유지, 아니면 0점·담임 비움 선택),
+ * 학기 미지정 예전 자료는 ID 그대로 이 학기로 지정한다. (불러오기 창과 새 프로젝트 만들기가 함께 쓴다)
+ */
+export function rosterCopyOps(o: {
+  kind: RosterKind;
+  all: Doc[];
+  chosen: Doc[];
+  legacy: boolean;
+  target: TermRef;
+  sameYear: boolean;
+  clearHomeroom: boolean;
+}): BatchOp[] {
+  const tf = termFields(o.target);
+  if (o.legacy) return o.chosen.map((d): BatchOp => ({ type: 'set', ref: ref(o.kind, d.id), data: { ...tf }, merge: true }));
+  const ids = nextId(o.kind === 'teachers' ? 'T' : 'R', o.all.map((d) => d.id), o.chosen.length);
+  return o.chosen.map(({ id: _id, term: _t, school: _s, year: _y, semester: _m, ...d }, i): BatchOp => {
+    const data: Record<string, unknown> = { ...d, ...tf };
+    if (o.kind === 'teachers') {
+      if (!o.sameYear) data.cumulativeLoad = 0;
+      if (o.clearHomeroom) data.homeroom = null;
+    }
+    return { type: 'set', ref: ref(o.kind, ids[i]!), data };
+  });
+}
+
+/** 가장 최근 다른 학기(같은 학교) 명단: 새 프로젝트를 만들 때 이어받을 후보 */
+export function latestRoster(all: Doc[], target: TermRef): { term: TermRef; docs: Doc[] } | null {
+  const key = termKey(target);
+  if (all.some((d) => d.term === key)) return null; // 이미 이 학기 명단이 있으면 가져올 필요 없음
+  const terms = [...new Set(all.flatMap((d) => (d.term && d.term !== key ? [d.term] : [])))]
+    .flatMap((k) => parseTermKey(k) ?? [])
+    .filter((t) => t.school === target.school.trim())
+    .sort(byRecent);
+  const src = terms[0];
+  return src ? { term: src, docs: all.filter((d) => d.term === termKey(src)) } : null;
+}
 
 /** 목록에 보여 줄 설명 (교사: 이름 교과 이메일, 시험실: 실명 학년-반) */
 function describe(kind: RosterKind, d: Doc): string {
@@ -142,21 +219,7 @@ export function RosterImportDialog({ kind, target, all, onClose }: { kind: Roste
   const save = async () => {
     setBusy(true);
     setError(null);
-    const tf = termFields(target);
-    const ops: BatchOp[] = [];
-    if (source === 'legacy') {
-      for (const d of chosen) ops.push({ type: 'set', ref: ref(kind, d.id), data: { ...tf }, merge: true });
-    } else {
-      const ids = nextId(kind === 'teachers' ? 'T' : 'R', all.map((d) => d.id), chosen.length);
-      chosen.forEach(({ id: _id, term: _t, school: _s, year: _y, semester: _m, ...d }, i) => {
-        const data: Record<string, unknown> = { ...d, ...tf };
-        if (kind === 'teachers') {
-          if (!sameYear) data.cumulativeLoad = 0;
-          if (clearHomeroom) data.homeroom = null;
-        }
-        ops.push({ type: 'set', ref: ref(kind, ids[i]!), data });
-      });
-    }
+    const ops = rosterCopyOps({ kind, all, chosen, legacy: source === 'legacy', target, sameYear, clearHomeroom });
     try {
       await commitOps(ops, `${KIND_LABEL[kind]} 명단 불러오기`);
       toast(`${KIND_LABEL[kind]} ${chosen.length}${kind === 'teachers' ? '명을' : '개를'} ${termLabel(target)}(으)로 불러왔습니다.`);

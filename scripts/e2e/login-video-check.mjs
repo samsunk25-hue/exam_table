@@ -14,7 +14,7 @@ for (const [name, viewport] of [['desktop', { width: 1280, height: 900 }], ['mob
   const page = await browser.newPage({ viewport });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('http://localhost:5173/');
+  await page.goto(process.argv[2] ?? 'http://localhost:5173/');
   const v = page.locator('video');
   await v.waitFor();
   await page.waitForFunction(() => {

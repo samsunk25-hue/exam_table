@@ -101,6 +101,8 @@ export const callAiFairnessReport = httpsCallable<
   { sessionId: string },
   { text: string; moves: { seatId: string; from: string; to: string; label: string; effect: string }[]; mean: number; sd: number }
 >(functions, 'aiFairnessReport', { timeout: 300_000 });
+export const callSetMyAiKey = httpsCallable<{ key: string }, { last4: string }>(functions, 'setMyAiKey');
+export const callClearMyAiKey = httpsCallable<void, { cleared: boolean }>(functions, 'clearMyAiKey');
 export const callAddAdmin = httpsCallable<{ email: string }, { email: string; applied: boolean }>(functions, 'addAdmin');
 export const callRemoveAdmin = httpsCallable<{ email: string }, { email: string }>(functions, 'removeAdmin');
 export const callReviewAccessRequest = httpsCallable<{ uid: string; approve: boolean; note?: string }, { status: string }>(

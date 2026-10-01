@@ -4,6 +4,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { Alert, Button, Card, Field, PageTitle, Spinner } from '@/components/ui';
 import { callAddAdmin, callRemoveAdmin, db, errorMessage } from '@/lib/firebase';
 import { AccessRequestsCard } from './AccessRequestsCard';
+import { AiKeyCard } from './AiKeyCard';
 
 interface AdminEntry {
   email: string;
@@ -110,6 +111,7 @@ export function AdminsPage() {
   return (
     <>
       <PageTitle sub="관리자는 모든 시험 프로젝트의 설정·배정·확정을 할 수 있습니다.">관리자 관리</PageTitle>
+      <AiKeyCard />
       <AccessRequestsCard />
 
       <Card className="mb-6">

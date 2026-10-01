@@ -51,6 +51,8 @@ export function createSession(data: NewSession) {
     ...data,
     status: 'DRAFT',
     createdAt: serverTimestamp(),
+    // 교사용 AI 설명은 프로젝트를 만든 관리자의 AI 키를 쓴다
+    createdBy: auth.currentUser!.uid,
     ...stamp(),
   });
 }

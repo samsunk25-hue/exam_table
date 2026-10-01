@@ -1,15 +1,49 @@
 // AI 기능 (Claude API): 학교 문서에서 시험 일정·교사 명단 읽기, 배정 이유 설명, 공정성 점검 리포트.
-// API 키는 Firebase 비밀값 ANTHROPIC_API_KEY. 에뮬레이터에서 키가 없으면 가짜 응답으로 흐름만 점검한다.
-import { defineSecret } from 'firebase-functions/params';
+// API 키는 관리자마다 자기 것을 넣는다 → aiKeys/{uid} (보안 규칙상 함수만 읽고 쓴다. 코드·저장소·배포 파일에 없음).
+// 교사용 설명은 그 시험 프로젝트를 만든 관리자의 키를 쓴다. 에뮬레이터에서 키가 없으면 가짜 응답으로 흐름만 점검한다.
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 import { DEFAULT_ROLE_WEIGHTS, buildEngineInput, buildSeats, seatCandidates, type Seat } from '@sim/engine';
 import { SEAT_ROLE_LABEL, type SessionStatus } from '@sim/shared';
-import { db, requireAdmin } from './common';
+import { db, requireAdmin, serverTimestamp } from './common';
 import { loadData } from './runs';
 
-const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 const MODEL = 'claude-opus-5-5';
-const AI_OPTIONS = { timeoutSeconds: 300, memory: '512MiB' as const, secrets: [ANTHROPIC_API_KEY] };
+const AI_OPTIONS = { timeoutSeconds: 300, memory: '512MiB' as const };
+const API = 'https://api.anthropic.com/v1';
+const headers = (key: string) => ({ 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' });
+const isEmulator = () => process.env.FUNCTIONS_EMULATOR === 'true';
+
+/** 관리자 본인의 키 (없으면 null) */
+async function keyOf(uid: string | undefined | null): Promise<string | null> {
+  if (!uid) return null;
+  const snap = await db().doc(`aiKeys/${uid}`).get();
+  return (snap.get('key') as string | undefined) ?? null;
+}
+
+/** 관리자: 내 AI 키 등록·바꾸기. 키를 실제로 확인한 뒤 비공개 저장소에 둔다 (화면에는 끝 4자리만). */
+export const setMyAiKey = onCall({ timeoutSeconds: 30 }, async (req) => {
+  const uid = requireAdmin(req);
+  const { key } = (req.data ?? {}) as { key?: unknown };
+  const k = typeof key === 'string' ? key.trim() : '';
+  if (!/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(k)) throw new HttpsError('invalid-argument', 'Claude API 키 형식이 아닙니다 (sk-ant-로 시작).');
+  // 에뮬레이터 점검용 가짜 키(sk-ant-test-…)는 확인을 건너뛴다
+  if (!(isEmulator() && k.startsWith('sk-ant-test-'))) {
+    const res = await fetch(`${API}/models?limit=1`, { headers: headers(k) });
+    if (res.status === 401 || res.status === 403) throw new HttpsError('permission-denied', '키가 맞지 않습니다. Anthropic 콘솔에서 키를 다시 확인해 주세요.');
+    if (!res.ok) throw new HttpsError('unavailable', `키를 확인하지 못했습니다 (${res.status}). 잠시 뒤 다시 시도해 주세요.`);
+  }
+  await db().doc(`aiKeys/${uid}`).set({ key: k, email: (req.auth?.token.email as string | undefined) ?? null, updatedAt: serverTimestamp() });
+  await db().doc(`users/${uid}`).set({ ai: { last4: k.slice(-4), updatedAt: serverTimestamp() } }, { merge: true });
+  return { last4: k.slice(-4) };
+});
+
+/** 관리자: 내 AI 키 삭제 */
+export const clearMyAiKey = onCall(async (req) => {
+  const uid = requireAdmin(req);
+  await db().doc(`aiKeys/${uid}`).delete();
+  await db().doc(`users/${uid}`).set({ ai: null }, { merge: true });
+  return { cleared: true };
+});
 
 type Block = Record<string, unknown>;
 interface Tool {
@@ -18,15 +52,23 @@ interface Tool {
   input_schema: Record<string, unknown>;
 }
 
-const fakeMode = () => !ANTHROPIC_API_KEY.value() && process.env.FUNCTIONS_EMULATOR === 'true';
+/** 키가 없을 때: 에뮬레이터면 가짜 응답(null), 아니면 안내 오류 */
+function needKey(key: string | null, forTeacher = false): string | null {
+  // 에뮬레이터 점검용 가짜 키는 실제로 부르지 않는다
+  if (key && isEmulator() && key.startsWith('sk-ant-test-')) return null;
+  if (key) return key;
+  if (isEmulator()) return null;
+  throw new HttpsError(
+    'failed-precondition',
+    forTeacher ? '관리자가 AI 키를 등록하지 않아 설명을 볼 수 없습니다. 관리자에게 문의하세요.' : '내 AI 키가 없습니다. 관리자 관리 > 내 AI 키에서 Claude API 키를 등록하세요.',
+  );
+}
 
 /** Claude 호출. tool을 주면 그 도구 입력(JSON)을, 아니면 글을 돌려준다. */
-async function claude(o: { system: string; content: Block[]; tool?: Tool; maxTokens?: number }): Promise<unknown> {
-  const key = ANTHROPIC_API_KEY.value();
-  if (!key) throw new HttpsError('failed-precondition', 'AI 키가 설정되지 않았습니다. 관리자가 ANTHROPIC_API_KEY를 등록해야 합니다.');
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+async function claude(key: string, o: { system: string; content: Block[]; tool?: Tool; maxTokens?: number }): Promise<unknown> {
+  const res = await fetch(`${API}/messages`, {
     method: 'POST',
-    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    headers: headers(key),
     body: JSON.stringify({
       model: MODEL,
       max_tokens: o.maxTokens ?? 4000,
@@ -35,6 +77,8 @@ async function claude(o: { system: string; content: Block[]; tool?: Tool; maxTok
       ...(o.tool ? { tools: [o.tool], tool_choice: { type: 'tool', name: o.tool.name } } : {}),
     }),
   });
+  if (res.status === 401 || res.status === 403) throw new HttpsError('permission-denied', 'AI 키가 맞지 않거나 만료되었습니다. 관리자 관리 > 내 AI 키를 확인하세요.');
+  if (res.status === 402 || res.status === 429) throw new HttpsError('resource-exhausted', 'AI 사용 한도나 잔액이 부족합니다. Anthropic 콘솔의 결제(Billing)를 확인하세요.');
   if (!res.ok) {
     const body = await res.text();
     throw new HttpsError('unavailable', `AI 응답 오류 (${res.status}): ${body.slice(0, 200)}`);
@@ -103,7 +147,7 @@ const MEDIA = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp
 
 /** 교육계획서·시험 시간표·업무 분장표 등(PDF·사진·글)에서 시험 일정과 교사 명단을 읽는다 */
 export const aiExtract = onCall(AI_OPTIONS, async (req) => {
-  requireAdmin(req);
+  const key = needKey(await keyOf(requireAdmin(req)));
   const { kind, files, text, year } = (req.data ?? {}) as {
     kind?: unknown;
     files?: { name?: unknown; mediaType?: unknown; data?: unknown }[];
@@ -136,9 +180,9 @@ export const aiExtract = onCall(AI_OPTIONS, async (req) => {
 - 문서에 없는 값은 지어내지 말고 null로 두고, 애매한 점은 notes에 적으세요.`,
   });
 
-  const out = fakeMode()
+  const out = !key
     ? fakeExtract(y)
-    : ((await claude({
+    : ((await claude(key, {
         system: '당신은 한국 중·고등학교 교무 문서를 정확히 표로 옮기는 도우미입니다. 반드시 record_school_data 도구로만 답합니다.',
         content,
         tool: EXTRACT_TOOL,
@@ -214,6 +258,7 @@ export const aiExplainDuties = onCall(AI_OPTIONS, async (req) => {
   if (!admin && !['PUBLISHED', 'SWAP', 'CONFIRMED', 'LOCKED'].includes(L.status)) {
     throw new HttpsError('failed-precondition', '시간표가 공개된 뒤에 설명을 볼 수 있습니다.');
   }
+  const key = needKey((await keyOf(L.snap.get('createdBy') as string | undefined)) ?? (await keyOf(L.snap.get('updatedBy') as string | undefined)), !admin);
   const me = L.data.teachers.find((t) => t.id === teacherId);
   if (!me) throw new HttpsError('not-found', '교사 명단에 없습니다.');
   const stats = loadStats(L);
@@ -236,9 +281,9 @@ ${duties.join('\n') || '- 없음'}
 점수 이유 읽는 법: 기초일치=그 시간 원래 수업하던 반, 부담하위=누적이 적어 우선, 부담상위=누적이 많아 감점, 비담임=그 학년 담임이 아님, 연속=이어지는 교시 감점, 복도전담·출제교사 복도=역할 맞춤.
 배정 원칙: 불가시간·동시간 중복·연장 감독 직후는 절대 배정하지 않고, 나머지는 위 점수가 높은 교사를 고르며, 누적이 적은 교사를 먼저 배정해 형평을 맞춘다.`;
 
-  const text = fakeMode()
+  const text = !key
     ? `(에뮬레이터 가짜 응답) ${me.name} 선생님은 이번 시험에서 감독 ${mine?.count ?? 0}회를 맡았습니다. 학년도 누적 ${mine?.total ?? 0}점으로 학교 평균 ${mean}점과 비교됩니다.`
-    : ((await claude({
+    : ((await claude(key, {
         system:
           '당신은 학교 시험 감독 배정 결과를 교사에게 친절하게 설명하는 도우미입니다. 주어진 사실만 쓰고 지어내지 마세요. 다른 교사의 이름이나 개인 사정은 언급하지 마세요. 한국어 존댓말로, 5~8문장, 필요하면 "- "로 시작하는 짧은 목록을 쓰고 마크다운 제목·굵은 글씨는 쓰지 마세요.',
         content: [{ type: 'text', text: `${facts}\n\n이 교사가 "왜 이렇게 배정됐나요?"라고 물었습니다. 감독 횟수와 시간이 정해진 이유, 다른 교사와 비교한 형평성, 바꾸고 싶을 때 할 수 있는 일(교환 요청)을 설명해 주세요.` }],
@@ -249,7 +294,7 @@ ${duties.join('\n') || '- 없음'}
 
 /** 관리자: 공정성 점검 리포트 + 바로 적용할 수 있는 감독 옮기기 제안 */
 export const aiFairnessReport = onCall(AI_OPTIONS, async (req) => {
-  requireAdmin(req);
+  const key = needKey(await keyOf(requireAdmin(req)));
   const { sessionId } = (req.data ?? {}) as { sessionId?: unknown };
   if (typeof sessionId !== 'string') throw new HttpsError('invalid-argument', '시험 프로젝트를 확인해 주세요.');
   const L = await loadSession(sessionId, req, true);
@@ -293,9 +338,9 @@ ${table}
 조건을 지키는 옮기기 제안:
 ${moves.map((m, i) => `${i + 1}. ${m.label} (${m.effect})`).join('\n') || '없음'}`;
 
-  const text = fakeMode()
+  const text = !key
     ? `(에뮬레이터 가짜 응답) 학년도 누적 평균 ${round(mean)}점, 편차 ${round(sd)}점입니다. 옮기기 제안 ${moves.length}건을 확인하세요.`
-    : ((await claude({
+    : ((await claude(key, {
         system:
           '당신은 학교 시험 감독 배정의 공정성을 점검하는 교무 도우미입니다. 주어진 수치만 근거로, 관리자(교감·교무부장)가 바로 이해하도록 한국어로 씁니다. 마크다운 제목·굵은 글씨 없이 짧은 문단과 "- " 목록만 쓰고 10~15줄 안으로 씁니다.',
         content: [

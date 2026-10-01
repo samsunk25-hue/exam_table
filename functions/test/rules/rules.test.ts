@@ -127,6 +127,15 @@ describe('교환 요청', () => {
   });
 });
 
+describe('AI 키', () => {
+  it('관리자 본인도 브라우저에서는 키를 읽거나 쓸 수 없다 (함수만)', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'aiKeys/admin'), { key: 'sk-ant-secret' }));
+    await assertFails(getDoc(doc(admin(), 'aiKeys/admin')));
+    await assertFails(setDoc(doc(admin(), 'aiKeys/admin'), { key: 'sk-ant-other' }));
+    await assertFails(getDoc(doc(kim(), 'aiKeys/admin')));
+  });
+});
+
 describe('앱 알림', () => {
   const put = (id: string, data: Record<string, unknown>) => env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `notifications/${id}`), data));
 

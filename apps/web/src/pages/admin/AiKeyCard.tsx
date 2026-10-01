@@ -1,0 +1,106 @@
+import { doc, onSnapshot, type Timestamp } from 'firebase/firestore';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useAuth } from '@/auth/AuthProvider';
+import { toast } from '@/components/Toast';
+import { Alert, Button, Card } from '@/components/ui';
+import { callClearMyAiKey, callSetMyAiKey, db, errorMessage } from '@/lib/firebase';
+
+/**
+ * 관리자 본인의 Claude API 키. 서버의 비공개 저장소에만 두고(브라우저로는 다시 읽을 수 없음) 끝 4자리만 보여 준다.
+ * 관리자마다 자기 키를 넣고, 교사용 설명은 그 시험 프로젝트를 만든 관리자의 키를 쓴다.
+ */
+export function AiKeyCard() {
+  const { user } = useAuth();
+  const [status, setStatus] = useState<{ last4: string; updatedAt?: Timestamp } | null | undefined>(undefined);
+  const [key, setKey] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    return onSnapshot(
+      doc(db, 'users', user.uid),
+      (snap) => setStatus((snap.get('ai') as { last4: string; updatedAt?: Timestamp } | null | undefined) ?? null),
+      () => setStatus(null),
+    );
+  }, [user]);
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const { data } = await callSetMyAiKey({ key: key.trim() });
+      toast(`AI 키를 등록했습니다 (끝 ${data.last4}).`);
+      setKey('');
+      setEditing(false);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const clear = async () => {
+    setBusy(true);
+    try {
+      await callClearMyAiKey();
+      toast('AI 키를 삭제했습니다.');
+    } catch (err) {
+      toast(errorMessage(err), 'alert');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="mb-6">
+      <h2 className="text-lg font-bold">🔑 내 AI 키 (Claude)</h2>
+      <p className="mt-1 text-muted">
+        AI 기능(학교 문서 읽기, 공정성 리포트, 교사용 배정 설명)에 쓰는 내 Claude API 키입니다. 키는 서버의 비공개 저장소에만 저장되어 앱·코드·다른 관리자·교사에게
+        보이지 않으며, 관리자마다 자기 키를 넣습니다. 교사용 설명은 그 시험 프로젝트를 만든 관리자의 키로 처리됩니다.
+      </p>
+      <div className="mt-3">
+        {status === undefined ? null : status && !editing ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="rounded-full bg-mint-soft px-3 py-1 font-semibold">등록됨 · sk-ant-…{status.last4}</span>
+            {status.updatedAt && <span className="text-sm text-muted">{status.updatedAt.toDate().toLocaleDateString('ko-KR')} 등록</span>}
+            <Button variant="secondary" onClick={() => setEditing(true)} disabled={busy}>
+              키 바꾸기
+            </Button>
+            <Button variant="ghost" onClick={() => void clear()} disabled={busy}>
+              삭제
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={(e) => void save(e)} className="grid max-w-xl gap-2">
+            <label className="grid gap-1">
+              <span className="font-semibold">Claude API 키</span>
+              <input
+                type="password"
+                autoComplete="off"
+                aria-label="Claude API 키"
+                placeholder="sk-ant-로 시작하는 키를 붙여 넣으세요"
+                className="min-h-12 rounded-xl border border-line px-4 font-mono"
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+              />
+              <span className="text-sm text-muted">console.anthropic.com → API Keys에서 만든 키. 등록할 때 실제로 쓸 수 있는 키인지 확인합니다.</span>
+            </label>
+            {error && <Alert>{error}</Alert>}
+            <div className="flex gap-2">
+              <Button type="submit" disabled={busy || !key.trim()}>
+                {busy ? '확인 중…' : '등록'}
+              </Button>
+              {status && (
+                <Button type="button" variant="secondary" onClick={() => setEditing(false)} disabled={busy}>
+                  취소
+                </Button>
+              )}
+            </div>
+          </form>
+        )}
+      </div>
+    </Card>
+  );
+}

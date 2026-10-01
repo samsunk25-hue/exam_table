@@ -82,6 +82,8 @@ function NextAction({ session }: { session: ExamSession }) {
   if (slots.loading || assignments.loading || teachers.loading || rooms.loading) return null;
   const activeTeachers = teachers.data.filter((t) => t.active !== false && t.defaultRole !== 'EXCLUDED').length;
   const placed = slots.data.some((x) => (x.rooms ?? []).length > 0);
+  // 담임(학년·반)이 있으면 학급 교실을 자동으로 만들므로 시험실 등록은 건너뛰어도 된다
+  const homerooms = teachers.data.some((t) => !t.temporary && t.homeroom);
   const transition = (to: string) => TRANSITIONS[session.status].find((t) => t.to === to);
   const go = (to: string, label: string, text: string) => ({ kind: 'link' as const, to, label, text });
   const step = (to: string, label: string, text: string) => ({ kind: 'step' as const, t: transition(to)!, label, text });
@@ -90,12 +92,12 @@ function NextAction({ session }: { session: ExamSession }) {
     s === 'DRAFT' || s === 'AUTO_ASSIGNED'
       ? activeTeachers === 0
         ? go('teachers', '교사 명단 입력하기', '감독할 교사가 없습니다. 교사 명단을 넣으세요 (엑셀·지난 학기 이어받기·직접 입력).')
-        : rooms.data.length === 0
-          ? go('rooms', '시험실 등록하기', '시험실이 없습니다. 교실·특별실을 등록하세요.')
+        : rooms.data.length === 0 && !homerooms
+          ? go('rooms', '시험실 등록하기', '시험실이 없습니다. 학년별 학급 수만 넣으면 교실이 만들어집니다 (또는 교사 명단에 담임을 넣으면 자동).')
           : slots.data.length === 0
             ? go('schedule', '시험 일정 입력하기', '시험 일정을 넣으세요 (달력·표·엑셀·학교 문서 AI 읽기). 시험실은 자동으로 배치됩니다.')
             : !placed
-              ? go('schedule', '시험실 확인하기', '시험에 배치할 수 있는 교실이 없습니다. 시험실의 학년·반이 시험 학년과 맞는지 확인하세요.')
+              ? go('rooms', '시험실 확인하기', '시험에 배치할 교실이 없습니다. 시험실에서 학년별 학급 수를 넣으면 학급 교실로 자동 배치됩니다.')
               : assignments.data.length === 0
           ? go('assign', '자동 배정하기', `시험 ${slots.data.length}건이 준비되었습니다. 불가시간을 받은 뒤 자동 배정하세요.`)
           : step('PUBLISHED', '교사에게 공개하기', '배정을 마쳤습니다. ③ 점검에서 업무 점수를 확인한 뒤 교사에게 공개하세요.')

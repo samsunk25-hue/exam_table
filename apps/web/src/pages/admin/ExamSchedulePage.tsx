@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   autoPlacements,
@@ -290,6 +291,7 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
     return [...g].sort((a, b) => a - b);
   }, [rooms.data, slots.data]);
   const roomName = new Map(rooms.data.map((r) => [r.id, r.name]));
+  const unplacedCount = slots.data.filter((x) => x.rooms.length === 0).length;
 
   if (slots.loading || rooms.loading) return <Spinner />;
   if (slots.error || rooms.error) return <Alert>{slots.error ?? rooms.error}</Alert>;
@@ -310,6 +312,15 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
 
   return (
     <div className="grid gap-6">
+      {/* 시험실은 선택 사항: 학급 교실이 있으면(또는 담임 정보로 만들어지면) 저절로 배치된다 */}
+      {unplacedCount > 0 && (
+        <Alert tone="info">
+          시험실이 정해지지 않은 시험 {unplacedCount}건 — 학급 교실이 있으면 자동으로 배치됩니다. 교사 명단에 담임(학년·반)을 넣거나{' '}
+          <Link to="../rooms" relative="path" className="font-semibold text-primary-strong underline underline-offset-2">
+            시험실에서 학년별 학급 수 넣기 →
+          </Link>
+        </Alert>
+      )}
       {!editable && <Alert>교사 공개 이후에는 시험 일정을 바꿀 수 없습니다 (보기만 가능).</Alert>}
       {editable && (
         <div className="flex flex-wrap items-center gap-3">
@@ -415,7 +426,7 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
                         </div>
                         <div className="text-sm text-muted">
                           {s.startTime ? `${s.startTime}~${s.endTime ?? ''}` : '시간 미정'} ·{' '}
-                          {s.rooms.length === 0 ? <span className="font-semibold text-alert">시험실 없음</span> : `시험실 ${s.rooms.length}개`}
+                          {s.rooms.length === 0 ? <span className="font-semibold text-step4">시험실 미정</span> : `시험실 ${s.rooms.length}개`}
                           {s.rooms.length > 0 &&
                             ` (${[...s.rooms]
                               .sort((a, b) => Number(!!b.endTime) - Number(!!a.endTime))

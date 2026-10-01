@@ -17,3 +17,6 @@ firestore-debug.log
 ui-debug.log
 
 .vercel
+
+# hero source image (5MB): only cropped apps/web/public/*.jpg are committed
+hero-source.png

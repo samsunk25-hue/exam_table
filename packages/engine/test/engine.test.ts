@@ -362,6 +362,29 @@ describe('일부 학년만 시험 (수업 중 교사 제외)', () => {
   it('끄면: 제한 없음', () => {
     expect(validateAssignments(input(false), [{ seatId: 'G1_CHIEF_1', teacherId: 'A' }])).toEqual([]);
   });
+
+  it('감독과 수업이 함께 있는 교사는 둘을 합쳐 3교시 연속 불가', () => {
+    // 월 1·2·3교시 1학년 시험 / A는 2교시에 2학년 수업 → A가 1·3교시를 모두 맡으면 감독-수업-감독 3연속
+    const three = emptyInput({
+      teachers: [teacher('A'), teacher('B'), teacher('C')],
+      rooms: [{ id: 'R11', name: '1-1', chiefCount: 1, assistantCount: 0, spaceType: 'CLASSROOM' }],
+      slots: [1, 2, 3].map((p) => ({ id: `S${p}`, date: '2026-10-12', period: p, grade: 1, subject: `과목${p}`, type: 'EXAM' as const })),
+      groups: [1, 2, 3].map((p) => ({ id: `G${p}`, slotId: `S${p}`, roomId: 'R11', grade: 1, classNo: 1, roomType: 'NORMAL' as const })),
+      baseTimetable: [{ teacherId: 'A', weekday: 1, period: 2, grade: 2, classNo: 1 }],
+      settings: { useBaseTimetable: true, classDuringExam: true },
+    });
+    const bad = [
+      { seatId: 'G1_CHIEF_1', teacherId: 'A' },
+      { seatId: 'G3_CHIEF_1', teacherId: 'A' },
+    ];
+    expect(validateAssignments(three, bad).map((v) => v.reason)).toContain('THREE_IN_ROW');
+    // 감독만 3연속인 교사(수업 없음)는 이 규칙에 걸리지 않는다
+    const onlyDuty = [1, 2, 3].map((p) => ({ seatId: `G${p}_CHIEF_1`, teacherId: 'B' }));
+    expect(validateAssignments(three, onlyDuty).map((v) => v.reason)).not.toContain('THREE_IN_ROW');
+    const r = runAssignment(three);
+    const a = r.assignments.filter((x) => x.teacherId === 'A').map((x) => x.slotId);
+    expect(a.includes('S1') && a.includes('S3')).toBe(false);
+  });
 });
 
 describe('감독 없음 자리', () => {

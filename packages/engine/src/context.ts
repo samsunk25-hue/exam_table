@@ -49,6 +49,7 @@ export const EXCLUSION_LABEL: Record<ExclusionReason, string> = {
   AFTER_EXTENDED: '연장 감독 인접',
   EXAM_WRITER: '출제 과목 시험',
   IN_CLASS: '수업 중',
+  THREE_IN_ROW: '수업 포함 3연속',
 };
 
 /** YYYY-MM-DD → 1=월 ... 7=일 */

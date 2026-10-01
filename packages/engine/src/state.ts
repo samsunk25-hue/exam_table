@@ -103,6 +103,18 @@ export class State {
     ) {
       return 'AFTER_EXTENDED';
     }
+    // 시험 감독과 수업(시험 없는 학년)이 함께 있는 교사: 감독·수업을 합쳐 3교시 연속 불가
+    if (this.ctx.inClass.size) {
+      const cls = (p: number) => this.ctx.inClass.has(`${teacher.id}|${seat.date}|${p}`);
+      const busy = (p: number) => seat.periods.includes(p) || cls(p) || this.seatsAt(teacher.id, seat.date, p, ignoreSeatId).length > 0;
+      let lo = first;
+      let hi = last;
+      while (lo > 1 && busy(lo - 1)) lo--;
+      while (hi < 20 && busy(hi + 1)) hi++;
+      if (hi - lo + 1 >= 3) {
+        for (let p = lo; p <= hi; p++) if (cls(p)) return 'THREE_IN_ROW';
+      }
+    }
     return null;
   }
 

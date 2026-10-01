@@ -196,7 +196,9 @@ export type ExclusionReason =
   | 'BUSY'
   | 'AFTER_EXTENDED'
   | 'EXAM_WRITER'
-  | 'IN_CLASS';
+  | 'IN_CLASS'
+  /** 시험 감독과 수업이 함께 있는 날, 감독·수업을 합쳐 3교시 연속 */
+  | 'THREE_IN_ROW';
 
 export interface UnassignedSeat {
   seat: Seat;

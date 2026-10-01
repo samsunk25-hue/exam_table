@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/auth/AuthProvider';
-import { AppTitle } from '@/components/Brand';
+import { AppFooter, AppTitle } from '@/components/Brand';
 import { Alert, Button, Card } from '@/components/ui';
 import { errorMessage, usingEmulators } from '@/lib/firebase';
 
@@ -72,7 +72,7 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-dvh items-center justify-center px-4 py-8">
+    <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-8">
       <Card className="w-full max-w-2xl overflow-hidden p-0">
         <IntroVideo />
         <div className="p-8">
@@ -89,6 +89,7 @@ export function LoginPage() {
           )}
         </div>
       </Card>
+      <AppFooter />
     </div>
   );
 }

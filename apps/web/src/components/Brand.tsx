@@ -27,3 +27,12 @@ export function HeroImage({ className = '', src = '/hero.jpg' }: { className?: s
     />
   );
 }
+
+/** 모든 화면 맨 아래 제작자 표시 */
+export function AppFooter() {
+  return (
+    <footer className="no-print px-4 py-6 text-center text-sm text-muted">
+      {APP_NAME} · by <span className="font-hand text-base text-ink">물리여신</span>
+    </footer>
+  );
+}

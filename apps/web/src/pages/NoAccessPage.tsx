@@ -1,7 +1,7 @@
 import { Navigate } from 'react-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { AccessRequestForm } from '@/components/AccessRequestForm';
-import { AppTitle } from '@/components/Brand';
+import { AppFooter, AppTitle } from '@/components/Brand';
 import { Alert, Button, Card } from '@/components/ui';
 
 /** 등록되지 않은 계정: 가입(교사) 또는 관리자 권한을 신청하고 승인을 기다린다 */
@@ -12,7 +12,7 @@ export function NoAccessPage() {
   if (role === 'TEACHER') return <Navigate to="/me" replace />;
 
   return (
-    <div className="flex min-h-dvh items-center justify-center px-4 py-8">
+    <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-8">
       <Card className="w-full max-w-lg p-8">
         <AppTitle as="h1" />
         <h2 className="mt-4 text-xl font-bold">가입 신청</h2>
@@ -31,6 +31,7 @@ export function NoAccessPage() {
           다른 계정으로 로그인
         </Button>
       </Card>
+      <AppFooter />
     </div>
   );
 }

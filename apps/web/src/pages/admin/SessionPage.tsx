@@ -1,12 +1,5 @@
-import { useEffect, useState } from "react";
-import {
-  Link,
-  NavLink,
-  Outlet,
-  useLocation,
-  useOutletContext,
-  useParams,
-} from "react-router";
+import { useEffect, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useOutletContext, useParams } from 'react-router';
 import {
   EXAM_WRITER_RULE_LABEL,
   STATUS_LABEL,
@@ -19,57 +12,43 @@ import {
   type RoomDoc,
   type SlotDoc,
   type Transition,
-} from "@sim/shared";
-import { StatusBadge } from "@/components/StatusStepper";
-import { useTerm } from "@/components/TermRoster";
-import { UndoConfirm, useUndoOps } from "@/components/UndoHistory";
-import { BundleSection, TimetableUpload } from "./BundleCard";
-import { AiRulesCard } from "./AiRulesCard";
-import { TempStaffCard } from "./TempStaffCard";
-import {
-  Alert,
-  Button,
-  Card,
-  PageTitle,
-  Spinner,
-  Toggle,
-} from "@/components/ui";
-import { useCollection } from "@/lib/data";
-import { callTransitionSession, errorMessage } from "@/lib/firebase";
-import {
-  sessionTitle,
-  termWhere,
-  updateSessionSettings,
-  useSession,
-  useSessionTeachers,
-  type ExamSession,
-} from "@/lib/sessions";
+} from '@sim/shared';
+import { StatusBadge } from '@/components/StatusStepper';
+import { useTerm } from '@/components/TermRoster';
+import { UndoConfirm, useUndoOps } from '@/components/UndoHistory';
+import { BundleSection, TimetableUpload } from './BundleCard';
+import { AiRulesCard } from './AiRulesCard';
+import { TempStaffCard } from './TempStaffCard';
+import { Alert, Button, Card, PageTitle, Spinner, Toggle } from '@/components/ui';
+import { useCollection } from '@/lib/data';
+import { callTransitionSession, errorMessage } from '@/lib/firebase';
+import { sessionTitle, termWhere, updateSessionSettings, useSession, useSessionTeachers, type ExamSession } from '@/lib/sessions';
 
 /** 프로젝트 메뉴: 4단계(준비 → 배정 → 점검 → 공개·출력), 단계 안에 세부 화면 */
 const STEPS: { label: string; tabs: { to: string; label: string }[] }[] = [
   {
-    label: "① 준비",
+    label: '① 준비',
     tabs: [
-      { to: "", label: "개요" },
-      { to: "schedule", label: "시험 일정" },
-      { to: "teachers", label: "교사 명단" },
-      { to: "rooms", label: "시험실" },
-      { to: "availability", label: "불가시간" },
+      { to: '', label: '개요' },
+      { to: 'schedule', label: '시험 일정' },
+      { to: 'teachers', label: '교사 명단' },
+      { to: 'rooms', label: '시험실' },
+      { to: 'availability', label: '불가시간' },
     ],
   },
   {
-    label: "② 배정",
+    label: '② 배정',
     tabs: [
-      { to: "assign", label: "자동 배정" },
-      { to: "editor", label: "시간표 편집" },
+      { to: 'assign', label: '자동 배정' },
+      { to: 'editor', label: '시간표 편집' },
     ],
   },
-  { label: "③ 점검", tabs: [{ to: "equity", label: "업무 점수·AI 점검" }] },
+  { label: '③ 점검', tabs: [{ to: 'equity', label: '업무 점수·AI 점검' }] },
   {
-    label: "④ 공개·출력",
+    label: '④ 공개·출력',
     tabs: [
-      { to: "print", label: "출력" },
-      { to: "history", label: "변경 이력" },
+      { to: 'print', label: '출력' },
+      { to: 'history', label: '변경 이력' },
     ],
   },
 ];
@@ -88,115 +67,47 @@ function SyncTerm({ session }: { session: ExamSession }) {
 /** 지금 상태에서 할 일 하나 (큰 버튼) */
 function NextAction({ session }: { session: ExamSession }) {
   const slots = useCollection<SlotDoc>(`sessions/${session.id}/slots`);
-  const assignments = useCollection<AssignmentDoc>(
-    `sessions/${session.id}/assignments`,
-  );
+  const assignments = useCollection<AssignmentDoc>(`sessions/${session.id}/assignments`);
   const teachers = useSessionTeachers(session);
-  const rooms = useCollection<RoomDoc>("rooms", termWhere(session));
-  if (slots.loading || assignments.loading || teachers.loading || rooms.loading)
-    return null;
-  const activeTeachers = teachers.data.filter(
-    (t) => t.active !== false && t.defaultRole !== "EXCLUDED",
-  ).length;
+  const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
+  if (slots.loading || assignments.loading || teachers.loading || rooms.loading) return null;
+  const activeTeachers = teachers.data.filter((t) => t.active !== false && t.defaultRole !== 'EXCLUDED').length;
   const placed = slots.data.some((x) => (x.rooms ?? []).length > 0);
-  const transition = (to: string) =>
-    TRANSITIONS[session.status].find((t) => t.to === to);
-  const go = (to: string, label: string, text: string) => ({
-    kind: "link" as const,
-    to,
-    label,
-    text,
-  });
-  const step = (to: string, label: string, text: string) => ({
-    kind: "step" as const,
-    t: transition(to)!,
-    label,
-    text,
-  });
+  const transition = (to: string) => TRANSITIONS[session.status].find((t) => t.to === to);
+  const go = (to: string, label: string, text: string) => ({ kind: 'link' as const, to, label, text });
+  const step = (to: string, label: string, text: string) => ({ kind: 'step' as const, t: transition(to)!, label, text });
   const s = session.status;
   const next =
-    s === "DRAFT" || s === "AUTO_ASSIGNED"
+    s === 'DRAFT' || s === 'AUTO_ASSIGNED'
       ? slots.data.length === 0
-        ? go(
-            "schedule",
-            "시험 일정 입력하기",
-            "먼저 시험 일정을 넣으세요 (달력·표·엑셀·학교 문서 AI 읽기).",
-          )
+        ? go('schedule', '시험 일정 입력하기', '먼저 시험 일정을 넣으세요 (달력·표·엑셀·학교 문서 AI 읽기).')
         : activeTeachers === 0
-          ? go(
-              "teachers",
-              "교사 명단 입력하기",
-              "감독할 교사가 없습니다. 교사 명단을 넣으세요 (엑셀·지난 학기 이어받기·직접 입력).",
-            )
+          ? go('teachers', '교사 명단 입력하기', '감독할 교사가 없습니다. 교사 명단을 넣으세요 (엑셀·지난 학기 이어받기·직접 입력).')
           : rooms.data.length === 0
-            ? go(
-                "rooms",
-                "시험실 등록하기",
-                "시험실이 없습니다. 교실·특별실을 등록하세요.",
-              )
+            ? go('rooms', '시험실 등록하기', '시험실이 없습니다. 교실·특별실을 등록하세요.')
             : !placed
-              ? go(
-                  "schedule",
-                  "시험실 배치하기",
-                  "시험마다 어느 시험실에서 보는지 정해야 감독 자리가 생깁니다. 시험 일정에서 시험실을 배치하세요.",
-                )
+              ? go('schedule', '시험실 배치하기', '시험마다 어느 시험실에서 보는지 정해야 감독 자리가 생깁니다. 시험 일정에서 시험실을 배치하세요.')
               : assignments.data.length === 0
-                ? go(
-                    "assign",
-                    "자동 배정하기",
-                    `시험 ${slots.data.length}건이 준비되었습니다. 불가시간을 받은 뒤 자동 배정하세요.`,
-                  )
-                : s === "DRAFT"
-                  ? step(
-                      "AUTO_ASSIGNED",
-                      "배정 완료로 표시",
-                      "배정이 들어 있습니다. 배정을 마쳤으면 다음 단계로 넘어가세요.",
-                    )
-                  : step(
-                      "REVIEW",
-                      "검토 시작하기",
-                      "배정을 마쳤습니다. 업무 점수·AI 점검으로 확인한 뒤 검토를 시작하세요.",
-                    )
-      : s === "REVIEW"
-        ? step(
-            "PUBLISHED",
-            "교사에게 공개하기",
-            "검토가 끝나면 교사에게 공개하세요. 공개 중에는 교사가 교환을 요청할 수 있습니다.",
-          )
-        : s === "PUBLISHED" || s === "SWAP"
-          ? step(
-              "CONFIRMED",
-              "최종 확정하기",
-              "교환 요청을 정리했으면 최종 확정하세요. 확정하면 업무 점수가 누적됩니다.",
-            )
-          : go(
-              "print",
-              "시간표 출력하기",
-              s === "LOCKED"
-                ? "변경이 잠긴 완료 상태입니다."
-                : "확정되었습니다. 시간표를 출력·배포하세요.",
-            );
-  if (next.kind === "step" && !next.t) return null;
+          ? go('assign', '자동 배정하기', `시험 ${slots.data.length}건이 준비되었습니다. 불가시간을 받은 뒤 자동 배정하세요.`)
+          : s === 'DRAFT'
+            ? step('AUTO_ASSIGNED', '배정 완료로 표시', '배정이 들어 있습니다. 배정을 마쳤으면 다음 단계로 넘어가세요.')
+            : step('REVIEW', '검토 시작하기', '배정을 마쳤습니다. 업무 점수·AI 점검으로 확인한 뒤 검토를 시작하세요.')
+      : s === 'REVIEW'
+        ? step('PUBLISHED', '교사에게 공개하기', '검토가 끝나면 교사에게 공개하세요. 공개 중에는 교사가 교환을 요청할 수 있습니다.')
+        : s === 'PUBLISHED' || s === 'SWAP'
+          ? step('CONFIRMED', '최종 확정하기', '교환 요청을 정리했으면 최종 확정하세요. 확정하면 업무 점수가 누적됩니다.')
+          : go('print', '시간표 출력하기', s === 'LOCKED' ? '변경이 잠긴 완료 상태입니다.' : '확정되었습니다. 시간표를 출력·배포하세요.');
+  if (next.kind === 'step' && !next.t) return null;
   return (
-    <div
-      className="mb-4 flex flex-wrap items-center gap-3 rounded-card border-2 border-primary bg-primary-soft/60 px-4 py-3 no-print"
-      aria-label="다음 할 일"
-    >
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-card border-2 border-primary bg-primary-soft/60 px-4 py-3 no-print" aria-label="다음 할 일">
       <span className="font-bold text-primary-strong">다음 할 일</span>
       <span className="min-w-0 flex-1 text-sm">{next.text}</span>
-      {next.kind === "link" ? (
-        <Link
-          to={next.to}
-          className="inline-flex min-h-12 items-center rounded-xl bg-primary px-5 font-semibold text-white hover:bg-primary-strong"
-        >
+      {next.kind === 'link' ? (
+        <Link to={next.to} className="inline-flex min-h-12 items-center rounded-xl bg-primary px-5 font-semibold text-white hover:bg-primary-strong">
           {next.label} →
         </Link>
       ) : (
-        <TransitionButton
-          session={session}
-          t={next.t}
-          label={`${next.label} →`}
-        />
+        <TransitionButton session={session} t={next.t} label={`${next.label} →`} />
       )}
     </div>
   );
@@ -212,75 +123,45 @@ export function SessionLayout() {
   if (!session) return <Alert>시험 프로젝트를 찾을 수 없습니다.</Alert>;
 
   // 지금 화면이 속한 단계
-  const sub =
-    pathname
-      .split(`/sessions/${session.id}`)[1]
-      ?.replace(/^\//, "")
-      .split("/")[0] ?? "";
-  const current = Math.max(
-    0,
-    STEPS.findIndex((st) => st.tabs.some((t) => t.to === sub)),
-  );
+  const sub = pathname.split(`/sessions/${session.id}`)[1]?.replace(/^\//, '').split('/')[0] ?? '';
+  const current = Math.max(0, STEPS.findIndex((st) => st.tabs.some((t) => t.to === sub)));
   // 진행 상태 → 단계: 초안=준비, 배정 완료=배정, 검토=점검, 공개·확정=공개·출력
-  const progress = {
-    DRAFT: 0,
-    AUTO_ASSIGNED: 1,
-    REVIEW: 2,
-    PUBLISHED: 3,
-    SWAP: 3,
-    CONFIRMED: 3,
-    LOCKED: 3,
-  }[session.status];
+  const progress = { DRAFT: 0, AUTO_ASSIGNED: 1, REVIEW: 2, PUBLISHED: 3, SWAP: 3, CONFIRMED: 3, LOCKED: 3 }[session.status];
   const tabClass = ({ isActive }: { isActive: boolean }) =>
-    `flex min-h-12 shrink-0 items-center border-b-2 px-4 font-semibold ${isActive ? "border-primary text-primary-strong" : "border-transparent text-muted hover:text-ink"}`;
+    `flex min-h-12 shrink-0 items-center border-b-2 px-4 font-semibold ${isActive ? 'border-primary text-primary-strong' : 'border-transparent text-muted hover:text-ink'}`;
 
   return (
     <>
-      <Link
-        to="/admin"
-        className="inline-flex min-h-12 items-center text-primary-strong"
-      >
+      <Link to="/admin" className="inline-flex min-h-12 items-center text-primary-strong">
         ← 대시보드
       </Link>
       <PageTitle sub={session.schoolName}>{sessionTitle(session)}</PageTitle>
       <SyncTerm session={session} />
       <NextAction session={session} />
-      <nav
-        className="flex gap-2 overflow-x-auto"
-        aria-label="시험 프로젝트 단계"
-      >
+      <nav className="flex gap-2 overflow-x-auto" aria-label="시험 프로젝트 단계">
         {STEPS.map((st, i) => {
           // 진행 상태도 이 단계 탭으로 보여 준다: 지난 단계 ✓, 지금 단계 "진행 중"
           const done = i < progress;
           return (
             <Link
               key={st.label}
-              to={st.tabs[0]!.to || "."}
-              aria-current={i === current ? "page" : undefined}
+              to={st.tabs[0]!.to || '.'}
+              aria-current={i === current ? 'page' : undefined}
               className={`flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-5 text-lg font-bold ${
-                i === current
-                  ? "bg-primary text-white"
-                  : "bg-surface text-ink border border-line hover:border-primary hover:bg-primary-soft"
+                i === current ? 'bg-primary text-white' : 'bg-surface text-ink border border-line hover:border-primary hover:bg-primary-soft'
               }`}
             >
               {done ? `✓ ${st.label.slice(2)}` : st.label}
               {i === progress && (
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${i === current ? "bg-white/25" : "bg-primary-soft text-primary-strong"}`}
-                >
-                  진행 중
-                </span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${i === current ? 'bg-white/25' : 'bg-primary-soft text-primary-strong'}`}>진행 중</span>
               )}
             </Link>
           );
         })}
       </nav>
-      <nav
-        className="mb-6 flex gap-1 overflow-x-auto border-b border-line"
-        aria-label="시험 프로젝트 메뉴"
-      >
+      <nav className="mb-6 flex gap-1 overflow-x-auto border-b border-line" aria-label="시험 프로젝트 메뉴">
         {STEPS[current]!.tabs.map((t) => (
-          <NavLink key={t.to} to={t.to} end={t.to === ""} className={tabClass}>
+          <NavLink key={t.to} to={t.to} end={t.to === ''} className={tabClass}>
             {t.label}
           </NavLink>
         ))}
@@ -294,7 +175,7 @@ export function SessionLayout() {
 function PrevStepButton({ sessionId }: { sessionId: string }) {
   const ops = useUndoOps(sessionId);
   const [open, setOpen] = useState(false);
-  const last = ops.data.find((o) => o.kind === "STATUS" && !o.undone);
+  const last = ops.data.find((o) => o.kind === 'STATUS' && !o.undone);
   if (!last) return null;
   return (
     <>
@@ -306,36 +187,21 @@ function PrevStepButton({ sessionId }: { sessionId: string }) {
   );
 }
 
-function TransitionButton({
-  session,
-  t,
-  label,
-}: {
-  session: ExamSession;
-  t: Transition;
-  /** 버튼 글자 (없으면 단계 이름) */ label?: string;
-}) {
+function TransitionButton({ session, t, label }: { session: ExamSession; t: Transition; /** 버튼 글자 (없으면 단계 이름) */ label?: string }) {
   const [asking, setAsking] = useState(false);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const backward =
-    t.to === "DRAFT" ||
-    t.to === "AUTO_ASSIGNED" ||
-    t.to === "REVIEW" ||
-    (session.status === "LOCKED" && t.to === "CONFIRMED");
+    t.to === 'DRAFT' || t.to === 'AUTO_ASSIGNED' || t.to === 'REVIEW' || (session.status === 'LOCKED' && t.to === 'CONFIRMED');
 
   const run = async () => {
     setBusy(true);
     setError(null);
     try {
-      await callTransitionSession({
-        sessionId: session.id,
-        to: t.to,
-        reason: reason.trim() || undefined,
-      });
+      await callTransitionSession({ sessionId: session.id, to: t.to, reason: reason.trim() || undefined });
       setAsking(false);
-      setReason("");
+      setReason('');
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -345,10 +211,7 @@ function TransitionButton({
 
   if (!asking) {
     return (
-      <Button
-        variant={backward ? "secondary" : "primary"}
-        onClick={() => setAsking(true)}
-      >
+      <Button variant={backward ? 'secondary' : 'primary'} onClick={() => setAsking(true)}>
         {label ?? t.label}
       </Button>
     );
@@ -357,18 +220,13 @@ function TransitionButton({
   return (
     <Card className="w-full">
       <p className="font-semibold">
-        "{STATUS_LABEL[session.status]}" → "{STATUS_LABEL[t.to]}"(으)로
-        바꿀까요?
+        "{STATUS_LABEL[session.status]}" → "{STATUS_LABEL[t.to]}"(으)로 바꿀까요?
       </p>
-      {t.to === "CONFIRMED" && session.status !== "LOCKED" && (
-        <p className="mt-1 text-muted">
-          확정하면 이번 배정의 업무점수가 교사별 누적 점수에 반영됩니다.
-        </p>
+      {t.to === 'CONFIRMED' && session.status !== 'LOCKED' && (
+        <p className="mt-1 text-muted">확정하면 이번 배정의 업무점수가 교사별 누적 점수에 반영됩니다.</p>
       )}
       <label className="mt-3 flex flex-col gap-1.5">
-        <span className="font-semibold">
-          사유 {t.requiresReason ? "(필수)" : "(선택)"}
-        </span>
+        <span className="font-semibold">사유 {t.requiresReason ? '(필수)' : '(선택)'}</span>
         <textarea
           className="min-h-20 rounded-xl border border-line px-4 py-3 outline-none focus:border-primary"
           value={reason}
@@ -381,17 +239,10 @@ function TransitionButton({
         </div>
       )}
       <div className="mt-3 flex gap-2">
-        <Button
-          onClick={() => void run()}
-          disabled={busy || (t.requiresReason && !reason.trim())}
-        >
-          {busy ? "처리 중…" : "확인"}
+        <Button onClick={() => void run()} disabled={busy || (t.requiresReason && !reason.trim())}>
+          {busy ? '처리 중…' : '확인'}
         </Button>
-        <Button
-          variant="secondary"
-          onClick={() => setAsking(false)}
-          disabled={busy}
-        >
+        <Button variant="secondary" onClick={() => setAsking(false)} disabled={busy}>
           취소
         </Button>
       </div>
@@ -413,10 +264,7 @@ export function SessionOverview() {
     setSaving(true);
     setError(null);
     try {
-      await updateSessionSettings(session.id, {
-        ...session.settings,
-        useBaseTimetable: v,
-      });
+      await updateSessionSettings(session.id, { ...session.settings, useBaseTimetable: v });
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -424,14 +272,11 @@ export function SessionOverview() {
     }
   };
 
-  const saveSetting = async (patch: Partial<ExamSession["settings"]>) => {
+  const saveSetting = async (patch: Partial<ExamSession['settings']>) => {
     setSaving(true);
     setError(null);
     try {
-      await updateSessionSettings(session.id, {
-        ...session.settings,
-        ...patch,
-      });
+      await updateSessionSettings(session.id, { ...session.settings, ...patch });
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -443,10 +288,7 @@ export function SessionOverview() {
     setSaving(true);
     setError(null);
     try {
-      await updateSessionSettings(session.id, {
-        ...session.settings,
-        examWriter: v,
-      });
+      await updateSessionSettings(session.id, { ...session.settings, examWriter: v });
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -461,22 +303,15 @@ export function SessionOverview() {
           현재 상태 <StatusBadge status={session.status} />
         </h2>
         {session.lastChangeReason && (
-          <p className="mt-3 text-sm text-muted">
-            최근 변경 사유: {session.lastChangeReason}
-          </p>
+          <p className="mt-3 text-sm text-muted">최근 변경 사유: {session.lastChangeReason}</p>
         )}
         <div className="mt-5 flex flex-wrap gap-2">
-          {TRANSITIONS[session.status]
-            .filter((t) => t.to !== "SWAP")
-            .map((t) => (
-              // 교환은 공개 중 언제나 가능하므로 "교환 기간 시작" 단계는 버튼으로 보이지 않는다
-              <TransitionButton key={t.to} session={session} t={t} />
-            ))}
+          {TRANSITIONS[session.status].filter((t) => t.to !== 'SWAP').map((t) => (
+            // 교환은 공개 중 언제나 가능하므로 "교환 기간 시작" 단계는 버튼으로 보이지 않는다
+            <TransitionButton key={t.to} session={session} t={t} />
+          ))}
           <PrevStepButton sessionId={session.id} />
-          <Link
-            to="history"
-            className="inline-flex min-h-12 items-center px-3 font-semibold text-primary-strong underline-offset-4 hover:underline"
-          >
+          <Link to="history" className="inline-flex min-h-12 items-center px-3 font-semibold text-primary-strong underline-offset-4 hover:underline">
             작업 기록·되돌리기 →
           </Link>
         </div>
@@ -513,7 +348,7 @@ export function SessionOverview() {
           <select
             aria-label="출제 교사 규칙"
             className="min-h-12 rounded-xl border border-line bg-surface px-3 disabled:bg-bg"
-            value={session.settings.examWriter ?? "NONE"}
+            value={session.settings.examWriter ?? 'NONE'}
             disabled={!editable || saving}
             onChange={(e) => void saveWriter(e.target.value as ExamWriterRule)}
           >
@@ -523,16 +358,9 @@ export function SessionOverview() {
               </option>
             ))}
           </select>
-          <span className="text-sm text-muted">
-            담당 교과가 시험 과목과 같은 교사를 출제 교사로 봅니다. 시험 중 문항
-            질의에 대응하도록 복도 대기를 맡깁니다.
-          </span>
+          <span className="text-sm text-muted">담당 교과가 시험 과목과 같은 교사를 출제 교사로 봅니다. 시험 중 문항 질의에 대응하도록 복도 대기를 맡깁니다.</span>
         </label>
-        {!editable && (
-          <p className="mt-2 text-sm text-muted">
-            교사 공개 이후에는 설정을 바꿀 수 없습니다.
-          </p>
-        )}
+        {!editable && <p className="mt-2 text-sm text-muted">교사 공개 이후에는 설정을 바꿀 수 없습니다.</p>}
         {error && (
           <div className="mt-3">
             <Alert>{error}</Alert>

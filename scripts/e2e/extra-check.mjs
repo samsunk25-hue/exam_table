@@ -69,16 +69,16 @@ check('칸에 "감독 없음" 표시, 미배정으로 세지 않음', !(await A.
 
 // 교시 시간 자동 계산 (1교시 시작·시험 시간·쉬는 시간)
 await go(A.page, `/admin/sessions/${SID}/schedule`);
-// 시험이 있으면 교시 시간이 미리 채워져 접혀 있으므로 연다
-await A.page.getByRole('button', { name: '시간 설정' }).click({ timeout: 8000 }).catch(() => {});
-const bar = A.page.getByText('1교시 시작만 넣으면').locator('..');
+await A.page.getByRole('button', { name: '시험 시간표 표로 입력' }).click();
+const gridDlg = A.page.getByRole('dialog', { name: '시험 시간표 표로 입력' });
+const bar = gridDlg.getByText('1교시 시작만 넣으면').locator('..');
 await bar.getByLabel('시험 시간 (분)').fill('50');
 await bar.getByLabel('쉬는 시간 (분)').fill('10');
 await bar.locator('button[aria-haspopup]').first().click();
 const clock = A.page.getByRole('dialog', { name: '1교시 시작 선택' });
 await clock.getByRole('button', { name: '9', exact: true }).first().click();
 await clock.getByRole('button', { name: '00', exact: true }).last().click();
-const text = await A.page.locator('main').innerText();
+const text = await gridDlg.innerText();
 check('1교시 시작만 넣으면 나머지 교시 자동 (2교시 10:00~10:50)', text.includes('10:00') && text.includes('10:50') && text.includes('11:00') && text.includes('11:50'));
 await A.page.screenshot({ path: 'scripts/e2e/out/extra-periods.png', fullPage: true });
 check('콘솔 오류 없음', A.errors.length === 0, A.errors.join(' / '));

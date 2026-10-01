@@ -32,18 +32,27 @@ for (const g of [1, 2]) {
 const { browser, page, errors } = await openApp();
 await go(page, `/admin/sessions/${SID}/schedule`);
 
-// 1. 교시별 기본 시간: 시험 시간 45분 · 쉬는 시간 15분 · 1교시 시작 9:00 → 모든 교시 자동
-const bar = page.getByText('1교시 시작만 넣으면').locator('..');
+// 1. 교시 시간은 표 입력 팝업에서: 시험 시간 45분 · 쉬는 시간 15분 · 1교시 시작 9:00 → 모든 교시 자동
+check('따로 있던 "교시별 기본 시간" 카드 없음', (await page.getByRole('heading', { name: '교시별 기본 시간' }).count()) === 0);
+await page.getByRole('button', { name: '시험 시간표 표로 입력' }).click();
+const timeDlg = page.getByRole('dialog', { name: '시험 시간표 표로 입력' });
+const bar = timeDlg.getByText('1교시 시작만 넣으면').locator('..');
 await bar.getByLabel('시험 시간 (분)').fill('45');
 await bar.getByLabel('쉬는 시간 (분)').fill('15');
 await bar.locator('button[aria-haspopup]').first().click();
 await page.getByRole('dialog', { name: '1교시 시작 선택' }).getByRole('button', { name: '9', exact: true }).first().click();
 await page.getByRole('dialog', { name: '1교시 시작 선택' }).getByRole('button', { name: '00', exact: true }).last().click();
-const card = await page.locator('main').innerText();
+const card = await timeDlg.innerText();
 check('시계로 1교시 시작 → 모든 교시 자동', ['09:00', '09:45', '10:00', '10:45', '11:00', '11:45'].every((t) => card.includes(t)));
-await page.getByRole('button', { name: '저장', exact: true }).click();
-await page.getByRole('status').filter({ hasText: '교시별 기본 시간을 저장했습니다' }).last().waitFor();
-check('교시별 기본 시간 저장', true);
+// 교시 추가: 쉬는 시간 15분을 알아서 이어 붙인다
+await timeDlg.getByRole('button', { name: '+ 교시 추가' }).click();
+await timeDlg.getByRole('button', { name: '+ 교시 추가' }).click();
+const card2 = await timeDlg.innerText();
+check('쉬는 시간으로 나머지 교시 자동 계산 (+교시 추가)', ['12:00', '12:45', '13:00', '13:45'].every((t) => card2.includes(t)));
+// 저장된 교시 시간은 시험 추가 때 쓰이므로 여기서는 설정에 직접 넣는다 (표 저장은 grid-check에서 점검)
+await timeDlg.getByRole('button', { name: '닫기' }).first().click().catch(() => {});
+await page.keyboard.press('Escape');
+await db.doc(`sessions/${SID}`).set({ settings: { periodTimes: { 1: { start: '09:00', end: '09:45' }, 2: { start: '10:00', end: '10:45' }, 3: { start: '11:00', end: '11:45' } } } }, { merge: true });
 
 // 2. 달력에서 10월 12일 선택 → 시험 추가
 await page.getByRole('button', { name: /^10월 12일/ }).click();
@@ -64,20 +73,6 @@ await page.screenshot({ path: `${OUT}/schedule-after.png`, fullPage: true });
 const slots = await db.collection(`sessions/${SID}/slots`).get();
 const s1 = slots.docs.find((d) => d.id === '2026-10-12_1_1');
 check('저장된 시험 (시간·자동 배치)', slots.size === 2 && s1?.get('startTime') === '09:00' && s1?.get('rooms').some((p) => p.roomId === 'SC1'), slots.docs.map((d) => `${d.id}:${d.get('subject')}`).join(', '));
-
-// 3. 쉬는 시간 15분 → 1교시 기준 자동 계산 → 교시 추가도 자동
-await page.getByRole('button', { name: '시간 설정' }).click();
-await page.getByRole('button', { name: '+ 교시 추가' }).click(); // 쉬는 시간 15분을 알아서 이어 붙인다
-await page.getByRole('button', { name: '저장', exact: true }).click();
-await page.getByRole('status').filter({ hasText: '교시별 기본 시간을 저장했습니다' }).last().waitFor();
-const want = '10:00~10:45 11:00~11:45 12:00~12:45 13:00~13:45';
-let got = '';
-for (let i = 0; i < 50 && got !== want; i++) {
-  const pt = (await db.doc(`sessions/${SID}`).get()).get('settings.periodTimes');
-  got = [2, 3, 4, 5].map((p) => `${pt?.[p]?.start}~${pt?.[p]?.end}`).join(' ');
-  if (got !== want) await new Promise((r) => setTimeout(r, 300));
-}
-check('쉬는 시간으로 나머지 교시 자동 계산 (+교시 추가)', got === want, got);
 
 // 4. 여러 교시 동시 선택: 표(가로 교시, 세로 학년)에 입력
 await page.getByRole('button', { name: /^10월 13일/ }).click();
@@ -105,10 +100,10 @@ await page.getByRole('button', { name: /^10월 21일/ }).click();
 await page.getByText('4일 (주말 제외)').waitFor();
 await page.screenshot({ path: `${OUT}/schedule-range.png`, fullPage: true });
 await page.getByRole('button', { name: '이 기간 시험 시간표 표로 입력' }).click();
-const grid = page.getByRole('dialog', { name: '시험 시간표 표로 입력' });
-const gtext = await grid.innerText();
+const gridDlg = page.getByRole('dialog', { name: '시험 시간표 표로 입력' });
+const gtext = await gridDlg.innerText();
 check('기간 선택 → 표 입력에 날짜 4일', ['10월 16일', '10월 19일', '10월 20일', '10월 21일'].every((d) => gtext.includes(d)) && !gtext.includes('10월 17일'));
-await grid.getByRole('button', { name: '닫기' }).first().click();
+await gridDlg.getByRole('button', { name: '닫기' }).first().click();
 check('콘솔 오류 없음', errors.length === 0, errors.join(' / '));
 await browser.close();
 process.exit(failures ? 1 : 0);

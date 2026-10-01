@@ -25,89 +25,6 @@ type Slot = WithId<SlotDoc>;
 const MAX_PERIOD = 10;
 
 /** 교시별 기본 시간: 한 번 정하면 시험 추가 때 자동으로 채운다 */
-function PeriodTimesCard({ session, editable, slots }: { session: ExamSession; editable: boolean; slots: Slot[] }) {
-  // 저장된 기본 시간이 없으면 이미 넣은 시험 일정의 시각으로 채운다 (통합 양식으로 올린 경우 등)
-  const saved = Object.keys(session.settings.periodTimes ?? {}).length ? session.settings.periodTimes! : periodTimesFromSlots(slots);
-  const [times, setTimes] = useState<Record<string, PeriodTime>>(saved);
-  const [count, setCount] = useState(Math.max(4, ...Object.keys(saved).map(Number)));
-  const [open, setOpen] = useState(Object.keys(saved).length === 0);
-  const [busy, setBusy] = useState(false);
-  const set = (p: number, patch: Partial<PeriodTime>) => setTimes({ ...times, [p]: { start: '', end: '', ...times[p], ...patch } });
-  const addPeriod = () => {
-    setTimes(withAddedPeriod(times, count, guessBreak(times)));
-    setCount(count + 1);
-  };
-
-  const save = async () => {
-    const bad = Object.entries(times).find(([, t]) => t.start && t.end && t.start >= t.end);
-    if (bad) return toast(`${bad[0]}교시: 종료 시각이 시작보다 빠릅니다.`, 'alert');
-    setBusy(true);
-    try {
-      const clean = Object.fromEntries(Object.entries(times).filter(([p, t]) => Number(p) <= count && (t.start || t.end)));
-      await updateSessionSettings(session.id, { ...session.settings, periodTimes: clean });
-      toast('교시별 기본 시간을 저장했습니다.');
-      setOpen(false);
-    } catch (e) {
-      toast(errorMessage(e), 'alert');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const summary = Object.entries(saved)
-    .sort(([a], [b]) => Number(a) - Number(b))
-    .map(([p, t]) => `${p}교시 ${t.start}~${t.end}`)
-    .join(' · ');
-
-  return (
-    <Card>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-lg font-bold">교시별 기본 시간</h2>
-          <p className="text-muted">{summary || '교시마다 시작·종료 시각을 정해 두면 시험을 추가할 때 자동으로 채워집니다.'}</p>
-        </div>
-        {!open && editable && (
-          <Button variant="secondary" onClick={() => setOpen(true)}>
-            시간 설정
-          </Button>
-        )}
-      </div>
-      {open && editable && (
-        <div className="mt-4 grid gap-3">
-          <BreakTimeBar times={times} count={count} onChange={setTimes} />
-          {Array.from({ length: count }, (_, i) => i + 1).map((p) => (
-            <div key={p} className="grid grid-cols-[4rem_1fr_1fr] items-end gap-3">
-              <span className="pb-3 text-lg font-bold">{p}교시</span>
-              <ClockTimePicker label="시작" value={times[p]?.start ?? ''} onChange={(v) => set(p, { start: v })} />
-              <ClockTimePicker label="종료" value={times[p]?.end ?? ''} onChange={(v) => set(p, { end: v })} />
-            </div>
-          ))}
-          <div className="flex flex-wrap gap-2">
-            {count < MAX_PERIOD && (
-              <Button variant="ghost" onClick={addPeriod}>
-                + 교시 추가
-              </Button>
-            )}
-            {count > 1 && (
-              <Button variant="ghost" onClick={() => setCount(count - 1)}>
-                − 마지막 교시 빼기
-              </Button>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={() => void save()} disabled={busy}>
-              저장
-            </Button>
-            <Button variant="secondary" onClick={() => (setTimes(saved), setOpen(false))} disabled={busy}>
-              취소
-            </Button>
-          </div>
-        </div>
-      )}
-    </Card>
-  );
-}
-
 interface GradeRow {
   on: boolean;
   /** 교시 → 과목 ("자습"이면 자습 시간) */
@@ -533,8 +450,6 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
         </Card>
       </div>
 
-      {/* 날짜를 먼저 고른 뒤 교시 시간 */}
-      <PeriodTimesCard session={session} editable={editable} slots={slots.data} />
 
       {importing && <ScheduleImportDialog session={session} slots={slots.data} rooms={rooms.data} onClose={() => setImporting(false)} />}
       {grid && <ExamGridEditor session={session} slots={slots.data} rooms={rooms.data} initialDates={grid.dates} onClose={() => setGrid(null)} />}

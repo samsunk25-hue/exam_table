@@ -59,3 +59,33 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/* 메뉴 오른쪽 동물 행진 (AnimalParade) */
+.animal-walker {
+  position: absolute;
+  bottom: 0.35rem;
+  left: 0;
+  font-size: 1.6rem;
+  line-height: 1;
+  animation-name: animal-walk;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.animal-hop {
+  display: inline-block;
+  animation-name: animal-hop;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+@keyframes animal-walk {
+  /* 오른쪽으로 갈 때는 좌우를 뒤집어 진행 방향을 보게 한다 */
+  0% { left: 0; transform: scaleX(-1); }
+  49.9% { left: calc(100% - 2rem); transform: scaleX(-1); }
+  50% { left: calc(100% - 2rem); transform: scaleX(1); }
+  100% { left: 0; transform: scaleX(1); }
+}
+@keyframes animal-hop {
+  from { transform: translateY(0); }
+  to { transform: translateY(-0.4rem); }
+}

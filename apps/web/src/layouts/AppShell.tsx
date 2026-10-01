@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router';
 import { useAuth } from '@/auth/AuthProvider';
+import { AnimalParade } from '@/components/AnimalParade';
 import { AppTitle, HeroImage } from '@/components/Brand';
 import { NotificationBell } from '@/components/NotificationBell';
 import { Button } from '@/components/ui';
@@ -53,6 +54,7 @@ export function AppShell({ nav, modeLabel }: { nav: NavItem[]; modeLabel: string
               {item.label}
             </NavLink>
           ))}
+          <AnimalParade />
         </nav>
       </header>
       <main className="mx-auto max-w-[1440px] px-4 py-6 lg:px-8">

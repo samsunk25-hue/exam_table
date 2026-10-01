@@ -15,6 +15,7 @@ import { toast } from '@/components/Toast';
 import { Alert, Button, Card, Select, Spinner, Table, Td } from '@/components/ui';
 import { cellKey, deleteAvailability, reviewAvailability, sortAvailability, submitAvailability, type Availability } from '@/lib/availability';
 import { useCollection } from '@/lib/data';
+import { termWhere } from '@/lib/sessions';
 import { errorMessage } from '@/lib/firebase';
 import { useCurrentSession } from './SessionPage';
 
@@ -273,8 +274,8 @@ export function SessionAvailabilityPage() {
   const session = useCurrentSession();
   const sid = session.id;
   const slots = useCollection<SlotDoc>(`sessions/${sid}/slots`);
-  const rooms = useCollection<RoomDoc>('rooms');
-  const teachers = useCollection<TeacherDoc>('teachers');
+  const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
+  const teachers = useCollection<TeacherDoc>('teachers', termWhere(session));
   const availability = useCollection<AvailabilityDoc>(`sessions/${sid}/availability`);
 
   const nameById = useMemo(() => new Map(teachers.data.map((t) => [t.id, t.name])), [teachers.data]);

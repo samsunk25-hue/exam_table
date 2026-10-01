@@ -10,7 +10,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import type { SessionStatus } from '@sim/shared';
+import { sessionTerm, termKey, type SessionStatus } from '@sim/shared';
 import { auth, db } from './firebase';
 
 export interface PeriodTime {
@@ -101,4 +101,9 @@ export function useSession(id: string | undefined): Live<ExamSession | null> {
 
 export function sessionTitle(s: Pick<ExamSession, 'year' | 'semester' | 'examName'>): string {
   return `${s.year}학년도 ${s.semester}학기 ${s.examName}`;
+}
+
+/** 이 세션 학교·학기의 교사·시험실만 구독할 때: useCollection('teachers', termWhere(session)) */
+export function termWhere(s: Pick<ExamSession, 'schoolName' | 'year' | 'semester'>): [string, string] {
+  return ['term', termKey(sessionTerm(s))];
 }

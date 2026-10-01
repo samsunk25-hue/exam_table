@@ -1,5 +1,5 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
-import { nextId, type AccessRequestDoc } from '@sim/shared';
+import { nextId, sessionTerm, termFields, type AccessRequestDoc } from '@sim/shared';
 import { db, requireAdmin, serverTimestamp } from './common';
 import { refreshUserRole } from './admins';
 
@@ -26,8 +26,14 @@ export const reviewAccessRequest = onCall(async (req) => {
   }
 
   if (r.kind === 'TEACHER') {
-    const teachers = await db().collection('teachers').get();
-    const existing = teachers.docs.find((d) => d.get('email') === r.email);
+    // 가장 최근 시험 프로젝트의 학교·학기 명단에 넣는다
+    const [teachers, latest] = await Promise.all([
+      db().collection('teachers').get(),
+      db().collection('sessions').orderBy('createdAt', 'desc').limit(1).get(),
+    ]);
+    const s = latest.docs[0];
+    const term = s ? termFields(sessionTerm({ schoolName: s.get('schoolName') as string, year: s.get('year') as number, semester: s.get('semester') as number })) : {};
+    const existing = teachers.docs.find((d) => d.get('email') === r.email && (!s || d.get('term') === (term as { term?: string }).term));
     if (existing) {
       await existing.ref.set({ active: true, updatedBy: reviewer, updatedAt: serverTimestamp() }, { merge: true });
     } else {
@@ -40,6 +46,7 @@ export const reviewAccessRequest = onCall(async (req) => {
         defaultRole: 'NORMAL',
         active: true,
         cumulativeLoad: 0,
+        ...term,
         updatedBy: reviewer,
         updatedAt: serverTimestamp(),
       });

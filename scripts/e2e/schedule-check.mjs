@@ -9,6 +9,7 @@ const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 initializeApp({ projectId: 'smart-invigilation' });
 const db = getFirestore();
+const TERM = { term: '점검중학교|2026|2', school: '점검중학교', year: 2026, semester: 2 }; // 학교·학기 명단
 
 const OUT = 'scripts/e2e/out';
 mkdirSync(OUT, { recursive: true });
@@ -22,10 +23,10 @@ const SID = 'E2E_SCHED';
 await db.recursiveDelete(db.doc(`sessions/${SID}`));
 await db.doc(`sessions/${SID}`).set({
   schoolName: '점검중학교', year: 2026, semester: 2, examName: '일정 점검', status: 'DRAFT',
-  settings: { useBaseTimetable: false }, createdAt: new Date(Date.now() + 60_000), updatedBy: 'seed',
+  settings: { useBaseTimetable: false }, createdAt: new Date(Date.now() + 60_000), ...TERM, updatedBy: 'seed',
 });
 for (const g of [1, 2]) {
-  await db.doc(`rooms/SC${g}`).set({ name: `S${g}-1`, spaceType: 'CLASSROOM', grade: g, classNo: 1, chiefCount: 1, assistantCount: 0, updatedBy: 'seed' });
+  await db.doc(`rooms/SC${g}`).set({ name: `S${g}-1`, spaceType: 'CLASSROOM', grade: g, classNo: 1, chiefCount: 1, assistantCount: 0, ...TERM, updatedBy: 'seed' });
 }
 
 const { browser, page, errors } = await openApp();

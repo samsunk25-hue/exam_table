@@ -5,7 +5,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { FullTimetable, PersonalTimetable } from '@/components/TimetableViews';
 import { Alert, Button, Card, DownloadButton, PageTitle, Spinner } from '@/components/ui';
 import { useCollection } from '@/lib/data';
-import { sessionTitle, useSessions, type ExamSession } from '@/lib/sessions';
+import { sessionTitle, useSessions, type ExamSession, termWhere } from '@/lib/sessions';
 import { downloadCalendar, downloadFullTimetable, downloadPersonalTimetable, dutiesOf, type TimetableData } from '@/lib/timetable';
 
 /** 시험 일정이 나왔으면 불가 시간 제출로 안내 */
@@ -32,8 +32,8 @@ function AvailabilityCallout({ session }: { session: ExamSession }) {
 function PublishedSchedule({ session, teacherId }: { session: ExamSession; teacherId: string }) {
   const sid = session.id;
   const slots = useCollection<SlotDoc>(`sessions/${sid}/slots`);
-  const rooms = useCollection<RoomDoc>('rooms');
-  const teachers = useCollection<TeacherDoc>('teachers');
+  const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
+  const teachers = useCollection<TeacherDoc>('teachers', termWhere(session));
   const assignments = useCollection<AssignmentDoc>(`sessions/${sid}/assignments`);
   const [view, setView] = useState<'mine' | 'full'>('mine');
 

@@ -29,7 +29,7 @@ import { toast } from '@/components/Toast';
 import { Alert, Button, Card, Select, Spinner, Table, Td } from '@/components/ui';
 import { useCollection } from '@/lib/data';
 import { callApplyChanges, errorMessage } from '@/lib/firebase';
-import type { ExamSession } from '@/lib/sessions';
+import { termWhere, type ExamSession } from '@/lib/sessions';
 import { sortRooms } from './RoomsPage';
 import { useCurrentSession } from './SessionPage';
 
@@ -228,8 +228,8 @@ export function SessionEditorPage() {
   const session = useCurrentSession();
   const sid = session.id;
   const slots = useCollection<SlotDoc>(`sessions/${sid}/slots`);
-  const rooms = useCollection<RoomDoc>('rooms');
-  const teachers = useCollection<TeacherDoc>('teachers');
+  const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
+  const teachers = useCollection<TeacherDoc>('teachers', termWhere(session));
   const assignments = useCollection<AssignmentDoc>(`sessions/${sid}/assignments`);
   const availability = useCollection<AvailabilityDoc>(`sessions/${sid}/availability`);
   const constraints = useCollection<ConstraintDoc>(`sessions/${sid}/constraints`);

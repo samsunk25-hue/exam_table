@@ -10,6 +10,7 @@ const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 initializeApp({ projectId: 'smart-invigilation' });
 const db = getFirestore();
+const TERM = { term: '점검중학교|2026|2', school: '점검중학교', year: 2026, semester: 2 }; // 학교·학기 명단
 
 const OUT = 'scripts/e2e/out';
 mkdirSync(OUT, { recursive: true });
@@ -27,22 +28,22 @@ const batch = db.batch();
 for (let i = 1; i <= 16; i++) {
   batch.set(db.doc(`teachers/A${String(i).padStart(3, '0')}`), {
     name: `교사${i}`, email: null, subject: subjects[i % 4], homeroom: i <= 6 ? { grade: Math.ceil(i / 3), classNo: ((i - 1) % 3) + 1 } : null,
-    defaultRole: i > 14 ? 'HALLWAY' : 'NORMAL', active: true, cumulativeLoad: i % 3, updatedBy: 'seed',
+    defaultRole: i > 14 ? 'HALLWAY' : 'NORMAL', active: true, cumulativeLoad: i % 3, ...TERM, updatedBy: 'seed',
   });
 }
 const roomIds = [];
 for (const g of [1, 2]) {
   for (const c of [1, 2, 3]) {
     roomIds.push([`EA${g}${c}`, g, c]);
-    batch.set(db.doc(`rooms/EA${g}${c}`), { name: `E${g}-${c}`, spaceType: 'CLASSROOM', grade: g, classNo: c, chiefCount: 1, assistantCount: 0, updatedBy: 'seed' });
+    batch.set(db.doc(`rooms/EA${g}${c}`), { name: `E${g}-${c}`, spaceType: 'CLASSROOM', grade: g, classNo: c, chiefCount: 1, assistantCount: 0, ...TERM, updatedBy: 'seed' });
   }
   roomIds.push([`EH${g}`, g, null]);
-  batch.set(db.doc(`rooms/EH${g}`), { name: `E${g}학년 복도`, spaceType: 'HALLWAY', grade: g, classNo: null, chiefCount: 1, assistantCount: 0, updatedBy: 'seed' });
+  batch.set(db.doc(`rooms/EH${g}`), { name: `E${g}학년 복도`, spaceType: 'HALLWAY', grade: g, classNo: null, chiefCount: 1, assistantCount: 0, ...TERM, updatedBy: 'seed' });
 }
 await batch.commit();
 await db.doc(`sessions/${SID}`).set({
   schoolName: '점검중학교', year: 2026, semester: 2, examName: '자동배정 점검', status: 'DRAFT',
-  settings: { useBaseTimetable: false }, createdAt: new Date(), updatedBy: 'seed',
+  settings: { useBaseTimetable: false }, createdAt: new Date(), ...TERM, updatedBy: 'seed',
 });
 for (const date of ['2026-10-12', '2026-10-13']) {
   for (const period of [1, 2]) {
@@ -50,7 +51,7 @@ for (const date of ['2026-10-12', '2026-10-13']) {
       await db.doc(`sessions/${SID}/slots/${date}_${period}_${grade}`).set({
         date, period, startTime: null, endTime: null, grade, subject: subjects[(period + grade) % 4], type: 'EXAM',
         rooms: roomIds.filter(([, g]) => g === grade).map(([roomId, , c]) => ({ roomId, classNo: c, headcount: null, roomType: 'NORMAL' })),
-        updatedBy: 'seed',
+        ...TERM, updatedBy: 'seed',
       });
     }
   }

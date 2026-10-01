@@ -8,6 +8,7 @@ const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 initializeApp({ projectId: 'smart-invigilation' });
 const db = getFirestore();
+const TERM = { term: '불러오기중학교|2026|2', school: '불러오기중학교', year: 2026, semester: 2 }; // 학교·학기 명단
 
 let failures = 0;
 const check = (label, ok, detail = '') => {
@@ -18,8 +19,8 @@ const check = (label, ok, detail = '') => {
 const SRC = 'E2E_IMP_SRC';
 const DST = 'E2E_IMP_DST';
 for (const id of [SRC, DST]) await db.recursiveDelete(db.doc(`sessions/${id}`));
-await db.doc('rooms/IMP1').set({ name: 'I1-1', spaceType: 'CLASSROOM', grade: 1, classNo: 1, chiefCount: 1, assistantCount: 0, updatedBy: 'seed' });
-const base = { schoolName: '불러오기중학교', year: 2026, semester: 2, status: 'DRAFT', settings: { useBaseTimetable: false }, updatedBy: 'seed' };
+await db.doc('rooms/IMP1').set({ name: 'I1-1', spaceType: 'CLASSROOM', grade: 1, classNo: 1, chiefCount: 1, assistantCount: 0, ...TERM, updatedBy: 'seed' });
+const base = { schoolName: '불러오기중학교', year: 2026, semester: 2, status: 'DRAFT', settings: { useBaseTimetable: false }, ...TERM, updatedBy: 'seed' };
 await db.doc(`sessions/${SRC}`).set({ ...base, examName: '원본 시험', createdAt: new Date(), settings: { useBaseTimetable: false, periodTimes: { 1: { start: '09:00', end: '09:45' } } } });
 await db.doc(`sessions/${DST}`).set({ ...base, examName: '새 시험', createdAt: new Date(Date.now() + 1000) });
 const slot = (date, period, grade, subject, type, rooms) => ({ date, period, startTime: '09:00', endTime: '09:45', grade, subject, type, rooms });

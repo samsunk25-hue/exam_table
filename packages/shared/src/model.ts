@@ -5,6 +5,33 @@ export type SpaceType = 'CLASSROOM' | 'SEPARATE' | 'HALLWAY';
 export type SlotType = 'EXAM' | 'STUDY';
 export type PlacementRoomType = 'NORMAL' | 'EXTENDED' | 'SPECIAL';
 
+/**
+ * 학교·학기 구분 (교사·시험실 명단은 학기마다 따로 저장한다).
+ * term = `${school}|${year}|${semester}` — 같은 학기 명단을 조회할 때 쓴다.
+ */
+export interface TermFields {
+  term: string;
+  school: string;
+  year: number;
+  semester: number;
+}
+
+export interface TermRef {
+  school: string;
+  year: number;
+  semester: number;
+}
+
+export const termKey = (t: TermRef) => `${t.school.trim()}|${t.year}|${t.semester}`;
+export const termFields = (t: TermRef): TermFields => ({ term: termKey(t), school: t.school.trim(), year: t.year, semester: t.semester });
+export const termLabel = (t: TermRef) => `${t.school} · ${t.year}학년도 ${t.semester}학기`;
+/** 세션(학교명·학년도·학기) → 학기 */
+export const sessionTerm = (s: { schoolName: string; year: number; semester: number }): TermRef => ({ school: s.schoolName, year: s.year, semester: s.semester });
+export function parseTermKey(key: string): TermRef | null {
+  const [school, year, semester] = key.split('|');
+  return school && Number(year) && Number(semester) ? { school, year: Number(year), semester: Number(semester) } : null;
+}
+
 export interface Homeroom {
   grade: number;
   classNo: number;
@@ -19,7 +46,13 @@ export interface TeacherDoc {
   homeroom: Homeroom | null;
   defaultRole: DefaultRole;
   active: boolean;
+  /** 같은 학년도 안의 누적 업무점수 (같은 학년도 학기에서 명단을 불러오면 이어받는다) */
   cumulativeLoad: number;
+  /** 소속 학교·학기. 없으면 예전(학기 미지정) 자료 */
+  term?: string;
+  school?: string;
+  year?: number;
+  semester?: number;
 }
 
 /** rooms/{roomId} */
@@ -32,6 +65,10 @@ export interface RoomDoc {
   classNo: number | null;
   chiefCount: number;
   assistantCount: number;
+  term?: string;
+  school?: string;
+  year?: number;
+  semester?: number;
 }
 
 /** 시험 1건에 배치된 시험실 (엔진의 Group에 해당, groupId = `${slotId}__${roomId}`) */

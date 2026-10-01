@@ -1,7 +1,8 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { SPACE_TYPE_LABEL, nextId, type RoomDoc, type SpaceType, type WithId } from '@sim/shared';
+import { SPACE_TYPE_LABEL, nextId, termFields, termLabel, type RoomDoc, type SpaceType, type TermRef, type WithId } from '@sim/shared';
 import { BundleHint } from '@/components/BundleHint';
 import { Modal } from '@/components/Modal';
+import { RosterImportDialog, TermPicker, useTermChoice } from '@/components/TermRoster';
 import { Alert, Button, Card, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
@@ -21,7 +22,19 @@ export function sortRooms<T extends RoomDoc>(list: T[]): T[] {
   );
 }
 
-function RoomForm({ room, all, onClose }: { room: Room | null; all: Room[]; onClose: () => void }) {
+function RoomForm({
+  room,
+  all,
+  takenIds,
+  term,
+  onClose,
+}: {
+  room: Room | null;
+  all: Room[];
+  takenIds: string[];
+  term: TermRef;
+  onClose: () => void;
+}) {
   const [f, setF] = useState({
     name: room?.name ?? '',
     // 새로 추가하는 것은 대부분 특별실 (교실·복도는 학급 수 설정으로 만든다)
@@ -58,8 +71,8 @@ function RoomForm({ room, all, onClose }: { room: Room | null; all: Room[]; onCl
     setError(null);
     const data: RoomDoc = { name, spaceType: f.spaceType, grade, classNo, chiefCount: chief, assistantCount: assistant };
     try {
-      const id = room?.id ?? nextId('R', all.map((r) => r.id))[0]!;
-      await commitOps([{ type: 'set', ref: ref('rooms', id), data: { ...data } }]);
+      const id = room?.id ?? nextId('R', takenIds)[0]!;
+      await commitOps([{ type: 'set', ref: ref('rooms', id), data: { ...data, ...termFields(term) } }]);
       onClose();
     } catch (err) {
       setError(errorMessage(err));
@@ -124,27 +137,57 @@ function RoomForm({ room, all, onClose }: { room: Room | null; all: Room[]; onCl
 }
 
 export function RoomsPage() {
-  const { data, loading, error } = useCollection<RoomDoc>('rooms');
+  const everyone = useCollection<RoomDoc>('rooms');
+  const { loading, error } = everyone;
+  const choice = useTermChoice(everyone.data);
+  // 선택한 학교·학기 시험실만 보여 준다
+  const data = useMemo(() => everyone.data.filter((r) => r.term === choice.key), [everyone.data, choice.key]);
+  const legacy = everyone.data.filter((r) => !r.term).length;
+  const takenIds = useMemo(() => everyone.data.map((r) => r.id), [everyone.data]);
   const [editing, setEditing] = useState<Room | 'new' | null>(null);
+  const [importing, setImporting] = useState(false);
   const rooms = useMemo(() => sortRooms(data), [data]);
   const seats = data.reduce((s, r) => s + r.chiefCount + r.assistantCount, 0);
 
   return (
     <>
-      <PageTitle sub={`시험실 ${data.length}개 · 한 교시에 필요한 감독 ${seats}명 (모든 시험실 사용 시)`}>시험실 관리</PageTitle>
+      <PageTitle sub={`${choice.current ? `${termLabel(choice.current)} · ` : ''}시험실 ${data.length}개 · 한 교시에 필요한 감독 ${seats}명 (모든 시험실 사용 시)`}>
+        시험실 관리
+      </PageTitle>
+
+      <TermPicker terms={choice.terms} value={choice.key} onChange={choice.choose} />
+      {!choice.loading && !choice.current && (
+        <div className="mb-4">
+          <Alert tone="info">먼저 대시보드에서 시험 프로젝트를 만드세요. 프로젝트의 학교·학기별로 시험실을 따로 관리합니다.</Alert>
+        </div>
+      )}
+      {legacy > 0 && choice.current && (
+        <div className="mb-4">
+          <Alert tone="info">학기가 지정되지 않은 예전 시험실 {legacy}개가 있습니다. "다른 학기에서 불러오기"로 이 학기에 넣을 수 있습니다.</Alert>
+        </div>
+      )}
 
       <BundleHint what="시험실 목록" />
 
-      {!loading && !error && <ClassroomSetupCard rooms={data} />}
+      {!loading && !error && choice.current && (
+        <ClassroomSetupCard key={choice.key} rooms={data} term={termFields(choice.current)} takenIds={takenIds} />
+      )}
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        <Button onClick={() => setEditing('new')}>+ 특별실 추가</Button>
-      </div>
+      {choice.current && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Button onClick={() => setEditing('new')}>+ 특별실 추가</Button>
+          <Button variant="secondary" onClick={() => setImporting(true)}>
+            다른 학기에서 불러오기
+          </Button>
+        </div>
+      )}
 
       <Card>
         {loading && <Spinner />}
         {error && <Alert>{error}</Alert>}
-        {!loading && data.length === 0 && <p className="py-6 text-muted">등록된 시험실이 없습니다. 위에서 학급 수를 입력해 교실을 만드세요.</p>}
+        {!loading && data.length === 0 && (
+          <p className="py-6 text-muted">이 학기에 등록된 시험실이 없습니다. 다른 학기에서 불러오거나 위에서 학급 수를 입력해 교실을 만드세요.</p>
+        )}
         {rooms.length > 0 && (
           <Table head={['실명', '공간유형', '학년', '반', '정감독', '부감독', '']}>
             {rooms.map((r) => (
@@ -166,7 +209,10 @@ export function RoomsPage() {
         )}
       </Card>
 
-      {editing && <RoomForm room={editing === 'new' ? null : editing} all={data} onClose={() => setEditing(null)} />}
+      {editing && choice.current && (
+        <RoomForm room={editing === 'new' ? null : editing} all={data} takenIds={takenIds} term={choice.current} onClose={() => setEditing(null)} />
+      )}
+      {importing && choice.current && <RosterImportDialog kind="rooms" target={choice.current} all={everyone.data} onClose={() => setImporting(false)} />}
     </>
   );
 }

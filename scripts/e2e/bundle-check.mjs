@@ -21,6 +21,7 @@ const check = (label, ok, detail = '') => {
   const { getFirestore } = require('firebase-admin/firestore');
   initializeApp({ projectId: 'smart-invigilation' });
   const db = getFirestore();
+const TERM = { term: '점검중학교|2026|2', school: '점검중학교', year: 2026, semester: 2 }; // 학교·학기 명단
   for (const col of ['teachers', 'rooms']) await db.recursiveDelete(db.collection(col));
   const seed = [
     ['T001', '김국어', 'kim@test.kr', '국어', { grade: 1, classNo: 1 }],
@@ -28,7 +29,7 @@ const check = (label, ok, detail = '') => {
     ['T003', '박영어', 'park@test.kr', '영어', null],
   ];
   for (const [id, name, email, subject, homeroom] of seed) {
-    await db.doc(`teachers/${id}`).set({ name, email, subject, homeroom, defaultRole: 'NORMAL', active: true, cumulativeLoad: 0, updatedBy: 'seed' });
+    await db.doc(`teachers/${id}`).set({ name, email, subject, homeroom, defaultRole: 'NORMAL', active: true, cumulativeLoad: 0, ...TERM, updatedBy: 'seed' });
   }
 }
 

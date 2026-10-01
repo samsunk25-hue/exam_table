@@ -17,6 +17,7 @@ import { dateLabel } from '@/components/AvailabilityGrid';
 import { toast } from '@/components/Toast';
 import { Alert, Button, Card, Spinner, Table, Td, Toggle } from '@/components/ui';
 import { useCollection } from '@/lib/data';
+import { termWhere } from '@/lib/sessions';
 import { callApplyRun, callRunAssignment, errorMessage } from '@/lib/firebase';
 import { sortRooms } from './RoomsPage';
 import { useCurrentSession } from './SessionPage';
@@ -177,8 +178,8 @@ export function SessionAssignPage() {
   const assignments = useCollection<AssignmentDoc>(`sessions/${sid}/assignments`);
   const availability = useCollection<AvailabilityDoc>(`sessions/${sid}/availability`);
   const slots = useCollection<SlotDoc>(`sessions/${sid}/slots`);
-  const rooms = useCollection<RoomDoc>('rooms');
-  const teachers = useCollection<TeacherDoc>('teachers');
+  const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
+  const teachers = useCollection<TeacherDoc>('teachers', termWhere(session));
   const [keepManual, setKeepManual] = useState(true);
   const [withScenarios, setWithScenarios] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);

@@ -12,6 +12,7 @@ const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 initializeApp({ projectId: 'smart-invigilation' });
 const db = getFirestore();
+const TERM = { term: '삭제중학교|2026|2', school: '삭제중학교', year: 2026, semester: 2 }; // 학교·학기 명단
 
 const OUT = 'scripts/e2e/out';
 mkdirSync(OUT, { recursive: true });
@@ -25,7 +26,7 @@ const check = (label, ok, detail = '') => {
 await db.recursiveDelete(db.collection('teachers'));
 for (const [i, name] of ['김국어1', '김국어2', '박영어1'].entries()) {
   await db.doc(`teachers/T90${i}`).set({
-    name, email: null, subject: null, homeroom: { grade: 1, classNo: i + 1 }, defaultRole: 'NORMAL', active: true, cumulativeLoad: 0, updatedBy: 'seed',
+    name, email: null, subject: null, homeroom: { grade: 1, classNo: i + 1 }, defaultRole: 'NORMAL', active: true, cumulativeLoad: 0, ...TERM, updatedBy: 'seed',
   });
 }
 

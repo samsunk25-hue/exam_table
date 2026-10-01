@@ -12,6 +12,8 @@ import {
   type SlotDoc,
   type TeacherDoc,
   type WithId,
+  sessionTerm,
+  termKey,
 } from '@sim/shared';
 import { db, requireAdmin, serverTimestamp } from './common';
 import type { QuerySnapshot, WriteBatch } from 'firebase-admin/firestore';
@@ -36,9 +38,12 @@ async function loadSession(sessionId: string) {
 
 export async function loadData(sessionId: string, useBaseTimetable: boolean) {
   const firestore = db();
+  // 이 세션 학교·학기의 교사·시험실만 쓴다
+  const session = (await firestore.doc(`sessions/${sessionId}`).get()).data() ?? {};
+  const term = termKey(sessionTerm(session as { schoolName: string; year: number; semester: number }));
   const [teachers, rooms, slots, availability, constraints, baseTimetable, assignments] = await Promise.all([
-    firestore.collection('teachers').get(),
-    firestore.collection('rooms').get(),
+    firestore.collection('teachers').where('term', '==', term).get(),
+    firestore.collection('rooms').where('term', '==', term).get(),
     firestore.collection(`sessions/${sessionId}/slots`).get(),
     firestore.collection(`sessions/${sessionId}/availability`).get(),
     firestore.collection(`sessions/${sessionId}/constraints`).get(),

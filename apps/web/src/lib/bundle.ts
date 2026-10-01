@@ -21,6 +21,7 @@ import {
   type SlotDoc,
   type TeacherDoc,
   type WithId,
+  type TermFields,
 } from '@sim/shared';
 import { commitOps, ref, type BatchOp } from './data';
 import { guideSheet, tableSheet, type OutSheet } from './xlsx';
@@ -165,7 +166,7 @@ export async function saveBundle(
   sid: string,
   plan: BundlePlan,
   ctx: BundleContext,
-  opts: { autoPlace: boolean; mode: SaveMode },
+  opts: { autoPlace: boolean; mode: SaveMode; term: TermFields },
 ): Promise<string[]> {
   const done: string[] = [];
   const slotPath = `sessions/${sid}/slots`;
@@ -192,7 +193,7 @@ export async function saveBundle(
       plan.teachers.map(({ id, isNew, ...data }) => ({
         type: 'set',
         ref: ref('teachers', id),
-        data: isNew ? { ...data, cumulativeLoad: 0 } : data,
+        data: isNew ? { ...data, ...opts.term, cumulativeLoad: 0 } : { ...data, ...opts.term },
         merge: !isNew,
       })),
     );
@@ -201,7 +202,7 @@ export async function saveBundle(
 
   const roomsAfter = new Map((replace ? ctx.rooms.filter((r) => !gone.rooms.includes(r)) : ctx.rooms).map((r) => [r.id, r]));
   if (plan.rooms.length) {
-    await commitOps(plan.rooms.map(({ id, isNew: _n, ...data }) => ({ type: 'set', ref: ref('rooms', id), data })));
+    await commitOps(plan.rooms.map(({ id, isNew: _n, ...data }) => ({ type: 'set', ref: ref('rooms', id), data: { ...data, ...opts.term } })));
     for (const { isNew: _n, ...r } of plan.rooms) roomsAfter.set(r.id, r);
     done.push(`시험실 ${plan.rooms.length}개 (신규 ${plan.rooms.filter((r) => r.isNew).length})`);
   }

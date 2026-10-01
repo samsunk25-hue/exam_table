@@ -55,6 +55,8 @@ export interface BundleContext {
   rooms: WithId<RoomDoc>[];
   slots: WithId<SlotDoc>[];
   useBaseTimetable: boolean;
+  /** 새 ID를 만들 때 피할 ID (다른 학기 명단 포함). 없으면 teachers/rooms의 ID */
+  takenIds?: string[];
   /** 시험 일정·기초시간표를 바꿀 수 있는 단계인지 */
   scheduleEditable: boolean;
 }
@@ -96,7 +98,7 @@ export function analyzeBundle(sheets: SheetRows[], ctx: BundleContext): BundleRe
       ? blocked(`필수 열이 없습니다: ${tSheet.missing.join(', ')}`)
       : parseTeachers(tSheet.data, tSheet.mapping, ctx.teachers, { takeover: plan.homeroomTakeovers });
     const vs = values(r);
-    const newIds = nextId('T', ctx.teachers.map((t) => t.id), vs.filter((v) => !v.id).length);
+    const newIds = nextId('T', ctx.takenIds ?? ctx.teachers.map((t) => t.id), vs.filter((v) => !v.id).length);
     let n = 0;
     plan.teachers = vs.map((v) => (v.id ? { ...v, id: v.id, isNew: false } : { ...v, id: newIds[n++]!, isNew: true }));
     const byId = new Map(teacherList.map((t) => [t.id, t]));
@@ -118,7 +120,7 @@ export function analyzeBundle(sheets: SheetRows[], ctx: BundleContext): BundleRe
       ? blocked(`필수 열이 없습니다: ${rSheet.missing.join(', ')}`)
       : parseRooms(rSheet.data, rSheet.mapping, roomList);
     const vs = values(r);
-    const newIds = nextId('R', ctx.rooms.map((x) => x.id), vs.filter((v) => !v.id).length);
+    const newIds = nextId('R', ctx.takenIds ?? ctx.rooms.map((x) => x.id), vs.filter((v) => !v.id).length);
     let n = 0;
     plan.rooms = vs.map((v) => (v.id ? { ...v, id: v.id, isNew: false } : { ...v, id: newIds[n++]!, isNew: true }));
     const byId = new Map(roomList.map((x) => [x.id, x]));

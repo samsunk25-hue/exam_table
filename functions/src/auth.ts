@@ -15,7 +15,7 @@ export async function lookupRole(email: string): Promise<{ role: UserRole; teach
   const firestore = db();
   const isBootstrap = bootstrapAdmins().includes(email);
   const [teacherSnap, adminSnap] = await Promise.all([
-    firestore.collection('teachers').where('email', '==', email).where('active', '==', true).limit(1).get(),
+    firestore.collection('teachers').where('email', '==', email).where('active', '==', true).get(),
     firestore.doc(`admins/${email}`).get(),
   ]);
 
@@ -28,7 +28,11 @@ export async function lookupRole(email: string): Promise<{ role: UserRole; teach
     });
   }
 
-  const teacherId = teacherSnap.docs[0]?.id ?? null;
+  // 학기마다 교사 문서가 따로 있으므로 가장 최근 학기 문서로 로그인한다
+  const latest = [...teacherSnap.docs].sort(
+    (a, b) => ((b.get('year') as number) ?? 0) - ((a.get('year') as number) ?? 0) || ((b.get('semester') as number) ?? 0) - ((a.get('semester') as number) ?? 0),
+  )[0];
+  const teacherId = latest?.id ?? null;
   return { role: resolveRole(isBootstrap || adminSnap.exists, teacherId), teacherId };
 }
 

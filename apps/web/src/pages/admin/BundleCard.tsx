@@ -4,6 +4,10 @@ import {
   analyzeBundle,
   buildSampleSchool,
   isSetupEditable,
+  sessionTerm,
+  termKey,
+  termLabel,
+  termFields,
   type BaseTimetableDoc,
   type BundleKey,
   type RoomDoc,
@@ -13,11 +17,12 @@ import {
 } from '@sim/shared';
 import { Modal } from '@/components/Modal';
 import { Alert, Button, Card, DownloadButton, Spinner } from '@/components/ui';
+import { RosterImportDialog, rememberTerm, type RosterKind } from '@/components/TermRoster';
 import { useCollection } from '@/lib/data';
 import { Readiness } from './Readiness';
 import { bundleSheets, replacePreview, saveBundle, type SaveMode } from '@/lib/bundle';
 import { errorMessage } from '@/lib/firebase';
-import type { ExamSession } from '@/lib/sessions';
+import { termWhere, type ExamSession } from '@/lib/sessions';
 import { downloadWorkbook, readWorkbook, type SheetData } from '@/lib/xlsx';
 
 interface Props {
@@ -44,6 +49,10 @@ function BundleImportDialog({ session, editable, teachers, rooms, slots, timetab
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string[] | null>(null);
   const [asking, setAsking] = useState(false);
+  // 새 ID가 다른 학기 명단과 겹치지 않게 전체 ID를 본다
+  const allTeachers = useCollection<TeacherDoc>('teachers');
+  const allRooms = useCollection<RoomDoc>('rooms');
+  const takenIds = useMemo(() => [...allTeachers.data, ...allRooms.data].map((x) => x.id), [allTeachers.data, allRooms.data]);
 
   const analysis = useMemo(
     () =>
@@ -54,9 +63,10 @@ function BundleImportDialog({ session, editable, teachers, rooms, slots, timetab
             slots,
             useBaseTimetable: session.settings.useBaseTimetable,
             scheduleEditable: editable,
+            takenIds,
           })
         : null,
-    [sheets, teachers, rooms, slots, session.settings.useBaseTimetable, editable],
+    [sheets, teachers, rooms, slots, session.settings.useBaseTimetable, editable, takenIds],
   );
   const anything = analysis?.sections.some((s) => s.present) ?? false;
 
@@ -80,7 +90,9 @@ function BundleImportDialog({ session, editable, teachers, rooms, slots, timetab
     setBusy(true);
     setError(null);
     try {
-      setDone(await saveBundle(session.id, analysis.plan, ctx, { autoPlace: autoPlace && editable, mode }));
+      setDone(await saveBundle(session.id, analysis.plan, ctx, { autoPlace: autoPlace && editable, mode, term: termFields(sessionTerm(session)) }));
+      // 교사·시험실·시험일정 탭이 이 학기를 바로 보여 주게
+      rememberTerm(termKey(sessionTerm(session)));
     } catch (e) {
       setError(`저장 중 오류가 발생했습니다: ${errorMessage(e)}`);
     } finally {
@@ -224,10 +236,41 @@ function BundleImportDialog({ session, editable, teachers, rooms, slots, timetab
   );
 }
 
+/**
+ * 이 프로젝트 학교·학기의 교사·시험실 명단이 비어 있으면, 교사 관리·시험실 관리 탭에 저장된
+ * 다른 학기(또는 학기 미지정) 명단을 불러오게 한다.
+ */
+function RosterLoadCard({ session, teachers, rooms }: { session: ExamSession; teachers: number; rooms: number }) {
+  const allTeachers = useCollection<TeacherDoc>('teachers');
+  const allRooms = useCollection<RoomDoc>('rooms');
+  const [kind, setKind] = useState<RosterKind | null>(null);
+  const term = sessionTerm(session);
+  const others = (list: { term?: string }[]) => list.some((d) => d.term !== termKey(term));
+  const canTeachers = teachers === 0 && others(allTeachers.data);
+  const canRooms = rooms === 0 && others(allRooms.data);
+  if (!canTeachers && !canRooms) return null;
+  return (
+    <Card>
+      <h2 className="text-lg font-bold">저장된 명단 불러오기</h2>
+      <p className="mt-1 text-muted">
+        {termLabel(term)}에 {[canTeachers && '교사', canRooms && '시험실'].filter(Boolean).join('·')} 명단이 없습니다. 교사 관리·시험실 관리에 저장된
+        다른 학기 명단을 불러와 시작할 수 있습니다.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {canTeachers && <Button onClick={() => setKind('teachers')}>교사 명단 불러오기</Button>}
+        {canRooms && <Button onClick={() => setKind('rooms')}>시험실 불러오기</Button>}
+      </div>
+      {kind && (
+        <RosterImportDialog kind={kind} target={term} all={kind === 'teachers' ? allTeachers.data : allRooms.data} onClose={() => setKind(null)} />
+      )}
+    </Card>
+  );
+}
+
 /** 필요한 자료를 직접 불러오는 통합 양식 카드 (개요 탭용) */
 export function BundleSection({ session }: { session: ExamSession }) {
-  const teachers = useCollection<TeacherDoc>('teachers');
-  const rooms = useCollection<RoomDoc>('rooms');
+  const teachers = useCollection<TeacherDoc>('teachers', termWhere(session));
+  const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
   const slots = useCollection<SlotDoc>(`sessions/${session.id}/slots`);
   const timetable = useCollection<BaseTimetableDoc>(`sessions/${session.id}/baseTimetable`);
   const all = [teachers, rooms, slots, timetable];
@@ -236,6 +279,7 @@ export function BundleSection({ session }: { session: ExamSession }) {
   if (error) return <Alert>{error}</Alert>;
   return (
     <>
+      <RosterLoadCard session={session} teachers={teachers.data.length} rooms={rooms.data.length} />
       <Readiness session={session} slots={slots.data} rooms={rooms.data} teachers={teachers.data} timetable={timetable.data} />
       <BundleCard
         session={session}

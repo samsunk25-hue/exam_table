@@ -6,6 +6,7 @@ const { getFirestore } = await import('firebase-admin/firestore');
 
 initializeApp({ projectId: 'smart-invigilation' });
 const db = getFirestore();
+const TERM = { term: '점검중학교|2026|2', school: '점검중학교', year: 2026, semester: 2 }; // 학교·학기 명단
 
 const teachers = [
   { id: 'T001', name: '김국어', email: 'kim@test.kr', subject: '국어', homeroom: { grade: 1, classNo: 1 } },
@@ -20,7 +21,7 @@ for (const { id, ...t } of teachers) {
     defaultRole: 'NORMAL',
     active: true,
     cumulativeLoad: 0,
-    updatedBy: 'seed',
+    ...TERM, updatedBy: 'seed',
   });
 }
 await batch.commit();

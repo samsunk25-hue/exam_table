@@ -20,7 +20,7 @@ import { Modal } from '@/components/Modal';
 import { Alert, Button, Card, Field, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
-import type { ExamSession } from '@/lib/sessions';
+import { termWhere, type ExamSession } from '@/lib/sessions';
 import { useCurrentSession } from './SessionPage';
 import { sortRooms } from './RoomsPage';
 
@@ -455,8 +455,8 @@ export function SessionSetupPage() {
   const session = useCurrentSession();
   const sid = session.id;
   const slots = useCollection<SlotDoc>(`sessions/${sid}/slots`);
-  const rooms = useCollection<RoomDoc>('rooms');
-  const teachers = useCollection<TeacherDoc>('teachers');
+  const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
+  const teachers = useCollection<TeacherDoc>('teachers', termWhere(session));
   const timetable = useCollection<BaseTimetableDoc>(`sessions/${sid}/baseTimetable`);
   const editable = isSetupEditable(session.status);
 

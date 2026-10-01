@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { classroomName, configFromRooms, planClassrooms, type ClassroomConfig, type RoomDoc, type WithId } from '@sim/shared';
+import { classroomName, configFromRooms, planClassrooms, type ClassroomConfig, type RoomDoc, type TermFields, type WithId } from '@sim/shared';
 import { Alert, Button, Card } from '@/components/ui';
 import { commitOps, ref, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
@@ -44,7 +44,7 @@ function NumberStepper({ label, value, min, max, onChange }: { label: string; va
 }
 
 /** 학년별 학급 수 입력 → 시험 치는 교실 체크 → 교실·복도 시험실 자동 생성 */
-export function ClassroomSetupCard({ rooms }: { rooms: WithId<RoomDoc>[] }) {
+export function ClassroomSetupCard({ rooms, term, takenIds }: { rooms: WithId<RoomDoc>[]; term: TermFields; takenIds: string[] }) {
   const initial = useMemo(() => configFromRooms(rooms), [rooms]);
   const [config, setConfig] = useState<ClassroomConfig>(initial);
   const [open, setOpen] = useState(rooms.length === 0);
@@ -52,7 +52,7 @@ export function ClassroomSetupCard({ rooms }: { rooms: WithId<RoomDoc>[] }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const plan = useMemo(() => planClassrooms(config, rooms), [config, rooms]);
+  const plan = useMemo(() => planClassrooms(config, rooms, takenIds), [config, rooms, takenIds]);
   const examRooms = plan.upsert.filter((r) => r.spaceType === 'CLASSROOM').length;
   const set = (patch: Partial<ClassroomConfig>) => {
     setConfig({ ...config, ...patch });
@@ -84,7 +84,7 @@ export function ClassroomSetupCard({ rooms }: { rooms: WithId<RoomDoc>[] }) {
     setBusy(true);
     setError(null);
     const ops: BatchOp[] = [
-      ...plan.upsert.map(({ id, ...data }): BatchOp => ({ type: 'set', ref: ref('rooms', id), data })),
+      ...plan.upsert.map(({ id, ...data }): BatchOp => ({ type: 'set', ref: ref('rooms', id), data: { ...data, ...term } })),
       ...plan.remove.map((r): BatchOp => ({ type: 'delete', ref: ref('rooms', r.id) })),
     ];
     try {

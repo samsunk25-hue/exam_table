@@ -1,7 +1,8 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { DEFAULT_ROLE_LABEL, SELECTABLE_ROLES, nextId, type DefaultRole, type TeacherDoc, type WithId } from '@sim/shared';
+import { DEFAULT_ROLE_LABEL, SELECTABLE_ROLES, nextId, termFields, termLabel, type DefaultRole, type TeacherDoc, type TermRef, type WithId } from '@sim/shared';
 import { BundleHint } from '@/components/BundleHint';
 import { Modal } from '@/components/Modal';
+import { RosterImportDialog, TermPicker, useTermChoice } from '@/components/TermRoster';
 import { Alert, Button, Card, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
@@ -28,7 +29,19 @@ interface FormState {
   active: boolean;
 }
 
-function TeacherForm({ teacher, all, onClose }: { teacher: Teacher | null; all: Teacher[]; onClose: () => void }) {
+function TeacherForm({
+  teacher,
+  all,
+  takenIds,
+  term,
+  onClose,
+}: {
+  teacher: Teacher | null;
+  all: Teacher[];
+  takenIds: string[];
+  term: TermRef;
+  onClose: () => void;
+}) {
   const [f, setF] = useState<FormState>({
     name: teacher?.name ?? '',
     email: teacher?.email ?? '',
@@ -73,11 +86,12 @@ function TeacherForm({ teacher, all, onClose }: { teacher: Teacher | null; all: 
       homeroom: f.grade ? { grade: Number(f.grade), classNo: Number(f.classNo) } : null,
       defaultRole: f.defaultRole,
       active: f.active,
+      ...termFields(term),
     };
     try {
       if (teacher) await commitOps([{ type: 'set', ref: ref('teachers', teacher.id), data, merge: true }]);
       else {
-        const [id] = nextId('T', all.map((t) => t.id));
+        const [id] = nextId('T', takenIds);
         await commitOps([{ type: 'set', ref: ref('teachers', id!), data: { ...data, cumulativeLoad: 0 } }]);
       }
       onClose();
@@ -160,9 +174,15 @@ function TeacherForm({ teacher, all, onClose }: { teacher: Teacher | null; all: 
 }
 
 export function TeachersPage() {
-  const { data, loading, error } = useCollection<TeacherDoc>('teachers');
+  const everyone = useCollection<TeacherDoc>('teachers');
+  const { loading, error } = everyone;
+  const choice = useTermChoice(everyone.data);
+  // 선택한 학교·학기 명단만 보여 준다
+  const data = useMemo(() => everyone.data.filter((t) => t.term === choice.key), [everyone.data, choice.key]);
+  const legacy = everyone.data.filter((t) => !t.term).length;
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Teacher | 'new' | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const teachers = useMemo(() => sortTeachers(data), [data]);
   const shown = teachers.filter((t) => {
@@ -175,13 +195,30 @@ export function TeachersPage() {
 
   return (
     <>
-      <PageTitle sub={`사용 중 ${activeCount}명 / 전체 ${data.length}명`}>교사 관리</PageTitle>
+      <PageTitle sub={choice.current ? `${termLabel(choice.current)} · 사용 중 ${activeCount}명 / 전체 ${data.length}명` : '교사 명단'}>교사 관리</PageTitle>
+
+      <TermPicker terms={choice.terms} value={choice.key} onChange={choice.choose} />
+      {!choice.loading && !choice.current && (
+        <div className="mb-4">
+          <Alert tone="info">먼저 대시보드에서 시험 프로젝트를 만드세요. 프로젝트의 학교·학기별로 교사 명단을 따로 관리합니다.</Alert>
+        </div>
+      )}
+      {legacy > 0 && choice.current && (
+        <div className="mb-4">
+          <Alert tone="info">학기가 지정되지 않은 예전 교사 {legacy}명이 있습니다. "다른 학기에서 불러오기"로 이 학기에 넣을 수 있습니다.</Alert>
+        </div>
+      )}
 
       <BundleHint what="교사 명단" />
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        <Button onClick={() => setEditing('new')}>+ 교사 추가</Button>
-      </div>
+      {choice.current && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Button onClick={() => setEditing('new')}>+ 교사 추가</Button>
+          <Button variant="secondary" onClick={() => setImporting(true)}>
+            다른 학기에서 불러오기
+          </Button>
+        </div>
+      )}
 
       {noEmail > 0 && (
         <div className="mb-4">
@@ -199,7 +236,9 @@ export function TeachersPage() {
         />
         {loading && <Spinner />}
         {error && <Alert>{error}</Alert>}
-        {!loading && data.length === 0 && <p className="py-6 text-muted">등록된 교사가 없습니다. 통합 양식으로 올리거나 "+ 교사 추가"로 입력하세요.</p>}
+        {!loading && data.length === 0 && (
+          <p className="py-6 text-muted">이 학기에 등록된 교사가 없습니다. 다른 학기에서 불러오거나, 통합 양식으로 올리거나, "+ 교사 추가"로 입력하세요.</p>
+        )}
         {shown.length > 0 && (
           <Table head={['이름', '이메일', '담당교과', '담임', '감독구분', '누적점수', '']}>
             {shown.map((t) => (
@@ -224,7 +263,16 @@ export function TeachersPage() {
         )}
       </Card>
 
-      {editing && <TeacherForm teacher={editing === 'new' ? null : editing} all={data} onClose={() => setEditing(null)} />}
+      {editing && choice.current && (
+        <TeacherForm
+          teacher={editing === 'new' ? null : editing}
+          all={data}
+          takenIds={everyone.data.map((t) => t.id)}
+          term={choice.current}
+          onClose={() => setEditing(null)}
+        />
+      )}
+      {importing && choice.current && <RosterImportDialog kind="teachers" target={choice.current} all={everyone.data} onClose={() => setImporting(false)} />}
     </>
   );
 }

@@ -10,6 +10,7 @@ const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 initializeApp({ projectId: 'smart-invigilation' });
 const db = getFirestore();
+const TERM = { term: '점검중학교|2026|2', school: '점검중학교', year: 2026, semester: 2 }; // 학교·학기 명단
 
 const OUT = 'scripts/e2e/out';
 mkdirSync(OUT, { recursive: true });
@@ -22,15 +23,15 @@ const check = (label, ok, detail = '') => {
 // 준비: 시험 프로젝트 1개, 시험 2교시, 시험실 1개 (필요 감독 2명)
 const SID = 'E2E_AVAIL';
 await db.recursiveDelete(db.doc(`sessions/${SID}`));
-await db.doc('rooms/RE2E').set({ name: 'E2E-1', spaceType: 'CLASSROOM', grade: 1, classNo: 9, chiefCount: 1, assistantCount: 1, updatedBy: 'seed' });
+await db.doc('rooms/RE2E').set({ name: 'E2E-1', spaceType: 'CLASSROOM', grade: 1, classNo: 9, chiefCount: 1, assistantCount: 1, ...TERM, updatedBy: 'seed' });
 await db.doc(`sessions/${SID}`).set({
   schoolName: '점검중학교', year: 2026, semester: 2, examName: '불가시간 점검', status: 'DRAFT',
-  settings: { useBaseTimetable: false }, createdAt: new Date(), updatedBy: 'seed',
+  settings: { useBaseTimetable: false }, createdAt: new Date(), ...TERM, updatedBy: 'seed',
 });
 for (const period of [1, 2]) {
   await db.doc(`sessions/${SID}/slots/2026-10-12_${period}_1`).set({
     date: '2026-10-12', period, startTime: period === 1 ? '09:00' : '10:00', endTime: null, grade: 1, subject: '국어', type: 'EXAM',
-    rooms: [{ roomId: 'RE2E', classNo: 9, headcount: null, roomType: 'NORMAL' }], updatedBy: 'seed',
+    rooms: [{ roomId: 'RE2E', classNo: 9, headcount: null, roomType: 'NORMAL' }], ...TERM, updatedBy: 'seed',
   });
 }
 

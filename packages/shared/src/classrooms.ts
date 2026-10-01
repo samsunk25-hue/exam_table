@@ -49,7 +49,8 @@ export function configFromRooms(rooms: RoomDoc[], fallbackGrades = 3): Classroom
 }
 
 /** 설정 → 저장할 시험실(신규·수정)과 삭제할 시험실 */
-export function planClassrooms(config: ClassroomConfig, rooms: WithId<RoomDoc>[]): ClassroomPlan {
+/** takenIds: 새 ID가 겹치면 안 되는 전체 ID (다른 학기 시험실 포함) */
+export function planClassrooms(config: ClassroomConfig, rooms: WithId<RoomDoc>[], takenIds?: string[]): ClassroomPlan {
   const wanted: RoomDoc[] = [];
   config.classCounts.forEach((count, i) => {
     const grade = i + 1;
@@ -72,7 +73,7 @@ export function planClassrooms(config: ClassroomConfig, rooms: WithId<RoomDoc>[]
   });
 
   const byName = new Map(rooms.map((r) => [r.name, r]));
-  const newIds = nextId('R', rooms.map((r) => r.id), wanted.filter((w) => !byName.has(w.name)).length);
+  const newIds = nextId('R', takenIds ?? rooms.map((r) => r.id), wanted.filter((w) => !byName.has(w.name)).length);
   let n = 0;
   const upsert = wanted.map((w) => {
     const prev = byName.get(w.name);

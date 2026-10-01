@@ -98,7 +98,7 @@ export function buildSampleSchool(startDate = '2026-10-19'): SampleSchool {
         const study = period === 3;
         const placements = study ? classrooms(g) : [...classrooms(g), hallway(g)];
         // 1학년 1교시 시험은 별도시험장(시간 연장) 함께 운영
-        if (!study && g === 1 && period === 1) placements.push({ roomId: 'SSEP', classNo: null, headcount: 2, roomType: 'EXTENDED' });
+        if (!study && g === 1 && period === 1) placements.push({ roomId: 'SSEP', classNo: null, headcount: 2, roomType: 'EXTENDED', startTime: '09:00', endTime: '10:10' }); // 연장 시간이 2교시와 겹치는 예시
         slots.push({
           id: slotIdOf(date, period, g),
           date,

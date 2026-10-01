@@ -99,7 +99,7 @@ export function bundleSheets(opts: {
       return isAuto(p.roomId) || !r || r.spaceType === 'SEPARATE' || r.grade === null;
     });
     const list = standard ? s.rooms.filter((p) => !isAuto(p.roomId)) : s.rooms;
-    return list.map((p) => [s.date, s.period, s.grade, roomName.get(p.roomId) ?? '', p.classNo ?? '', p.headcount ?? '', PLACEMENT_ROOM_TYPE_LABEL[p.roomType]]);
+    return list.map((p) => [s.date, s.period, s.grade, roomName.get(p.roomId) ?? '', p.classNo ?? '', p.headcount ?? '', PLACEMENT_ROOM_TYPE_LABEL[p.roomType], p.startTime ?? '', p.endTime ?? '']);
   });
 
   const guide = guideSheet(BUNDLE_SHEETS.guide, [

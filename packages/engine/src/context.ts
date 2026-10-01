@@ -98,6 +98,7 @@ export function buildSeats(input: EngineInput, roleWeights: RoleWeights): Seat[]
           weight: roleWeights[role],
           date: slot.date,
           period: slot.period,
+          periods: [...new Set([slot.period, ...(group.alsoPeriods ?? [])])].sort((a, b) => a - b),
           grade: group.grade,
           classNo: group.classNo,
           subject: slot.subject,
@@ -178,7 +179,7 @@ export function staticHardReason(ctx: Context, teacher: Teacher, seat: Seat): Ex
   if (!teacher.active || teacher.defaultRole === 'EXCLUDED') return 'INACTIVE';
   // 일반 교사는 교실·복도 모두 가능, 복도전담 교사는 복도만
   if (teacher.defaultRole === 'HALLWAY' && seat.role !== 'HALLWAY') return 'ROLE_MISMATCH';
-  if (ctx.unavailable.has(`${teacher.id}|${seat.date}|${seat.period}`)) return 'UNAVAILABLE';
+  if (seat.periods.some((p) => ctx.unavailable.has(`${teacher.id}|${seat.date}|${p}`))) return 'UNAVAILABLE';
   const cs = ctx.constraintsByTeacher.get(teacher.id);
   if (cs?.some((c) => c.priority === 'HARD' && constraintApplies(c, teacher, seat))) {
     return 'CONSTRAINT';

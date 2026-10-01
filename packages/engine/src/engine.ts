@@ -159,7 +159,7 @@ function ejectionChain(ctx: Context, state: State, pinnedIds: Set<string>): void
 
     for (const t of ctx.teachers) {
       if (state.hardReason(t, seat) !== 'BUSY') continue;
-      const busy = state.seatsAt(t.id, seat.date, seat.period);
+      const busy = state.busyAt(t.id, seat);
       if (busy.length !== 1) continue;
       const otherId = busy[0]!;
       if (pinnedIds.has(otherId)) continue;
@@ -272,7 +272,7 @@ function computeMetrics(ctx: Context, state: State): Metrics {
     const seat = ctx.seatById.get(a.seatId)!;
     const teacher = ctx.teacherById.get(a.teacherId)!;
     // 다음 교시와의 쌍만 세서 중복 없이 센다
-    if (state.seatsAt(teacher.id, seat.date, seat.period + 1).length > 0) consecutiveCount++;
+    if (state.seatsAt(teacher.id, seat.date, seat.periods[seat.periods.length - 1]! + 1).length > 0) consecutiveCount++;
     if (teacher.subject && teacher.subject === seat.subject && seat.role !== 'HALLWAY') subjectInRoom++;
   }
 

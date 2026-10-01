@@ -26,6 +26,8 @@ export const PLACEMENT_FIELDS: FieldDef[] = [
     note: '일반 / 연장 / 특수 (비우면 일반)',
     options: ['일반', '연장', '특수'],
   },
+  { key: 'startTime', label: '별도시작', required: false, synonyms: ['별도 시작', '별도시작시간'], note: '특별실을 시험 시간과 다르게 운영할 때만 (예: 09:00)' },
+  { key: 'endTime', label: '별도종료', required: false, synonyms: ['별도 종료', '별도종료시간'], note: '예: 10:10 (비우면 시험 시간과 같음)' },
 ];
 
 export interface SlotImport extends Omit<SlotDoc, 'rooms'> {
@@ -76,6 +78,10 @@ export function parsePlacements(
     const classNo = r.int('classNo', { min: 1, max: 30 });
     const headcount = r.int('headcount', { min: 0, max: 500 });
     const roomType = r.choice('roomType', ROOM_TYPES, { fallback: 'NORMAL' });
+    const startTime = r.time('startTime');
+    const endTime = r.time('endTime');
+    if ((startTime === null) !== (endTime === null)) r.errors.push('별도시작과 별도종료는 함께 입력하거나 함께 비워야 합니다.');
+    else if (startTime && endTime && startTime >= endTime) r.errors.push('별도종료가 별도시작보다 빠릅니다.');
 
     const slotId = date && period !== null && grade !== null ? slotIdOf(date, period, grade) : null;
     if (slotId && !slotIds.has(slotId)) r.errors.push(`시험 일정에 ${date} ${period}교시 ${grade}학년 시험이 없습니다.`);
@@ -83,7 +89,7 @@ export function parsePlacements(
     if (roomName && !roomId) r.errors.push(`시험실 "${roomName}"이(가) 시험실 관리에 없습니다.`);
 
     if (!slotId || !roomId || !roomType || !date || period === null) return null;
-    return { slotId, date, period, placement: { roomId, classNo, headcount, roomType } };
+    return { slotId, date, period, placement: { roomId, classNo, headcount, roomType, ...(startTime && endTime ? { startTime, endTime } : {}) } };
   });
 
   flagDuplicates(

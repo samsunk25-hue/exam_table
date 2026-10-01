@@ -36,13 +36,16 @@ export class State {
       times = new Map();
       this.teacherTimes.set(a.teacherId, times);
     }
-    const key = timeKey(seat.date, seat.period);
-    let set = times.get(key);
-    if (!set) {
-      set = new Set();
-      times.set(key, set);
+    // 별도 시간으로 여러 교시를 차지하면 그 교시마다 등록한다
+    for (const p of seat.periods) {
+      const key = timeKey(seat.date, p);
+      let set = times.get(key);
+      if (!set) {
+        set = new Set();
+        times.set(key, set);
+      }
+      set.add(a.seatId);
     }
-    set.add(a.seatId);
     this.sessionLoad.set(a.teacherId, (this.sessionLoad.get(a.teacherId) ?? 0) + a.weight);
   }
 
@@ -51,9 +54,16 @@ export class State {
     if (!a) return undefined;
     this.bySeat.delete(seatId);
     const seat = this.ctx.seatById.get(seatId)!;
-    this.teacherTimes.get(a.teacherId)?.get(timeKey(seat.date, seat.period))?.delete(seatId);
+    for (const p of seat.periods) this.teacherTimes.get(a.teacherId)?.get(timeKey(seat.date, p))?.delete(seatId);
     this.sessionLoad.set(a.teacherId, (this.sessionLoad.get(a.teacherId) ?? 0) - a.weight);
     return a;
+  }
+
+  /** 이 좌석이 차지하는 교시들에 교사가 이미 맡은 좌석 (ignoreSeatId 제외) */
+  busyAt(teacherId: string, seat: Seat, ignoreSeatId?: string): string[] {
+    const ids = new Set<string>();
+    for (const p of seat.periods) for (const id of this.seatsAt(teacherId, seat.date, p, ignoreSeatId)) ids.add(id);
+    return [...ids];
   }
 
   /** 해당 교사가 date/period에 맡은 좌석 (ignoreSeatId 제외) */
@@ -72,23 +82,23 @@ export class State {
   }
 
   assignmentsOf(teacherId: string): Assignment[] {
-    const out: Assignment[] = [];
-    for (const set of this.teacherTimes.get(teacherId)?.values() ?? []) {
-      for (const id of set) out.push(this.bySeat.get(id)!);
-    }
-    return out;
+    const ids = new Set<string>();
+    for (const set of this.teacherTimes.get(teacherId)?.values() ?? []) for (const id of set) ids.add(id);
+    return [...ids].map((id) => this.bySeat.get(id)!);
   }
 
   /** 다른 배정에 의해 생기는 하드 조건 */
   dynamicHardReason(teacher: Teacher, seat: Seat, ignoreSeatId?: string): ExclusionReason | null {
-    if (this.seatsAt(teacher.id, seat.date, seat.period, ignoreSeatId).length > 0) return 'BUSY';
+    if (this.busyAt(teacher.id, seat, ignoreSeatId).length > 0) return 'BUSY';
+    const first = seat.periods[0]!;
+    const last = seat.periods[seat.periods.length - 1]!;
     // 직전 교시 연장감독 → 이번 교시 불가
-    const prev = this.seatsAt(teacher.id, seat.date, seat.period - 1, ignoreSeatId);
+    const prev = this.seatsAt(teacher.id, seat.date, first - 1, ignoreSeatId);
     if (prev.some((id) => this.ctx.seatById.get(id)!.role === 'EXTENDED')) return 'AFTER_EXTENDED';
     // 이번 좌석이 연장감독 → 다음 교시 배정이 있으면 불가
     if (
       seat.role === 'EXTENDED' &&
-      this.seatsAt(teacher.id, seat.date, seat.period + 1, ignoreSeatId).length > 0
+      this.seatsAt(teacher.id, seat.date, last + 1, ignoreSeatId).length > 0
     ) {
       return 'AFTER_EXTENDED';
     }
@@ -138,8 +148,8 @@ export class State {
     }
 
     const adjacent =
-      this.seatsAt(teacher.id, seat.date, seat.period - 1, ignoreSeatId).length > 0 ||
-      this.seatsAt(teacher.id, seat.date, seat.period + 1, ignoreSeatId).length > 0;
+      this.seatsAt(teacher.id, seat.date, seat.periods[0]! - 1, ignoreSeatId).length > 0 ||
+      this.seatsAt(teacher.id, seat.date, seat.periods[seat.periods.length - 1]! + 1, ignoreSeatId).length > 0;
     if (adjacent) add(w.consecutive, '연속');
 
     add(softConstraintPenalty(this.ctx, teacher, seat), '예외규칙');

@@ -70,6 +70,19 @@ await page.getByRole('button', { name: '자동 배정 실행' }).click();
 await page.getByText(/^성공률$/).waitFor({ timeout: 60000 });
 const metrics = await page.locator('main').innerText();
 check('자동 배정 성공률 100%', /성공률\s*100%/.test(metrics));
+
+// 별도시험장 연장(09:00~10:10)은 2교시(10:00~)와 겹치므로 그 감독 교사는 같은 날 2교시에 배정되지 않는다
+check('별도 시간 저장 (별도시험장 09:00~10:10)', p1g1.every((d) => d.get('rooms').some((p) => p.startTime === '09:00' && p.endTime === '10:10')));
+const runs = await db.collection(`sessions/${SID}/runs`).get();
+const run = runs.docs.sort((a, b) => b.get('createdAt').toMillis() - a.get('createdAt').toMillis())[0].data();
+const at = (seatId) => {
+  const [date, period] = seatId.split('__')[0].split('_');
+  return { date, period: Number(period) };
+};
+const clashes = run.assignments
+  .filter((a) => a.seatId.includes('__SSEP_'))
+  .filter((ext) => run.assignments.some((o) => o.teacherId === ext.teacherId && at(o.seatId).date === at(ext.seatId).date && at(o.seatId).period === 2));
+check('연장 시간이 겹치는 2교시에는 같은 교사 배정 없음', clashes.length === 0, `${clashes.length}건`);
 await page.screenshot({ path: `${OUT}/sample-assign.png`, fullPage: true });
 check('콘솔 오류 없음', errors.length === 0, errors.join(' / '));
 await browser.close();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runAssignment, seatCandidates, validateAssignments, weekdayOf, type EngineInput } from '../src';
+import { overlappingPeriods, runAssignment, seatCandidates, validateAssignments, weekdayOf, type EngineInput } from '../src';
 import { emptyInput, fakeSchool, teacher } from './fixtures';
 
 /** 교실 1개, 시험 1개(날짜 2026-10-12 월요일 1교시) */
@@ -84,6 +84,36 @@ describe('하드 조건', () => {
       { seatId: 'G2_CHIEF_1', teacherId: 'A' },
     ];
     expect(validateAssignments(input, bad).map((v) => v.reason)).toContain('AFTER_EXTENDED');
+  });
+
+  it('특별실 별도 시간이 다음 교시와 겹치면 그 교시까지 차지한다 (중복 배정·불가시간)', () => {
+    const base = {
+      rooms: [
+        { id: 'SEP', name: '특별실', chiefCount: 1, assistantCount: 0, spaceType: 'SEPARATE' as const },
+        { id: 'R11', name: '1-1', chiefCount: 1, assistantCount: 0, spaceType: 'CLASSROOM' as const },
+      ],
+      slots: [
+        { id: 'S1', date: '2026-10-12', period: 1, grade: 1, subject: '수학', type: 'EXAM' as const },
+        { id: 'S2', date: '2026-10-12', period: 2, grade: 1, subject: '영어', type: 'EXAM' as const },
+      ],
+      groups: [
+        { id: 'G1', slotId: 'S1', roomId: 'SEP', grade: 1, classNo: null, roomType: 'SPECIAL' as const, alsoPeriods: [2] },
+        { id: 'G2', slotId: 'S2', roomId: 'R11', grade: 1, classNo: 1, roomType: 'NORMAL' as const },
+      ],
+    };
+    const input = emptyInput({ ...base, teachers: [teacher('A'), teacher('B')] });
+    const r = runAssignment(input);
+    expect(r.unassigned).toHaveLength(0);
+    expect(r.assignments.find((a) => a.slotId === 'S1')!.teacherId).not.toBe(r.assignments.find((a) => a.slotId === 'S2')!.teacherId);
+    expect(validateAssignments(input, [{ seatId: 'G1_CHIEF_1', teacherId: 'A' }, { seatId: 'G2_CHIEF_1', teacherId: 'A' }]).map((v) => v.reason)).toContain('BUSY');
+
+    // 2교시 불가인 교사는 1교시 특별실(2교시까지 이어짐)도 맡을 수 없다
+    const busy = emptyInput({
+      ...base,
+      teachers: [teacher('A'), teacher('B')],
+      availability: [{ teacherId: 'A', date: '2026-10-12', period: 2, status: 'APPROVED' }],
+    });
+    expect(runAssignment(busy).assignments.find((a) => a.slotId === 'S1')!.teacherId).toBe('B');
   });
 
   it('HARD 예외 규칙과 배정 제외 교사, 복도 역할을 지킨다', () => {
@@ -234,5 +264,23 @@ describe('가상 학교 (교사 60명, 4일 × 3교시, 28실)', () => {
     expect(validateAssignments(tight, r.assignments)).toEqual([]);
     expect(r.unassigned.length).toBeGreaterThan(0);
     expect(r.unassigned[0]!.message).toMatch(/미배정 \(가용 인력 0명 - .*동시간 타 감독 \d+명/);
+  });
+});
+
+describe('별도 시간 → 겹치는 교시', () => {
+  const slot = (period: number, startTime: string, endTime: string) => ({
+    date: '2026-10-12', period, grade: 1, subject: '수학', type: 'EXAM' as const, startTime, endTime, rooms: [],
+  });
+  const slots = [slot(1, '09:00', '09:45'), slot(2, '10:00', '10:45'), slot(3, '11:00', '11:45')];
+  const p = { roomId: 'SEP', classNo: null, headcount: 2, roomType: 'SPECIAL' as const };
+
+  it('시간을 따로 정하지 않으면 겹치는 교시가 없다', () => {
+    expect(overlappingPeriods(slots, slots[0]!, p)).toEqual([]);
+  });
+  it('종료를 10:20으로 늘리면 2교시와 겹친다', () => {
+    expect(overlappingPeriods(slots, slots[0]!, { ...p, endTime: '10:20' })).toEqual([2]);
+  });
+  it('쉬는 시간 안에서 끝나면 겹치지 않는다', () => {
+    expect(overlappingPeriods(slots, slots[0]!, { ...p, endTime: '09:55' })).toEqual([]);
   });
 });

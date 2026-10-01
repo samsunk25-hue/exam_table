@@ -51,6 +51,8 @@ export interface Group {
   /** null이면 혼합/별도 시험실 */
   classNo: number | null;
   roomType: GroupRoomType;
+  /** 별도 시간으로 운영해 함께 차지하는 같은 날 다른 교시 (예: 연장 시간이 다음 교시와 겹침) */
+  alsoPeriods?: number[];
 }
 
 export interface Availability {
@@ -140,6 +142,8 @@ export interface Seat {
   weight: number;
   date: string;
   period: number;
+  /** 이 좌석 감독이 차지하는 교시 (period + 별도 시간으로 겹치는 교시, 오름차순) */
+  periods: number[];
   grade: number;
   classNo: number | null;
   subject: string;

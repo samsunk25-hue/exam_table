@@ -14,6 +14,8 @@ import {
   type TeacherDoc,
   type WithId,
 } from '@sim/shared';
+import { overlappingPeriods } from '@sim/engine';
+import { ClockTimePicker } from '@/components/ClockTimePicker';
 import { ExamGridEditor } from '@/components/ExamGridEditor';
 import { ScheduleImportDialog } from '@/components/ScheduleImportDialog';
 import { Modal } from '@/components/Modal';
@@ -156,9 +158,24 @@ function PlacementEditor({ sid, slot, slots, rooms, onClose }: {
     setDraft(next);
   };
 
+  /** 특별실 별도 시간 켜기/끄기: 켜면 시험 시간으로 시작 */
+  const setOwnTime = (roomId: string, on: boolean) =>
+    patch(roomId, on ? { startTime: slot.startTime ?? '', endTime: slot.endTime ?? '' } : { startTime: null, endTime: null });
+
   const save = async () => {
     const conflict = [...draft.keys()].find((id) => usedElsewhere.has(id));
     if (conflict) return setError(`${rooms.find((r) => r.id === conflict)?.name}은(는) 같은 시간 ${usedElsewhere.get(conflict)}에 쓰이고 있습니다.`);
+    for (const p of draft.values()) {
+      if (!p.startTime && !p.endTime) continue;
+      const name = rooms.find((r) => r.id === p.roomId)?.name;
+      if (!p.startTime || !p.endTime) return setError(`${name}: 별도 시간의 시작·종료 시각을 모두 정하세요.`);
+      if (p.startTime >= p.endTime) return setError(`${name}: 종료 시각이 시작보다 빠릅니다.`);
+      // 별도 시간이 겹치는 다른 교시에 같은 시험실이 쓰이면 안 된다
+      const clash = overlappingPeriods(slots, slot, p).flatMap((period) =>
+        slots.filter((o) => o.date === slot.date && o.period === period && o.rooms.some((x) => x.roomId === p.roomId)),
+      )[0];
+      if (clash) return setError(`${name}: 별도 시간이 ${clash.period}교시와 겹치는데, 그 시간에 ${clash.grade}학년 ${clash.subject} 시험실로 쓰이고 있습니다.`);
+    }
     setBusy(true);
     const ordered = sortRooms(rooms).flatMap((r) => (draft.has(r.id) ? [draft.get(r.id)!] : []));
     try {
@@ -184,7 +201,8 @@ function PlacementEditor({ sid, slot, slots, rooms, onClose }: {
             모두 해제
           </Button>
         </div>
-        <Table head={['사용', '시험실', '반', '시험실유형', '응시인원']}>
+        <p className="text-sm text-muted">특별실은 "별도 시간"을 켜서 시험 시간과 다르게 정할 수 있습니다 (예: 시간 연장). 다음 교시와 겹치면 그 감독 교사는 다음 교시에 배정되지 않습니다.</p>
+        <Table head={['사용', '시험실', '반', '시험실유형', '응시인원', '운영 시간']}>
           {sortRooms(rooms).map((r) => {
             const p = draft.get(r.id);
             const busyElsewhere = usedElsewhere.get(r.id);
@@ -240,6 +258,30 @@ function PlacementEditor({ sid, slot, slots, rooms, onClose }: {
                       onChange={(e) => patch(r.id, { headcount: e.target.value ? Number(e.target.value) : null })}
                     />
                   )}
+                </Td>
+                <Td>
+                  {p && r.spaceType === 'SEPARATE' ? (
+                    <div className="grid gap-2">
+                      <label className="flex min-h-12 cursor-pointer items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="size-5 accent-primary"
+                          aria-label={`${r.name} 별도 시간`}
+                          checked={p.startTime != null || p.endTime != null}
+                          onChange={(e) => setOwnTime(r.id, e.target.checked)}
+                        />
+                        별도 시간
+                      </label>
+                      {(p.startTime != null || p.endTime != null) && (
+                        <div className="grid min-w-64 grid-cols-2 gap-2">
+                          <ClockTimePicker label={`${r.name} 시작`} value={p.startTime ?? ''} onChange={(v) => patch(r.id, { startTime: v })} />
+                          <ClockTimePicker label={`${r.name} 종료`} value={p.endTime ?? ''} onChange={(v) => patch(r.id, { endTime: v })} />
+                        </div>
+                      )}
+                    </div>
+                  ) : p ? (
+                    <span className="text-sm text-muted">시험 시간과 같음</span>
+                  ) : null}
                 </Td>
               </tr>
             );
@@ -359,7 +401,7 @@ function ScheduleCard({ session, editable, slots, rooms }: { session: ExamSessio
                         <span className="ml-2 text-sm text-muted">
                           {s.rooms
                             .slice(0, 4)
-                            .map((p) => `${roomName.get(p.roomId) ?? '(삭제됨)'}${p.roomType === 'EXTENDED' ? '(연장)' : ''}`)
+                            .map((p) => `${roomName.get(p.roomId) ?? '(삭제됨)'}${p.roomType === 'EXTENDED' ? '(연장)' : ''}${p.startTime && p.endTime ? ` ${p.startTime}~${p.endTime}` : ''}`)
                             .join(', ')}
                           {s.rooms.length > 4 && ' …'}
                         </span>

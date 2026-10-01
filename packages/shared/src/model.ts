@@ -77,6 +77,9 @@ export interface Placement {
   classNo: number | null;
   headcount: number | null;
   roomType: PlacementRoomType;
+  /** 특별실 등에서 시험 시간과 다르게 운영할 때 (없으면 시험 시간과 같음) */
+  startTime?: string | null;
+  endTime?: string | null;
 }
 
 /** sessions/{sid}/slots/{slotId} — slotId = `${date}_${period}_${grade}` */

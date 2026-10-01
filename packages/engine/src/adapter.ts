@@ -5,6 +5,7 @@ import {
   type AvailabilityDoc,
   type BaseTimetableDoc,
   type ConstraintDoc,
+  type Placement,
   type RoomDoc,
   type RunDoc,
   type SlotDoc,
@@ -21,6 +22,26 @@ export interface SessionData {
   baseTimetable: WithId<BaseTimetableDoc>[];
   useBaseTimetable: boolean;
   pinned?: PinnedAssignment[];
+}
+
+const toMin = (hm: string) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
+
+/**
+ * 별도 시간(startTime/endTime)으로 운영하는 배치가 같은 날 다른 교시와 겹치면 그 교시들.
+ * 다른 교시 시간은 그 교시 시험들의 시작·종료 시각에서 읽는다.
+ */
+export function overlappingPeriods(slots: SlotDoc[], slot: SlotDoc, p: Placement): number[] {
+  if (!p.startTime && !p.endTime) return [];
+  const start = p.startTime ?? slot.startTime;
+  const end = p.endTime ?? slot.endTime;
+  if (!start || !end) return [];
+  const [s, e] = [toMin(start), toMin(end)];
+  const out = new Set<number>();
+  for (const o of slots) {
+    if (o.date !== slot.date || o.period === slot.period || !o.startTime || !o.endTime) continue;
+    if (toMin(o.startTime) < e && s < toMin(o.endTime)) out.add(o.period);
+  }
+  return [...out].sort((a, b) => a - b);
 }
 
 export function buildEngineInput(d: SessionData): EngineInput {
@@ -53,6 +74,7 @@ export function buildEngineInput(d: SessionData): EngineInput {
           grade: s.grade,
           classNo: p.classNo,
           roomType: p.roomType,
+          alsoPeriods: overlappingPeriods(d.slots, s, p),
         })),
     ),
     availability: d.availability.map((a) => ({ teacherId: a.teacherId, date: a.date, period: a.period, status: a.status, reason: a.reason })),

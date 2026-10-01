@@ -1,6 +1,6 @@
 import { SEAT_ROLE_LABEL, examTimes, groupByDate } from '@sim/shared';
 import { dateLabel } from '@/components/AvailabilityGrid';
-import { timeText, type Duty, type TimetableData } from '@/lib/timetable';
+import { ownTimeOf, timeText, type Duty, type TimetableData } from '@/lib/timetable';
 
 /**
  * 최종(전체) 시간표. 컴퓨터: 날짜별 표(행 = 시험실, 열 = 교시) / 휴대폰: 교시별 카드.
@@ -44,6 +44,7 @@ export function FullTimetable({ data, highlight }: { data: TimetableData; highli
                           {cell(t.period, r.id).map((a) => (
                             <div key={a.id} className={`font-semibold ${a.teacherId === highlight ? 'rounded-md bg-primary px-1.5 text-white' : ''}`}>
                               {label(a.teacherId, a.role)}
+                              {ownTimeOf(data.slots, a.slotId, a.roomId) && <span className="ml-1 text-xs font-normal">({ownTimeOf(data.slots, a.slotId, a.roomId)})</span>}
                             </div>
                           ))}
                         </td>
@@ -71,6 +72,7 @@ export function FullTimetable({ data, highlight }: { data: TimetableData; highli
                             {cell(t.period, r.id).map((a) => (
                               <span key={a.id} className={`block ${a.teacherId === highlight ? 'rounded bg-primary px-1 text-white' : ''}`}>
                                 {label(a.teacherId, a.role)}
+                                {ownTimeOf(data.slots, a.slotId, a.roomId) && <span className="ml-1 text-xs font-normal">({ownTimeOf(data.slots, a.slotId, a.roomId)})</span>}
                               </span>
                             ))}
                           </span>

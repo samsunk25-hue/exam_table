@@ -32,6 +32,12 @@ export interface Duty {
   subject: string;
 }
 
+/** 특별실 등 시험 시간과 다르게 운영하는 배치의 시간 ("10:00~10:50"), 없으면 null */
+export function ownTimeOf(slots: TimetableData['slots'], slotId: string, roomId: string): string | null {
+  const p = slots.find((s) => s.id === slotId)?.rooms.find((x) => x.roomId === roomId);
+  return p?.startTime && p.endTime ? `${p.startTime}~${p.endTime}` : null;
+}
+
 export function dutiesOf(teacherId: string, d: TimetableData): Duty[] {
   const slotById = new Map(d.slots.map((s) => [s.id, s]));
   const roomById = new Map(d.rooms.map((r) => [r.id, r]));
@@ -39,12 +45,14 @@ export function dutiesOf(teacherId: string, d: TimetableData): Duty[] {
     .filter((a) => a.teacherId === teacherId)
     .map((a) => {
       const s = slotById.get(a.slotId);
+      // 특별실 별도 시간이 있으면 그 시간으로
+      const p = s?.rooms.find((x) => x.roomId === a.roomId);
       return {
         id: a.id,
         date: a.date,
         period: a.period,
-        startTime: s?.startTime ?? null,
-        endTime: s?.endTime ?? null,
+        startTime: (p?.startTime || s?.startTime) ?? null,
+        endTime: (p?.endTime || s?.endTime) ?? null,
         roomName: roomById.get(a.roomId)?.name ?? '',
         role: SEAT_ROLE_LABEL[a.role],
         grade: s?.grade ?? 0,
@@ -73,7 +81,10 @@ export function fullTimetableSheets(d: TimetableData): OutSheet[] {
         ...periods.map((p) =>
           d.assignments
             .filter((a) => a.date === date && a.period === p.period && a.roomId === r.id)
-            .map((a) => `${name.get(a.teacherId) ?? '?'}${a.role === 'CHIEF' ? '' : `(${SEAT_ROLE_LABEL[a.role]})`}`)
+            .map((a) => {
+              const own = ownTimeOf(d.slots, a.slotId, a.roomId);
+              return `${name.get(a.teacherId) ?? '?'}${a.role === 'CHIEF' ? '' : `(${SEAT_ROLE_LABEL[a.role]})`}${own ? ` [${own}]` : ''}`;
+            })
             .join(', '),
         ),
       ]);

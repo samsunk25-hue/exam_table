@@ -550,12 +550,12 @@ export function TimetableUpload({ session }: { session: ExamSession }) {
       <span className="text-sm">
         기초시간표: {timetable.data.length ? <b>교사 {timetable.data.length}명 · 수업 {total}건</b> : <b className="text-alert">아직 없음</b>}
       </span>
-      <DownloadButton
-        onDownload={() => downloadWorkbook(`기초시간표_${session.examName.replace(/\s+/g, '')}.xlsx`, timetableSheets(teachers, timetable.data))}
-        disabled={!teachers.length}
-      >
-        양식 받기 (교사별 시트)
-      </DownloadButton>
+      {/* 양식은 교사별 시트라 교사 명단이 있을 때만 보인다 */}
+      {teachers.length > 0 && (
+        <DownloadButton onDownload={() => downloadWorkbook(`기초시간표_${session.examName.replace(/\s+/g, '')}.xlsx`, timetableSheets(teachers, timetable.data))}>
+          양식 받기 (교사별 시트)
+        </DownloadButton>
+      )}
       <Button variant="secondary" onClick={() => setOpen(true)} disabled={!editable}>
         기초시간표 올리기
       </Button>

@@ -178,9 +178,12 @@ export function RoomsPage() {
       {choice.current && (
         <div className="mb-4 flex flex-wrap gap-2">
           <Button onClick={() => setEditing('new')}>+ 특별실 추가</Button>
-          <Button variant="secondary" onClick={() => setImporting(true)}>
-            다른 학기에서 불러오기
-          </Button>
+          {/* 다른 학기 명단이나 학기 미지정 예전 자료가 있을 때만 */}
+          {everyone.data.some((x) => x.term !== choice.key) && (
+            <Button variant="secondary" onClick={() => setImporting(true)}>
+              다른 학기에서 불러오기
+            </Button>
+          )}
           <Button variant="ghost" onClick={() => setHistory(true)}>
             ↶ 작업 기록·되돌리기
           </Button>

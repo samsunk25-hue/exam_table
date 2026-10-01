@@ -158,7 +158,9 @@ export function RosterImportDialog({ kind, target, all, onClose }: { kind: Roste
             </Button>
           )}
         </div>
-        {sources.length === 0 && legacy.length === 0 && <p className="text-muted">불러올 다른 학기 명단이 없습니다.</p>}
+        {sources.length === 0 && legacy.length === 0 && (
+          <p className="text-muted">다른 학기에 저장된 {KIND_LABEL[kind]} 명단이 없어 불러올 것이 없습니다. 이 학기 명단은 그대로 쓰면 됩니다.</p>
+        )}
         {source && (
           <div className="grid gap-2 rounded-xl bg-bg p-3">
             <p>

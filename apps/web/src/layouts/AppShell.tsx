@@ -26,9 +26,9 @@ export function AppShell({ nav, modeLabel }: { nav: NavItem[]; modeLabel: string
               {modeLabel} · {user?.email}
             </div>
           </div>
-          {/* 제목과 로그아웃 사이 빈 공간을 가로 배너로 채운다 (비율 유지, 좁으면 작아지고 휴대폰에서는 숨김) */}
+          {/* 제목 오른쪽 빈 공간에 대문 그림 (시간표 + 태블릿 든 선생님, 비율 유지, 휴대폰에서는 숨김) */}
           <div className="hidden min-w-0 flex-1 justify-end md:flex">
-            <HeroImage src="/banner.jpg" className="h-24 w-auto max-w-full rounded-xl object-contain shadow-sm" />
+            <HeroImage src="/hero.jpg" className="h-28 w-auto max-w-full rounded-xl object-contain shadow-sm" />
           </div>
           <Button variant="secondary" className="ml-auto shrink-0 md:ml-0" onClick={() => void signOut()}>
             로그아웃

@@ -14,6 +14,7 @@ import {
   type TeacherDoc,
   type WithId,
 } from '@sim/shared';
+import { ExamGridEditor } from '@/components/ExamGridEditor';
 import { Modal } from '@/components/Modal';
 import { Alert, Button, Card, Field, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
@@ -259,8 +260,9 @@ function PlacementEditor({ sid, slot, slots, rooms, onClose }: {
 
 // ───────────────────────── 시험 일정 카드 ─────────────────────────
 
-function ScheduleCard({ sid, editable, slots, rooms }: { sid: string; editable: boolean; slots: Slot[]; rooms: Room[] }) {
-  const [modal, setModal] = useState<{ kind: 'slot'; slot: Slot | null } | { kind: 'placement'; slot: Slot } | null>(null);
+function ScheduleCard({ session, editable, slots, rooms }: { session: ExamSession; editable: boolean; slots: Slot[]; rooms: Room[] }) {
+  const sid = session.id;
+  const [modal, setModal] = useState<{ kind: 'slot'; slot: Slot | null } | { kind: 'placement'; slot: Slot } | { kind: 'grid' } | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: 'info' | 'alert'; text: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -311,7 +313,10 @@ function ScheduleCard({ sid, editable, slots, rooms }: { sid: string; editable: 
       <h2 className="text-lg font-bold">시험 일정과 시험실 배치</h2>
       {editable ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button onClick={() => setModal({ kind: 'slot', slot: null })}>+ 시험 추가</Button>
+          <Button onClick={() => setModal({ kind: 'grid' })}>시험 시간표 표로 입력</Button>
+          <Button variant="secondary" onClick={() => setModal({ kind: 'slot', slot: null })}>
+            + 시험 1건 추가
+          </Button>
           <Button variant="secondary" onClick={() => void autoPlace()} disabled={busy || unplaced.length === 0}>
             기본 배치 자동 생성{unplaced.length ? ` (${unplaced.length}건)` : ''}
           </Button>
@@ -390,6 +395,7 @@ function ScheduleCard({ sid, editable, slots, rooms }: { sid: string; editable: 
       )}
 
       {modal?.kind === 'slot' && <SlotForm sid={sid} slot={modal.slot} slots={slots} onClose={() => setModal(null)} />}
+      {modal?.kind === 'grid' && <ExamGridEditor session={session} slots={slots} rooms={rooms} onClose={() => setModal(null)} />}
       {modal?.kind === 'placement' && (
         <PlacementEditor sid={sid} slot={modal.slot} slots={slots} rooms={rooms} onClose={() => setModal(null)} />
       )}
@@ -456,7 +462,7 @@ export function SessionSetupPage() {
 
   return (
     <div className="grid gap-6">
-      <ScheduleCard sid={sid} editable={editable} slots={slots.data} rooms={rooms.data} />
+      <ScheduleCard session={session} editable={editable} slots={slots.data} rooms={rooms.data} />
       <TimetableCard session={session} teachers={teachers.data} timetable={timetable.data} />
     </div>
   );

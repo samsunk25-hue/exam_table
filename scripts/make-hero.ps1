@@ -1,7 +1,6 @@
 ﻿# 대문 이미지 만들기: 원본 그림(hero-source.png)을 비율 그대로 잘라
 #   apps/web/public/og-image.jpg (링크 미리보기 1200x630) — 시간표 제목 ~ 선생님 상반신·태블릿
 #   apps/web/public/hero.jpg     (로그인 화면 960x504)     — 위와 같은 영역
-#   apps/web/public/banner.jpg   (머리글 빈 공간 1200x240) — 화분·시간표 제목·표·선생님 얼굴·건물 (5:1)
 # 실행: powershell -File scripts/make-hero.ps1 [원본 경로]
 param([string]$Source = "$PSScriptRoot/../hero-source.png")
 
@@ -37,7 +36,6 @@ try {
 
   Save-Crop 0.22 0.07 0.62 1200 630 'og-image.jpg'
   Save-Crop 0.22 0.07 0.62 960 504 'hero.jpg'
-  Save-Crop 0.02 0.09 0.96 1200 240 'banner.jpg'
 } finally {
   $src.Dispose()
 }

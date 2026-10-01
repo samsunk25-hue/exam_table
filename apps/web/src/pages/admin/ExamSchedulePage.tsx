@@ -12,6 +12,7 @@ import {
 import { dateLabel } from '@/components/AvailabilityGrid';
 import { Calendar, parseYmd } from '@/components/Calendar';
 import { ClockTimePicker } from '@/components/ClockTimePicker';
+import { ExamGridEditor } from '@/components/ExamGridEditor';
 import { Modal } from '@/components/Modal';
 import { toast } from '@/components/Toast';
 import { Alert, Button, Card, PageTitle, Spinner } from '@/components/ui';
@@ -295,6 +296,7 @@ function ScheduleEditor({ session }: { session: ExamSession }) {
   const [month, setMonth] = useState(() => new Date());
   const [form, setForm] = useState<{ editing: Slot | null } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [grid, setGrid] = useState(false);
 
   // 처음 열 때 첫 시험이 있는 달로 이동
   const firstDate = useMemo(() => [...slots.data].map((s) => s.date).sort()[0], [slots.data]);
@@ -338,6 +340,12 @@ function ScheduleEditor({ session }: { session: ExamSession }) {
   return (
     <div className="grid gap-6">
       {!editable && <Alert>교사 공개 이후에는 시험 일정을 바꿀 수 없습니다 (보기만 가능).</Alert>}
+      {editable && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button onClick={() => setGrid(true)}>시험 시간표 표로 입력</Button>
+          <span className="text-muted">날짜·교시 시간을 정하고 표에 과목(또는 "자습")을 한 번에 적습니다.</span>
+        </div>
+      )}
       <PeriodTimesCard session={session} editable={editable} />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -402,6 +410,7 @@ function ScheduleEditor({ session }: { session: ExamSession }) {
         </Card>
       </div>
 
+      {grid && <ExamGridEditor session={session} slots={slots.data} rooms={rooms.data} onClose={() => setGrid(false)} />}
       {form && selected && (
         <ExamForm session={session} date={selected} slots={slots.data} rooms={rooms.data} editing={form.editing} grades={grades} onClose={() => setForm(null)} />
       )}

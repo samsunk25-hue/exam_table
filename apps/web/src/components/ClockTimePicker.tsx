@@ -69,7 +69,7 @@ export function ClockTimePicker({ label, value, onChange }: { label: string; val
         }}
         className="flex min-h-12 cursor-pointer items-center justify-between gap-2 rounded-xl border border-line bg-surface px-4 text-left hover:border-primary"
       >
-        <span className={value ? 'text-lg font-bold' : 'text-muted'}>{value || '시간 선택'}</span>
+        <span className={`whitespace-nowrap text-lg ${value ? 'font-bold' : 'text-muted'}`}>{value || '--:--'}</span>
         <svg aria-hidden viewBox="0 0 20 20" className="size-5 fill-none stroke-current stroke-2 text-muted">
           <circle cx="10" cy="10" r="7.5" />
           <path d="M10 6v4l2.5 2" strokeLinecap="round" />

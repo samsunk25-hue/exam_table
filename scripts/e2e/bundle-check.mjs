@@ -13,6 +13,25 @@ const check = (label, ok, detail = '') => {
   if (!ok) failures++;
 };
 
+// 깨끗한 상태에서 시작: 교사·시험실을 비우고 기본 교사 3명만 둔다 (다른 점검이 남긴 자료와 섞이지 않게)
+{
+  process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
+  const require = createRequire(import.meta.url);
+  const { initializeApp } = require('firebase-admin/app');
+  const { getFirestore } = require('firebase-admin/firestore');
+  initializeApp({ projectId: 'smart-invigilation' });
+  const db = getFirestore();
+  for (const col of ['teachers', 'rooms']) await db.recursiveDelete(db.collection(col));
+  const seed = [
+    ['T001', '김국어', 'kim@test.kr', '국어', { grade: 1, classNo: 1 }],
+    ['T002', '이수학', 'lee@test.kr', '수학', { grade: 1, classNo: 2 }],
+    ['T003', '박영어', 'park@test.kr', '영어', null],
+  ];
+  for (const [id, name, email, subject, homeroom] of seed) {
+    await db.doc(`teachers/${id}`).set({ name, email, subject, homeroom, defaultRole: 'NORMAL', active: true, cumulativeLoad: 0, updatedBy: 'seed' });
+  }
+}
+
 const { browser, page, errors } = await openApp();
 
 // 1. 새 시험 프로젝트
@@ -55,6 +74,9 @@ await dialog.getByText(/검증 결과/).waitFor();
 check('통합 양식 검증', (await dialog.getByText(/검증 결과/).innerText()).includes('오류 0건'));
 await page.screenshot({ path: `${OUT}/bundle-preview.png`, fullPage: true });
 await dialog.getByRole('button', { name: '저장', exact: true }).click();
+// 기존 자료 처리 팝업이 뜨면 '기존 자료 유지'
+const keepBtn = page.getByRole('button', { name: /기존 자료 유지/ });
+if (await keepBtn.isVisible({ timeout: 1500 }).catch(() => false)) await keepBtn.click();
 await dialog.getByText('저장했습니다.').waitFor();
 check('저장 결과', true, (await dialog.locator('ul').innerText()).replace(/\n/g, ' / '));
 await dialog.getByRole('button', { name: '닫기' }).first().click();

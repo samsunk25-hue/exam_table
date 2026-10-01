@@ -50,6 +50,9 @@ await dialog.locator('input[type=file]').setInputFiles(file);
 await dialog.getByText(/검증 결과/).waitFor();
 check('샘플 그대로 업로드 → 오류 0건', (await dialog.getByText(/검증 결과/).innerText()).includes('오류 0건'));
 await dialog.getByRole('button', { name: '저장', exact: true }).click();
+// 기존 자료 처리 팝업이 뜨면 '기존 자료 유지'
+const keepBtn = page.getByRole('button', { name: /기존 자료 유지/ });
+if (await keepBtn.isVisible({ timeout: 1500 }).catch(() => false)) await keepBtn.click();
 await dialog.getByText('저장했습니다.').waitFor({ timeout: 60000 });
 const done = (await dialog.locator('ul').innerText()).replace(/\n/g, ' / ');
 check('저장 (교사 25 · 시험 27 · 시간표)', done.includes('교사 25명 (신규 25)') && done.includes('시험 일정 27건') && done.includes('기초시간표 교사 25명'), done);

@@ -15,7 +15,7 @@ import { Modal } from '@/components/Modal';
 import { Alert, Button, Card, DownloadButton, Spinner } from '@/components/ui';
 import { useCollection } from '@/lib/data';
 import { Readiness } from './Readiness';
-import { bundleSheets, saveBundle } from '@/lib/bundle';
+import { bundleSheets, replacePreview, saveBundle, type SaveMode } from '@/lib/bundle';
 import { errorMessage } from '@/lib/firebase';
 import type { ExamSession } from '@/lib/sessions';
 import { downloadWorkbook, readWorkbook, type SheetData } from '@/lib/xlsx';
@@ -43,6 +43,7 @@ function BundleImportDialog({ session, editable, teachers, rooms, slots, timetab
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string[] | null>(null);
+  const [asking, setAsking] = useState(false);
 
   const analysis = useMemo(
     () =>
@@ -69,12 +70,17 @@ function BundleImportDialog({ session, editable, teachers, rooms, slots, timetab
     }
   };
 
-  const save = async () => {
+  const ctx = { teachers, rooms, slots, timetable };
+  const gone = analysis ? replacePreview(analysis.plan, ctx) : null;
+  const goneCount = gone ? gone.teachers.length + gone.rooms.length + gone.slots.length + gone.timetable.length : 0;
+
+  const save = async (mode: SaveMode) => {
     if (!analysis) return;
+    setAsking(false);
     setBusy(true);
     setError(null);
     try {
-      setDone(await saveBundle(session.id, analysis.plan, { rooms, slots, timetable }, { autoPlace: autoPlace && editable }));
+      setDone(await saveBundle(session.id, analysis.plan, ctx, { autoPlace: autoPlace && editable, mode }));
     } catch (e) {
       setError(`저장 중 오류가 발생했습니다: ${errorMessage(e)}`);
     } finally {
@@ -169,7 +175,10 @@ function BundleImportDialog({ session, editable, teachers, rooms, slots, timetab
           {error && <Alert>{error}</Alert>}
 
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void save()} disabled={busy || !analysis || analysis.errorCount > 0 || !anything}>
+            <Button
+              onClick={() => (goneCount > 0 ? setAsking(true) : void save('merge'))}
+              disabled={busy || !analysis || analysis.errorCount > 0 || !anything}
+            >
               {busy ? '저장 중…' : analysis?.errorCount ? '오류를 고친 뒤 다시 올려 주세요' : '저장'}
             </Button>
             <Button variant="secondary" onClick={onClose} disabled={busy}>
@@ -177,6 +186,39 @@ function BundleImportDialog({ session, editable, teachers, rooms, slots, timetab
             </Button>
           </div>
         </div>
+      )}
+
+      {asking && gone && (
+        <Modal title="기존 자료를 어떻게 할까요?" onClose={() => setAsking(false)}>
+          <div className="grid gap-4">
+            <p>이미 입력된 자료 중 이번 파일에 없는 것이 있습니다.</p>
+            <ul className="list-disc rounded-xl bg-bg py-3 pr-3 pl-8">
+              {gone.teachers.length > 0 && <li>교사 {gone.teachers.length}명 ({gone.teachers.slice(0, 3).map((t) => t.name).join(', ')}{gone.teachers.length > 3 ? ' …' : ''})</li>}
+              {gone.rooms.length > 0 && <li>시험실 {gone.rooms.length}개 ({gone.rooms.slice(0, 3).map((r) => r.name).join(', ')}{gone.rooms.length > 3 ? ' …' : ''})</li>}
+              {gone.slots.length > 0 && <li>시험 {gone.slots.length}건</li>}
+              {gone.timetable.length > 0 && <li>기초시간표 교사 {gone.timetable.length}명</li>}
+            </ul>
+            <div className="grid gap-2">
+              <Button variant="secondary" className="h-auto justify-start py-3 text-left" onClick={() => void save('merge')}>
+                <span>
+                  <span className="block">기존 자료 유지 (추가·수정만)</span>
+                  <span className="block text-sm font-normal text-muted">위 자료는 그대로 두고, 파일에 있는 내용만 새로 넣거나 고칩니다.</span>
+                </span>
+              </Button>
+              <Button variant="danger" className="h-auto justify-start py-3 text-left" onClick={() => void save('replace')}>
+                <span>
+                  <span className="block">기존 자료 지우고 파일 내용으로 바꾸기</span>
+                  <span className="block text-sm font-normal">
+                    위 시험실·시험·기초시간표는 삭제합니다. 교사는 지난 기록을 지키기 위해 삭제하지 않고 "사용 안 함"으로 바꿉니다.
+                  </span>
+                </span>
+              </Button>
+              <Button variant="ghost" onClick={() => setAsking(false)}>
+                취소
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </Modal>
   );

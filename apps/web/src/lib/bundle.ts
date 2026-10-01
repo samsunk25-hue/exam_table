@@ -133,18 +133,53 @@ export function bundleSheets(opts: {
   ];
 }
 
+export type SaveMode = 'merge' | 'replace';
+
+export interface BundleContext {
+  teachers: Teacher[];
+  rooms: Room[];
+  slots: Slot[];
+  timetable: WithId<BaseTimetableDoc>[];
+}
+
+/**
+ * "기존 자료 지우고 바꾸기"를 고르면 사라질 자료 (파일에 해당 시트가 있는 항목만).
+ * 교사는 지난 배정 기록·누적 점수를 지키려고 삭제 대신 "사용 안 함"으로 바꾼다.
+ */
+export function replacePreview(plan: BundlePlan, ctx: BundleContext) {
+  const inFile = <T extends { id: string }>(list: T[], ids: Set<string>) => list.filter((x) => !ids.has(x.id));
+  return {
+    teachers: plan.teachers.length ? inFile(ctx.teachers.filter((t) => t.active), new Set(plan.teachers.map((t) => t.id))) : [],
+    rooms: plan.rooms.length ? inFile(ctx.rooms, new Set(plan.rooms.map((r) => r.id))) : [],
+    slots: plan.slots ? inFile(ctx.slots, new Set(plan.slots.map((s) => s.id))) : [],
+    timetable: plan.timetable ? inFile(ctx.timetable, new Set(plan.timetable.map((e) => e.teacherId))) : [],
+  };
+}
+
 /**
  * 통합 양식 저장: 교사 → 시험실 → 시험 일정 → 배치 → (배치 없는 시험 자동 배치) → 기초시간표 순서.
+ * mode = merge: 파일 내용만 추가·수정 / replace: 파일에 없는 기존 자료도 정리(교사는 사용 안 함).
  * 단계마다 커밋하므로 중간에 실패하면 앞 단계까지는 저장된다.
  */
 export async function saveBundle(
   sid: string,
   plan: BundlePlan,
-  ctx: { rooms: Room[]; slots: Slot[]; timetable: WithId<BaseTimetableDoc>[] },
-  opts: { autoPlace: boolean },
+  ctx: BundleContext,
+  opts: { autoPlace: boolean; mode: SaveMode },
 ): Promise<string[]> {
   const done: string[] = [];
   const slotPath = `sessions/${sid}/slots`;
+  const replace = opts.mode === 'replace';
+  const gone = replacePreview(plan, ctx);
+
+  if (replace && gone.teachers.length) {
+    await commitOps(gone.teachers.map((t) => ({ type: 'set', ref: ref('teachers', t.id), data: { active: false }, merge: true })));
+    done.push(`파일에 없는 교사 ${gone.teachers.length}명 → 사용 안 함`);
+  }
+  if (replace && gone.rooms.length) {
+    await commitOps(gone.rooms.map((r) => ({ type: 'delete', ref: ref('rooms', r.id) })));
+    done.push(`파일에 없는 시험실 ${gone.rooms.length}개 삭제`);
+  }
 
   if (plan.teachers.length) {
     await commitOps(
@@ -158,7 +193,7 @@ export async function saveBundle(
     done.push(`교사 ${plan.teachers.length}명 (신규 ${plan.teachers.filter((t) => t.isNew).length})`);
   }
 
-  const roomsAfter = new Map(ctx.rooms.map((r) => [r.id, r]));
+  const roomsAfter = new Map((replace ? ctx.rooms.filter((r) => !gone.rooms.includes(r)) : ctx.rooms).map((r) => [r.id, r]));
   if (plan.rooms.length) {
     await commitOps(plan.rooms.map(({ id, isNew: _n, ...data }) => ({ type: 'set', ref: ref('rooms', id), data })));
     for (const { isNew: _n, ...r } of plan.rooms) roomsAfter.set(r.id, r);
@@ -175,10 +210,14 @@ export async function saveBundle(
       ref: ref(slotPath, id),
       data: { ...data, rooms: existing.get(id)?.rooms ?? [] },
     }));
-    const removed = ctx.slots.filter((s) => !keep.has(s.id));
+    // 기존 유지면 파일에 없는 시험은 그대로 둔다
+    const removed = replace ? ctx.slots.filter((s) => !keep.has(s.id)) : [];
     for (const s of removed) ops.push({ type: 'delete', ref: ref(slotPath, s.id) });
     await commitOps(ops);
-    slotsAfter = plan.slots.map((s) => ({ ...s, rooms: existing.get(s.id)?.rooms ?? [] }));
+    slotsAfter = [
+      ...plan.slots.map((s) => ({ ...s, rooms: existing.get(s.id)?.rooms ?? [] })),
+      ...(replace ? [] : ctx.slots.filter((s) => !keep.has(s.id))),
+    ];
     done.push(`시험 일정 ${plan.slots.length}건${removed.length ? ` (삭제 ${removed.length})` : ''}`);
   }
 
@@ -223,7 +262,7 @@ export async function saveBundle(
       ref: ref(`sessions/${sid}/baseTimetable`, teacherId),
       data: { teacherId, entries },
     }));
-    for (const d of ctx.timetable) if (!grouped.has(d.id)) ops.push({ type: 'delete', ref: ref(`sessions/${sid}/baseTimetable`, d.id) });
+    if (replace) for (const d of ctx.timetable) if (!grouped.has(d.id)) ops.push({ type: 'delete', ref: ref(`sessions/${sid}/baseTimetable`, d.id) });
     await commitOps(ops);
     done.push(`기초시간표 교사 ${grouped.size}명 · 수업 ${plan.timetable.length}건`);
   }

@@ -7,7 +7,7 @@ export const APP_TITLE = `${APP_NAME}: ${APP_SUBTITLE}`;
 /** 필기체 앱 제목. size: 머리글(md) / 로그인 화면(lg) */
 export function AppTitle({ size = 'md', as: Tag = 'div' }: { size?: 'md' | 'lg'; as?: 'div' | 'h1' }) {
   return (
-    <Tag className={`font-hand leading-none ${size === 'lg' ? 'text-[2.8rem]' : 'text-[2.1rem]'}`}>
+    <Tag className={`font-hand leading-none ${size === 'lg' ? 'text-[2.3rem] sm:text-[2.8rem]' : 'text-[1.55rem] sm:text-[2.1rem]'}`}>
       <span className="text-primary-strong">{APP_NAME}</span>
       <span className="text-ink">: {APP_SUBTITLE}</span>
     </Tag>

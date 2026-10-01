@@ -15,6 +15,8 @@ import { SessionAvailabilityPage } from '@/pages/admin/SessionAvailabilityPage';
 import { SessionEditorPage } from '@/pages/admin/SessionEditorPage';
 import { SessionLayout, SessionOverview } from '@/pages/admin/SessionPage';
 import { MyAvailabilityPage } from '@/pages/teacher/MyAvailabilityPage';
+import { MySchedulePage } from '@/pages/teacher/MySchedulePage';
+import { SessionPrintPage } from '@/pages/admin/SessionPrintPage';
 import { SessionSetupPage } from '@/pages/admin/SessionSetupPage';
 import { TeachersPage } from '@/pages/admin/TeachersPage';
 
@@ -95,7 +97,7 @@ const router = createBrowserRouter([
               },
               {
                 path: 'print',
-                element: <PlaceholderPage title="출력" sprint="Sprint 6" description="전체·개인별 시간표 인쇄용 PDF." />,
+                element: <SessionPrintPage />,
               },
               {
                 path: 'history',
@@ -116,9 +118,7 @@ const router = createBrowserRouter([
         children: [
           {
             index: true,
-            element: (
-              <PlaceholderPage title="내 감독 시간표" sprint="Sprint 5" description="교사 공개 이후 본인 감독 일정과 배정 사유를 확인합니다." />
-            ),
+            element: <MySchedulePage />,
           },
           { path: 'availability', element: <MyAvailabilityPage /> },
         ],

@@ -16,11 +16,11 @@ export function AppShell({ nav, modeLabel }: { nav: NavItem[]; modeLabel: string
   return (
     <div className="min-h-dvh">
       {usingEmulators && (
-        <div className="bg-mint-soft px-4 py-1 text-center text-sm">로컬 에뮬레이터 연결 중 (실제 데이터 아님)</div>
+        <div className="no-print bg-mint-soft px-4 py-1 text-center text-sm">로컬 에뮬레이터 연결 중 (실제 데이터 아님)</div>
       )}
       <header className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1440px] items-center gap-4 px-4 py-3 lg:px-8">
-          <div className="min-w-0 shrink-0">
+          <div className="min-w-0 md:shrink-0">
             <AppTitle />
             <div className="mt-1 truncate text-sm text-muted">
               {modeLabel} · {user?.email}

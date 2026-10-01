@@ -3,9 +3,9 @@ import { chromium } from 'playwright-core';
 
 export const BASE = process.env.E2E_BASE ?? 'http://localhost:5173';
 
-export async function openApp({ email = 'samsunk25@gmail.com', headless = true } = {}) {
+export async function openApp({ email = 'samsunk25@gmail.com', headless = true, viewport = undefined } = {}) {
   const browser = await chromium.launch({ channel: 'msedge', headless });
-  const context = await browser.newContext({ acceptDownloads: true, locale: 'ko-KR' });
+  const context = await browser.newContext({ acceptDownloads: true, locale: 'ko-KR', ...(viewport ? { viewport, isMobile: true, hasTouch: true } : {}) });
   const page = await context.newPage();
   const errors = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));

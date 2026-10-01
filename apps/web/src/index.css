@@ -26,6 +26,33 @@ html {
   font-size: 17px; /* 본문 16~18px */
 }
 
+/* 인쇄(PDF 저장): 메뉴·버튼을 빼고 시간표만 */
+@media print {
+  .no-print,
+  header,
+  nav,
+  button,
+  [role='status'] {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    font-size: 11pt;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  section,
+  .print-break-inside-avoid {
+    break-inside: avoid;
+    box-shadow: none !important;
+  }
+  @page {
+    margin: 12mm;
+  }
+}
+
 body {
   background: var(--color-bg);
   color: var(--color-ink);

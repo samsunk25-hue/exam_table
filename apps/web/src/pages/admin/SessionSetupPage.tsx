@@ -15,6 +15,7 @@ import {
   type WithId,
 } from '@sim/shared';
 import { ExamGridEditor } from '@/components/ExamGridEditor';
+import { ScheduleImportDialog } from '@/components/ScheduleImportDialog';
 import { Modal } from '@/components/Modal';
 import { Alert, Button, Card, Field, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
@@ -262,7 +263,7 @@ function PlacementEditor({ sid, slot, slots, rooms, onClose }: {
 
 function ScheduleCard({ session, editable, slots, rooms }: { session: ExamSession; editable: boolean; slots: Slot[]; rooms: Room[] }) {
   const sid = session.id;
-  const [modal, setModal] = useState<{ kind: 'slot'; slot: Slot | null } | { kind: 'placement'; slot: Slot } | { kind: 'grid' } | null>(null);
+  const [modal, setModal] = useState<{ kind: 'slot'; slot: Slot | null } | { kind: 'placement'; slot: Slot } | { kind: 'grid' } | { kind: 'import' } | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: 'info' | 'alert'; text: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -314,6 +315,9 @@ function ScheduleCard({ session, editable, slots, rooms }: { session: ExamSessio
       {editable ? (
         <div className="mt-3 flex flex-wrap gap-2">
           <Button onClick={() => setModal({ kind: 'grid' })}>시험 시간표 표로 입력</Button>
+          <Button variant="secondary" onClick={() => setModal({ kind: 'import' })}>
+            다른 프로젝트에서 불러오기
+          </Button>
           <Button variant="secondary" onClick={() => setModal({ kind: 'slot', slot: null })}>
             + 시험 1건 추가
           </Button>
@@ -395,6 +399,7 @@ function ScheduleCard({ session, editable, slots, rooms }: { session: ExamSessio
       )}
 
       {modal?.kind === 'slot' && <SlotForm sid={sid} slot={modal.slot} slots={slots} onClose={() => setModal(null)} />}
+      {modal?.kind === 'import' && <ScheduleImportDialog session={session} slots={slots} rooms={rooms} onClose={() => setModal(null)} />}
       {modal?.kind === 'grid' && <ExamGridEditor session={session} slots={slots} rooms={rooms} onClose={() => setModal(null)} />}
       {modal?.kind === 'placement' && (
         <PlacementEditor sid={sid} slot={modal.slot} slots={slots} rooms={rooms} onClose={() => setModal(null)} />

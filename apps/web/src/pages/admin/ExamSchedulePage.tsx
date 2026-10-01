@@ -12,6 +12,7 @@ import { Calendar, parseYmd, ymd } from '@/components/Calendar';
 import { BreakTimeBar } from '@/components/BreakTimeBar';
 import { ClockTimePicker } from '@/components/ClockTimePicker';
 import { ExamGridEditor } from '@/components/ExamGridEditor';
+import { ScheduleImportDialog } from '@/components/ScheduleImportDialog';
 import { Modal } from '@/components/Modal';
 import { toast } from '@/components/Toast';
 import { Alert, Button, Card, PageTitle, Spinner } from '@/components/ui';
@@ -337,6 +338,7 @@ function ScheduleEditor({ session }: { session: ExamSession }) {
   const [form, setForm] = useState<{ editing: Slot | null } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [grid, setGrid] = useState<{ dates: string[] } | null>(null);
+  const [importing, setImporting] = useState(false);
   // 기간 선택: 시작일 → 종료일 두 번 누른다
   const [rangeMode, setRangeMode] = useState(false);
   const [range, setRange] = useState<{ from: string; to: string | null } | null>(null);
@@ -400,6 +402,9 @@ function ScheduleEditor({ session }: { session: ExamSession }) {
       {editable && (
         <div className="flex flex-wrap items-center gap-3">
           <Button onClick={() => setGrid({ dates: [] })}>시험 시간표 표로 입력</Button>
+          <Button variant="secondary" onClick={() => setImporting(true)}>
+            다른 프로젝트에서 불러오기
+          </Button>
           <span className="text-muted">날짜·교시 시간을 정하고 표에 과목(또는 "자습")을 한 번에 적습니다.</span>
         </div>
       )}
@@ -529,6 +534,7 @@ function ScheduleEditor({ session }: { session: ExamSession }) {
         </Card>
       </div>
 
+      {importing && <ScheduleImportDialog session={session} slots={slots.data} rooms={rooms.data} onClose={() => setImporting(false)} />}
       {grid && <ExamGridEditor session={session} slots={slots.data} rooms={rooms.data} initialDates={grid.dates} onClose={() => setGrid(null)} />}
       {form && selected && (
         <ExamForm session={session} date={selected} slots={slots.data} rooms={rooms.data} editing={form.editing} grades={grades} onClose={() => setForm(null)} />

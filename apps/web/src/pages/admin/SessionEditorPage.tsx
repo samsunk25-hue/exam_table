@@ -6,6 +6,7 @@ import {
   buildSeats,
   findSwapChains,
   seatCandidates,
+  validateAssignments,
   type EngineInput,
   type Seat,
   type SwapChain,
@@ -225,6 +226,65 @@ function SeatDialog({
   );
 }
 
+type Change = { seatId: string; teacherId: string | null };
+
+/**
+ * 끌어다 놓기: from 좌석의 교사를 to 좌석으로. to가 비어 있으면 옮기기, 차 있으면 맞바꾸기.
+ * 하드 조건을 어기면 이유를 돌려준다.
+ */
+function planDrop(data: EditorData, fromId: string, toId: string): { changes: Change[]; label: string; problem: string | null } | null {
+  if (fromId === toId) return null;
+  const now = new Map(data.assignments.map((a) => [a.id, a.teacherId]));
+  const mover = now.get(fromId);
+  if (!mover) return null;
+  const other = now.get(toId) ?? null;
+  const changes: Change[] = [
+    { seatId: fromId, teacherId: other },
+    { seatId: toId, teacherId: mover },
+  ];
+  for (const c of changes) {
+    if (c.teacherId) now.set(c.seatId, c.teacherId);
+    else now.delete(c.seatId);
+  }
+  const touched = new Set([fromId, toId]);
+  const v = validateAssignments(data.input, [...now].map(([seatId, teacherId]) => ({ seatId, teacherId }))).filter((x) => touched.has(x.seatId));
+  return {
+    changes,
+    label: other ? '끌어다 놓기 맞바꾸기' : '끌어다 놓기 이동',
+    problem: v.length ? v.map((x) => x.message).join(' / ') : null,
+  };
+}
+
+/** 최종 확정 이후 끌어다 놓기는 사유를 받는다 */
+function DropReasonDialog({ text, onSubmit, onClose }: { text: string; onSubmit: (reason: string) => void; onClose: () => void }) {
+  const [reason, setReason] = useState('');
+  return (
+    <Modal title="변경 사유" onClose={onClose}>
+      <form
+        className="grid gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (reason.trim()) onSubmit(reason.trim());
+        }}
+      >
+        <p>{text}</p>
+        <label className="grid gap-1">
+          <span className="font-semibold">최종 확정 이후 변경 사유</span>
+          <input aria-label="변경 사유" className="min-h-12 rounded-xl border border-line px-4" value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
+        </label>
+        <div className="flex gap-2">
+          <Button type="submit" disabled={!reason.trim()}>
+            바꾸기
+          </Button>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            취소
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 export function SessionEditorPage() {
   const session = useCurrentSession();
   const sid = session.id;
@@ -236,6 +296,10 @@ export function SessionEditorPage() {
   const constraints = useCollection<ConstraintDoc>(`sessions/${sid}/constraints`);
   const timetable = useCollection<BaseTimetableDoc>(`sessions/${sid}/baseTimetable`);
   const [editing, setEditing] = useState<Seat | null>(null);
+  // 끌어다 놓기: 잡은 좌석, 올려놓은 좌석(가능 여부), 사유 입력 대기
+  const [dragFrom, setDragFrom] = useState<string | null>(null);
+  const [hover, setHover] = useState<{ seatId: string; ok: boolean } | null>(null);
+  const [pendingDrop, setPendingDrop] = useState<{ changes: Change[]; label: string; text: string } | null>(null);
 
   const all = [slots, rooms, teachers, assignments, availability, constraints, timetable];
   const loading = all.some((x) => x.loading);
@@ -274,6 +338,35 @@ export function SessionEditorPage() {
   const unassigned = data.seats.filter((s) => !byId.has(s.id)).length;
   const locked = session.status === 'LOCKED';
 
+  const describe = (seatId: string) => {
+    const s = data.seats.find((x) => x.id === seatId)!;
+    return `${s.period}교시 ${roomName.get(s.roomId) ?? ''}`;
+  };
+  const apply = async (changes: Change[], label: string, reason?: string) => {
+    try {
+      await callApplyChanges({ sessionId: session.id, changes, reason, label });
+      toast(`${label === '끌어다 놓기 맞바꾸기' ? '맞바꿨습니다' : '옮겼습니다'}.`);
+    } catch (e) {
+      toast(errorMessage(e), 'alert');
+    }
+  };
+  const drop = (toId: string) => {
+    const fromId = dragFrom;
+    setDragFrom(null);
+    setHover(null);
+    if (!fromId) return;
+    const plan = planDrop(data, fromId, toId);
+    if (!plan) return;
+    if (plan.problem) return toast(`바꿀 수 없습니다: ${plan.problem}`, 'alert');
+    const mover = data.nameOf(byId.get(fromId)!.teacherId);
+    const other = byId.get(toId);
+    const text = other
+      ? `${mover}(${describe(fromId)}) ↔ ${data.nameOf(other.teacherId)}(${describe(toId)}) 맞바꾸기`
+      : `${mover}: ${describe(fromId)} → ${describe(toId)} 옮기기`;
+    if (session.status === 'CONFIRMED') setPendingDrop({ changes: plan.changes, label: plan.label, text });
+    else void apply(plan.changes, plan.label);
+  };
+
   return (
     <div className="grid gap-6">
       <Card>
@@ -291,6 +384,11 @@ export function SessionEditorPage() {
           </div>
         )}
         {data.seats.length === 0 && <p className="mt-2 text-muted">시험 일정과 시험실 배치를 먼저 등록하세요.</p>}
+        {!locked && data.seats.length > 0 && (
+          <p className="mt-2 text-sm text-muted">
+            💡 교사 이름을 끌어 다른 칸에 놓으면 옮기거나(빈칸) 맞바꿉니다(다른 교사 칸). 놓을 수 있는 칸은 초록, 조건에 걸리는 칸은 빨강으로 표시됩니다.
+          </p>
+        )}
       </Card>
 
       <AdminSwapCard sid={session.id} name={data.nameOf} />
@@ -309,15 +407,38 @@ export function SessionEditorPage() {
                       <div className="flex flex-col gap-1">
                         {seats.map((s) => {
                           const a = byId.get(s.id);
+                          const target = hover?.seatId === s.id && dragFrom !== s.id ? (hover.ok ? 'ring-4 ring-mint' : 'ring-4 ring-alert') : '';
                           return (
                             <button
                               key={s.id}
                               type="button"
                               disabled={locked}
+                              draggable={!locked && Boolean(a)}
+                              aria-label={`${s.period}교시 ${r.name} ${SEAT_ROLE_LABEL[s.role]} ${a ? data.nameOf(a.teacherId) : '미배정'}`}
                               onClick={() => setEditing(s)}
-                              className={`min-h-11 cursor-pointer rounded-lg px-2 text-left font-semibold transition-colors disabled:cursor-default ${
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData('text/plain', s.id);
+                                e.dataTransfer.effectAllowed = 'move';
+                                setDragFrom(s.id);
+                              }}
+                              onDragEnd={() => (setDragFrom(null), setHover(null))}
+                              onDragOver={(e) => {
+                                if (!dragFrom || locked) return;
+                                e.preventDefault();
+                                if (hover?.seatId !== s.id) {
+                                  const plan = planDrop(data, dragFrom, s.id);
+                                  setHover({ seatId: s.id, ok: Boolean(plan && !plan.problem) });
+                                }
+                              }}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                drop(s.id);
+                              }}
+                              className={`min-h-11 cursor-pointer rounded-lg px-2 text-left font-semibold transition-colors disabled:cursor-default ${target} ${
+                                dragFrom === s.id ? 'opacity-40' : ''
+                              } ${
                                 a
-                                  ? `${a.source === 'MANUAL' ? 'border-2 border-primary' : 'border border-line'} bg-surface hover:bg-primary-soft`
+                                  ? `${a.source === 'MANUAL' ? 'border-2 border-primary' : 'border border-line'} bg-surface hover:bg-primary-soft ${locked ? '' : 'active:cursor-grabbing'}`
                                   : 'border-2 border-dashed border-alert bg-alert-soft text-[#c0392b]'
                               }`}
                             >
@@ -336,6 +457,16 @@ export function SessionEditorPage() {
         </Card>
       ))}
 
+      {pendingDrop && (
+        <DropReasonDialog
+          text={pendingDrop.text}
+          onClose={() => setPendingDrop(null)}
+          onSubmit={(reason) => {
+            void apply(pendingDrop.changes, pendingDrop.label, reason);
+            setPendingDrop(null);
+          }}
+        />
+      )}
       {editing && (
         <SeatDialog session={session} seat={editing} roomName={roomName.get(editing.roomId) ?? ''} data={data} onClose={() => setEditing(null)} />
       )}

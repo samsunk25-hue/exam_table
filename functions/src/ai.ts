@@ -306,12 +306,13 @@ export const aiFairnessReport = onCall(AI_OPTIONS, async (req) => {
   const sd = Math.sqrt(stats.reduce((s, x) => s + (x.total - mean) ** 2, 0) / (stats.length || 1));
 
   // 제안: 누적이 많은 교사의 감독을, 조건을 지키며 누적이 적은 교사에게 넘기기 (최대 5건, 같은 교사 두 번 받지 않게)
-  const plain = L.current.map((a) => ({ seatId: a.id, teacherId: a.teacherId }));
+  const plain = L.current.filter((a) => L.seats.has(a.id)).map((a) => ({ seatId: a.id, teacherId: a.teacherId }));
   const heavy = [...stats].sort((a, b) => b.total - a.total).slice(0, 4);
   const moves: { seatId: string; from: string; to: string; label: string; effect: string }[] = [];
   const used = new Set<string>();
   for (const h of heavy) {
-    for (const a of L.current.filter((x) => x.teacherId === h.id)) {
+    // 지금 일정·시험실에 없는 옛 배정 기록은 건너뛴다
+    for (const a of L.current.filter((x) => x.teacherId === h.id && L.seats.has(x.id))) {
       if (moves.length >= 5) break;
       const best = seatCandidates(L.input, plain, a.id)
         .filter((c) => !c.blockedBy && c.teacherId !== h.id && !used.has(c.teacherId) && (total.get(c.teacherId) ?? 0) + a.weight < h.total - 0.5)

@@ -73,6 +73,7 @@ body {
 }
 .animal-hop {
   display: inline-block;
+  transform-origin: 50% 100%;
   animation-name: animal-hop;
   animation-timing-function: ease-in-out;
   animation-iteration-count: infinite;
@@ -85,7 +86,9 @@ body {
   50% { left: calc(100% - 2rem); transform: scaleX(1); }
   100% { left: 0; transform: scaleX(1); }
 }
+/* 걷는 모습: 발을 옮길 때마다 몸을 좌우로 살짝 기울인다 (튀지 않게 위아래 1px만) */
 @keyframes animal-hop {
-  from { transform: translateY(0); }
-  to { transform: translateY(-0.4rem); }
+  from { transform: rotate(-7deg) translateY(0); }
+  50% { transform: rotate(0deg) translateY(-1px); }
+  to { transform: rotate(7deg) translateY(0); }
 }

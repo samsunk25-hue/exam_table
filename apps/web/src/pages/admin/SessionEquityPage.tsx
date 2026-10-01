@@ -5,6 +5,7 @@ import { useCollection } from '@/lib/data';
 import { sessionTitle, termWhere } from '@/lib/sessions';
 import { downloadWorkbook } from '@/lib/xlsx';
 import { useCurrentSession } from './SessionPage';
+import { YearTrend } from './YearTrend';
 
 const ROLES: SeatRole[] = ['CHIEF', 'ASSISTANT', 'HALLWAY', 'EXTENDED', 'STUDY'];
 const round = (n: number) => Math.round(n * 10) / 10;
@@ -175,6 +176,8 @@ export function SessionEquityPage() {
           </Table>
         )}
       </Card>
+
+      <YearTrend session={session} teachers={teachers.data} assignments={assignments.data} />
     </div>
   );
 }

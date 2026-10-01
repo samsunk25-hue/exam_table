@@ -5,7 +5,6 @@ import { AppShell, type NavItem } from '@/layouts/AppShell';
 import type { Role } from '@/lib/firebase';
 import { LoginPage } from '@/pages/LoginPage';
 import { NoAccessPage } from '@/pages/NoAccessPage';
-import { PlaceholderPage } from '@/pages/PlaceholderPage';
 import { AdminsPage } from '@/pages/admin/AdminsPage';
 import { DashboardPage } from '@/pages/admin/DashboardPage';
 import { ExamSchedulePage } from '@/pages/admin/ExamSchedulePage';
@@ -17,6 +16,7 @@ import { SessionLayout, SessionOverview } from '@/pages/admin/SessionPage';
 import { MyAvailabilityPage } from '@/pages/teacher/MyAvailabilityPage';
 import { MySchedulePage } from '@/pages/teacher/MySchedulePage';
 import { SessionPrintPage } from '@/pages/admin/SessionPrintPage';
+import { SessionHistoryPage } from '@/pages/admin/SessionHistoryPage';
 import { SessionSetupPage } from '@/pages/admin/SessionSetupPage';
 import { TeachersPage } from '@/pages/admin/TeachersPage';
 
@@ -101,7 +101,7 @@ const router = createBrowserRouter([
               },
               {
                 path: 'history',
-                element: <PlaceholderPage title="변경 이력" sprint="Sprint 5" description="Audit Log 조회." />,
+                element: <SessionHistoryPage />,
               },
             ],
           },

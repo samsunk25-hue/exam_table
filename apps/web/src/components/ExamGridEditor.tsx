@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
 import { autoPlacements, slotIdOf, type RoomDoc, type SlotDoc, type WithId } from '@sim/shared';
 import { dateLabel } from '@/components/AvailabilityGrid';
+import { BreakTimeBar } from '@/components/BreakTimeBar';
 import { ClockTimePicker } from '@/components/ClockTimePicker';
 import { Modal } from '@/components/Modal';
 import { toast } from '@/components/Toast';
 import { Alert, Button } from '@/components/ui';
 import { commitOps, ref, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
+import { guessBreak, recalcPeriods, withAddedPeriod } from '@/lib/periodTimes';
 import { updateSessionSettings, type ExamSession, type PeriodTime } from '@/lib/sessions';
 
 type Slot = WithId<SlotDoc>;
@@ -23,15 +25,18 @@ export function ExamGridEditor({
   session,
   slots,
   rooms,
+  initialDates = [],
   onClose,
 }: {
   session: ExamSession;
   slots: Slot[];
   rooms: WithId<RoomDoc>[];
+  /** 달력에서 고른 기간: 처음부터 날짜로 넣어 둔다 */
+  initialDates?: string[];
   onClose: () => void;
 }) {
   const savedTimes = session.settings.periodTimes ?? {};
-  const [dates, setDates] = useState<string[]>(() => [...new Set(slots.map((s) => s.date))].sort());
+  const [dates, setDates] = useState<string[]>(() => [...new Set([...slots.map((s) => s.date), ...initialDates])].sort());
   const [newDate, setNewDate] = useState('');
   const [periods, setPeriods] = useState(() => Math.max(3, ...slots.map((s) => s.period), ...Object.keys(savedTimes).map(Number)));
   const [times, setTimes] = useState<Record<string, PeriodTime>>(() => {
@@ -39,6 +44,7 @@ export function ExamGridEditor({
     for (const s of slots) if (!t[s.period] && s.startTime) t[s.period] = { start: s.startTime, end: s.endTime ?? '' };
     return t;
   });
+  const [breakMin, setBreakMin] = useState(() => guessBreak(times));
   const grades = useMemo(() => {
     const g = new Set<number>([1, 2, 3]);
     rooms.forEach((r) => r.grade && g.add(r.grade));
@@ -148,6 +154,9 @@ export function ExamGridEditor({
 
         <section>
           <h3 className="mb-2 font-bold">2. 교시별 시간</h3>
+          <div className="mb-3">
+            <BreakTimeBar value={breakMin} onChange={setBreakMin} onRecalc={() => setTimes(recalcPeriods(times, periods, breakMin))} canRecalc={Boolean(times[1]?.start && times[1]?.end)} />
+          </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: periods }, (_, i) => i + 1).map((p) => (
               <div key={p} className="grid grid-cols-[3.5rem_1fr_1fr] items-end gap-2 rounded-xl border border-line p-2">
@@ -159,7 +168,7 @@ export function ExamGridEditor({
           </div>
           <div className="mt-2 flex gap-2">
             {periods < 8 && (
-              <Button variant="ghost" onClick={() => setPeriods(periods + 1)}>
+              <Button variant="ghost" onClick={() => (setTimes(withAddedPeriod(times, periods, breakMin)), setPeriods(periods + 1))}>
                 + 교시 추가
               </Button>
             )}

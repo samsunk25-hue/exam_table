@@ -7,12 +7,15 @@ export function Calendar({
   month,
   onMonthChange,
   selected,
+  selectedSet,
   onSelect,
   marks,
 }: {
   month: Date;
   onMonthChange: (d: Date) => void;
   selected: string | null;
+  /** 기간 선택처럼 여러 날을 함께 표시할 때 */
+  selectedSet?: Set<string>;
   onSelect: (date: string) => void;
   marks: Map<string, number>;
 }) {
@@ -63,7 +66,7 @@ export function Calendar({
           const key = ymd(d);
           const inMonth = d.getMonth() === month.getMonth();
           const count = marks.get(key) ?? 0;
-          const isSel = key === selected;
+          const isSel = key === selected || Boolean(selectedSet?.has(key));
           return (
             <button
               key={key}

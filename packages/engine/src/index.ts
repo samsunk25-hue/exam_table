@@ -14,4 +14,5 @@ export {
   EXCLUSION_LABEL,
   buildSeats,
   weekdayOf,
+  ruleWhenMatches,
 } from './context';

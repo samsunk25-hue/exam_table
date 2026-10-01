@@ -1,5 +1,6 @@
 import type {
   Constraint,
+  RuleWhen,
   EngineInput,
   ExclusionReason,
   Role,
@@ -212,8 +213,26 @@ export function buildContext(input: EngineInput): Context {
   };
 }
 
+const hit = <T>(list: T[] | undefined, v: T) => !list?.length || list.includes(v);
+
+/** 일반 규칙(RULE)의 조건이 이 자리에 맞는지 */
+export function ruleWhenMatches(w: RuleWhen | undefined, teacher: Teacher, seat: Seat): boolean {
+  if (!w) return true;
+  return (
+    hit(w.dates, seat.date) &&
+    (!w.periods?.length || seat.periods.some((p) => w.periods!.includes(p))) &&
+    hit(w.grades, seat.grade) &&
+    hit(w.roles, seat.role) &&
+    hit(w.subjects, seat.subject) &&
+    hit(w.roomIds, seat.roomId) &&
+    (!w.ownHomeroom || (teacher.homeroom !== null && teacher.homeroom.grade === seat.grade && teacher.homeroom.classNo === seat.classNo))
+  );
+}
+
 function constraintApplies(c: Constraint, teacher: Teacher, seat: Seat): boolean {
   switch (c.type) {
+    case 'RULE':
+      return ruleWhenMatches(c.when, teacher, seat);
     case 'HOMEROOM_EXCLUDE':
       return (
         teacher.homeroom !== null &&
@@ -238,11 +257,18 @@ export function staticHardReason(ctx: Context, teacher: Teacher, seat: Seat): Ex
   if (ctx.input.settings.examWriterRule === 'NO_ROOM' && teacher.subject && teacher.subject === seat.subject && seat.role !== 'HALLWAY') {
     return 'EXAM_WRITER';
   }
-  const cs = ctx.constraintsByTeacher.get(teacher.id);
-  if (cs?.some((c) => c.priority === 'HARD' && constraintApplies(c, teacher, seat))) {
+  const cs = constraintsFor(ctx, teacher.id);
+  if (cs.some((c) => c.priority === 'HARD' && constraintApplies(c, teacher, seat))) {
     return 'CONSTRAINT';
   }
   return null;
+}
+
+/** 그 교사 규칙 + 모든 교사('*') 규칙 */
+function constraintsFor(ctx: Context, teacherId: string): Constraint[] {
+  const own = ctx.constraintsByTeacher.get(teacherId) ?? [];
+  const all = ctx.constraintsByTeacher.get('*');
+  return all ? [...own, ...all] : own;
 }
 
 /** 배정 가능한 교사인지 (부담 대상) */
@@ -251,8 +277,7 @@ export function isEligibleTeacher(t: Teacher): boolean {
 }
 
 export function softConstraintPenalty(ctx: Context, teacher: Teacher, seat: Seat): number {
-  const cs = ctx.constraintsByTeacher.get(teacher.id);
-  if (!cs) return 0;
+  const cs = constraintsFor(ctx, teacher.id);
   let total = 0;
   for (const c of cs) {
     if (c.priority === 'SOFT' && constraintApplies(c, teacher, seat)) {

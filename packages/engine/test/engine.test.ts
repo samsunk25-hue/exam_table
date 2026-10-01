@@ -160,6 +160,27 @@ describe('소프트 점수', () => {
     expect(a!.teacherId).toBe('B');
   });
 
+  it('글로 쓴 고려사항(RULE): 금지·피하기·우선, 모든 교사(*) 규칙', () => {
+    // 금지: A는 1교시 정감독 금지 → B
+    const forbid = base();
+    forbid.constraints = [{ teacherId: 'A', type: 'RULE', when: { periods: [1], roles: ['CHIEF'] }, priority: 'HARD' }];
+    expect(runAssignment(forbid).assignments[0]!.teacherId).toBe('B');
+    // 조건이 안 맞으면(2교시) 적용 안 됨 → A
+    const other = base();
+    other.constraints = [{ teacherId: 'A', type: 'RULE', when: { periods: [2] }, priority: 'HARD' }];
+    expect(runAssignment(other).assignments[0]!.teacherId).toBe('A');
+    // 우선: B에 +100 → B, 이유에 표시
+    const prefer = base();
+    prefer.constraints = [{ teacherId: 'B', type: 'RULE', when: { dates: ['2026-10-12'] }, priority: 'SOFT', penalty: 100 }];
+    const [p] = runAssignment(prefer).assignments;
+    expect(p!.teacherId).toBe('B');
+    expect(p!.reason).toContain('+100(예외규칙)');
+    // 모든 교사 금지: 1학년 수학은 아무도 못 맡음 → 미배정
+    const all = base();
+    all.constraints = [{ teacherId: '*', type: 'RULE', when: { grades: [1], subjects: ['수학'] }, priority: 'HARD' }];
+    expect(runAssignment(all).unassigned).toHaveLength(1);
+  });
+
   it('누적 부담이 낮은 교사를 우선한다', () => {
     const input = base();
     input.teachers[0]!.priorLoad = 10;

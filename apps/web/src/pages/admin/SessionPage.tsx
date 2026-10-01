@@ -16,6 +16,7 @@ import { StatusBadge } from '@/components/StatusStepper';
 import { useTerm } from '@/components/TermRoster';
 import { UndoConfirm, useUndoOps } from '@/components/UndoHistory';
 import { BundleSection, TimetableUpload } from './BundleCard';
+import { AiRulesCard } from './AiRulesCard';
 import { TempStaffCard } from './TempStaffCard';
 import { Alert, Button, Card, PageTitle, Spinner, Toggle } from '@/components/ui';
 import { useCollection } from '@/lib/data';
@@ -355,6 +356,7 @@ export function SessionOverview() {
           </div>
         )}
       </Card>
+      <AiRulesCard session={session} editable={editable} />
     </div>
   );
 }

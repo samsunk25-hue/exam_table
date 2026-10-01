@@ -6,7 +6,7 @@ export type SpaceType = 'CLASSROOM' | 'SEPARATE' | 'HALLWAY';
 export type SlotType = 'EXAM' | 'STUDY';
 export type GroupRoomType = 'NORMAL' | 'EXTENDED' | 'SPECIAL';
 export type AvailabilityStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
-export type ConstraintType = 'HOMEROOM_EXCLUDE' | 'SLOT_EXCLUDE' | 'SUBJECT_EXCLUDE';
+export type ConstraintType = 'HOMEROOM_EXCLUDE' | 'SLOT_EXCLUDE' | 'SUBJECT_EXCLUDE' | 'RULE';
 export type ConstraintPriority = 'HARD' | 'SOFT';
 
 export interface Homeroom {
@@ -65,13 +65,29 @@ export interface Availability {
   reason?: string;
 }
 
+/** 일반 규칙의 "언제·어느 자리" 조건. 적힌 항목만 보고, 여러 값은 그중 하나면 해당 */
+export interface RuleWhen {
+  dates?: string[];
+  periods?: number[];
+  grades?: number[];
+  roles?: Role[];
+  subjects?: string[];
+  roomIds?: string[];
+  /** 담임 교사가 자기 반 교실 자리일 때만 */
+  ownHomeroom?: boolean;
+}
+
 export interface Constraint {
+  /** '*' = 모든 교사 */
   teacherId: string;
   type: ConstraintType;
-  /** SLOT_EXCLUDE: slotId, SUBJECT_EXCLUDE: 과목명, HOMEROOM_EXCLUDE: 미사용 */
+  /** SLOT_EXCLUDE: slotId, SUBJECT_EXCLUDE: 과목명, HOMEROOM_EXCLUDE·RULE: 미사용 */
   target?: string;
+  /** RULE: 조건 (비우면 모든 자리) */
+  when?: RuleWhen;
+  /** HARD = 금지, SOFT = 점수 가감 (회피는 음수, 선호는 양수) */
   priority: ConstraintPriority;
-  /** SOFT 규칙 감점 (기본 weights.softConstraint) */
+  /** SOFT 규칙 가감점 (기본 weights.softConstraint) */
   penalty?: number;
 }
 

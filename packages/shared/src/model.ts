@@ -137,13 +137,31 @@ export interface AvailabilityDoc {
   adminNote?: string | null;
 }
 
+/** 일반 규칙(RULE)의 "언제·어느 자리" 조건. 적힌 항목만 보고, 여러 값은 그중 하나면 해당 */
+export interface RuleWhenDoc {
+  dates?: string[];
+  periods?: number[];
+  grades?: number[];
+  roles?: ('CHIEF' | 'ASSISTANT' | 'STUDY' | 'EXTENDED' | 'HALLWAY')[];
+  subjects?: string[];
+  roomIds?: string[];
+  ownHomeroom?: boolean;
+}
+
 /** sessions/{sid}/constraints/{id} — 배정 예외 규칙 */
 export interface ConstraintDoc {
+  /** '*' = 모든 교사 */
   teacherId: string;
-  type: 'HOMEROOM_EXCLUDE' | 'SLOT_EXCLUDE' | 'SUBJECT_EXCLUDE';
+  type: 'HOMEROOM_EXCLUDE' | 'SLOT_EXCLUDE' | 'SUBJECT_EXCLUDE' | 'RULE';
   target?: string;
+  when?: RuleWhenDoc;
+  /** HARD = 금지, SOFT = 점수 가감 (penalty 음수 = 피하기, 양수 = 우선) */
   priority: 'HARD' | 'SOFT';
   penalty?: number;
+  /** 사람이 읽는 설명 (예: "김국어: 11/3 1교시 감독 금지") */
+  label?: string;
+  /** 관리자가 쓴 원래 문장 (AI로 만든 규칙) */
+  sourceText?: string;
 }
 
 export type SeatRole = 'CHIEF' | 'ASSISTANT' | 'STUDY' | 'EXTENDED' | 'HALLWAY';

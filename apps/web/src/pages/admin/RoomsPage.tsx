@@ -1,6 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { SPACE_TYPE_LABEL, nextId, termFields, termLabel, type RoomDoc, type SpaceType, type TermRef, type WithId } from '@sim/shared';
-import { BundleHint } from '@/components/BundleHint';
 import { Modal } from '@/components/Modal';
 import { UndoHistory } from '@/components/UndoHistory';
 import { RosterImportDialog, TermPicker, useTermChoice } from '@/components/TermRoster';
@@ -169,7 +168,6 @@ export function RoomsPage() {
         </div>
       )}
 
-      <BundleHint what="시험실 목록" />
 
       {!loading && !error && choice.current && (
         <ClassroomSetupCard key={choice.key} rooms={data} term={termFields(choice.current)} takenIds={takenIds} />

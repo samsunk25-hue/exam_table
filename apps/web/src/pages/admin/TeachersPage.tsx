@@ -12,7 +12,6 @@ import {
   type TermRef,
   type WithId,
 } from '@sim/shared';
-import { BundleHint } from '@/components/BundleHint';
 import { Modal } from '@/components/Modal';
 import { UndoHistory } from '@/components/UndoHistory';
 import { RosterImportDialog, TermPicker, useTermChoice } from '@/components/TermRoster';
@@ -288,7 +287,6 @@ export function TeachersPage() {
         </div>
       )}
 
-      <BundleHint what="교사 명단" />
 
       {choice.current && (
         <div className="mb-4 flex flex-wrap gap-2">

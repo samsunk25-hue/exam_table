@@ -124,6 +124,10 @@ export const runAssignment = onCall(RUN_OPTIONS, async (req) => {
 
   data.pinned = keep ? current.filter((a) => a.source === 'MANUAL').map((a) => ({ seatId: a.id, teacherId: a.teacherId })) : [];
   const input = buildEngineInput(data);
+  if (!input.teachers.some((t) => t.active && t.defaultRole !== 'EXCLUDED')) {
+    throw new HttpsError('failed-precondition', '감독할 교사가 없습니다. 준비 > 교사 명단을 먼저 넣으세요.');
+  }
+  if (input.groups.length === 0) throw new HttpsError('failed-precondition', '감독 자리가 없습니다. 시험실을 등록하고 시험 일정에서 시험실을 배치하세요.');
 
   // 다중 시나리오: 기본안 + A(형평성)·B(연속 배제)·C(출제 교사 복도) — 같은 batchId로 묶는다
   // 가중치 시뮬레이션에서 정한 값이 있으면 그 안 하나만 실행한다

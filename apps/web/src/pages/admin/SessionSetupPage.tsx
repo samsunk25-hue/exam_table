@@ -1,44 +1,26 @@
-import { useCallback, useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import {
-  PLACEMENT_FIELDS,
   PLACEMENT_ROOM_TYPE_LABEL,
-  SLOT_FIELDS,
   SLOT_TYPE_LABEL,
-  TIMETABLE_FIELDS,
-  WEEKDAY_LABEL,
   autoPlacements,
   checkSchedule,
-  groupPlacements,
-  groupTimetable,
-  isGridSheet,
   isSetupEditable,
-  parsePlacements,
-  parseSlots,
-  parseTimetable,
-  parseTimetableGrid,
   slotIdOf,
   type BaseTimetableDoc,
-  type Cell,
-  type ColumnMapping,
   type Placement,
   type PlacementRoomType,
   type RoomDoc,
   type SetupIssue,
   type SlotDoc,
-  type SlotImport,
   type SlotType,
   type TeacherDoc,
-  type TimetableImport,
   type WithId,
 } from '@sim/shared';
-import { ImportWizard } from '@/components/ImportWizard';
 import { Modal } from '@/components/Modal';
-import { Alert, Button, Card, DownloadButton, Field, Select, Spinner, Table, Td } from '@/components/ui';
+import { Alert, Button, Card, Field, Select, Spinner, Table, Td } from '@/components/ui';
 import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
 import type { ExamSession } from '@/lib/sessions';
-import { TIMETABLE_GUIDE, timetableSheets } from '@/lib/bundle';
-import { downloadTemplate, downloadWorkbook, guideSheet, type SheetData } from '@/lib/xlsx';
 import { useCurrentSession } from './SessionPage';
 import { sortRooms } from './RoomsPage';
 
@@ -357,13 +339,7 @@ function PlacementEditor({ sid, slot, slots, rooms, onClose }: {
 // ───────────────────────── 시험 일정 카드 ─────────────────────────
 
 function ScheduleCard({ sid, editable, slots, rooms }: { sid: string; editable: boolean; slots: Slot[]; rooms: Room[] }) {
-  const [modal, setModal] = useState<
-    | { kind: 'slot'; slot: Slot | null }
-    | { kind: 'placement'; slot: Slot }
-    | { kind: 'importSlots' }
-    | { kind: 'importPlacements' }
-    | null
-  >(null);
+  const [modal, setModal] = useState<{ kind: 'slot'; slot: Slot | null } | { kind: 'placement'; slot: Slot } | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: 'info' | 'alert'; text: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -373,12 +349,6 @@ function ScheduleCard({ sid, editable, slots, rooms }: { sid: string; editable: 
   const unplaced = slots.filter((s) => s.rooms.length === 0);
   const byDate = new Map<string, Slot[]>();
   for (const s of sorted) byDate.set(s.date, [...(byDate.get(s.date) ?? []), s]);
-
-  const analyzeSlots = useCallback((rows: Cell[][], mapping: ColumnMapping) => parseSlots(rows, mapping), []);
-  const analyzePlacements = useCallback(
-    (rows: Cell[][], mapping: ColumnMapping) => parsePlacements(rows, mapping, slots, rooms),
-    [slots, rooms],
-  );
 
   const run = async (fn: () => Promise<string>) => {
     setBusy(true);
@@ -415,81 +385,14 @@ function ScheduleCard({ sid, editable, slots, rooms }: { sid: string; editable: 
       return `${slotLabel(s)} 시험을 삭제했습니다.`;
     });
 
-  const saveSlots = async (values: SlotImport[]) => {
-    const existing = new Map(slots.map((s) => [s.id, s]));
-    const keep = new Set(values.map((v) => v.id));
-    const ops: BatchOp[] = values.map(({ id, ...data }) => ({
-      type: 'set',
-      ref: ref(`sessions/${sid}/slots`, id),
-      data: { ...data, rooms: existing.get(id)?.rooms ?? [] },
-    }));
-    const removed = slots.filter((s) => !keep.has(s.id));
-    for (const s of removed) ops.push({ type: 'delete', ref: ref(`sessions/${sid}/slots`, s.id) });
-    await commitOps(ops);
-    return `시험 ${values.length}건을 저장했습니다${removed.length ? ` (파일에 없는 ${removed.length}건 삭제)` : ''}. 이어서 "기본 배치 자동 생성"을 눌러 시험실을 배치하세요.`;
-  };
-
-  const savePlacements = async (values: { slotId: string; placement: Placement }[]) => {
-    const grouped = groupPlacements(values);
-    await commitOps(
-      [...grouped].map(([slotId, list]) => ({ type: 'set', ref: ref(`sessions/${sid}/slots`, slotId), data: { rooms: list }, merge: true })),
-    );
-    return `시험 ${grouped.size}건의 배치를 교체했습니다 (시험실 ${values.length}개).`;
-  };
-
-  const downloadSlotTemplate = () =>
-    downloadTemplate(
-      '시험일정_양식.xlsx',
-      SLOT_FIELDS,
-      sorted.length
-        ? sorted.map((s) => [s.date, s.period, s.startTime ?? '', s.endTime ?? '', s.grade, s.subject, SLOT_TYPE_LABEL[s.type]])
-        : [
-            ['2026-10-12', 1, '09:00', '09:45', 1, '국어', '시험'],
-            ['2026-10-12', 1, '09:00', '09:45', 2, '수학', '시험'],
-            ['2026-10-12', 2, '10:00', '10:45', 1, '영어', '시험'],
-          ],
-      ['* 업로드하면 이 프로젝트의 시험 일정을 파일 내용으로 교체합니다. 파일에 없는 시험은 삭제됩니다.'],
-    );
-
-  const downloadPlacementTemplate = () =>
-    downloadTemplate(
-      '시험실배치_양식.xlsx',
-      PLACEMENT_FIELDS,
-      sorted.flatMap((s) =>
-        (s.rooms.length ? s.rooms : autoPlacements(s, rooms)).map((p) => [
-          s.date,
-          s.period,
-          s.grade,
-          roomName.get(p.roomId) ?? '',
-          p.classNo ?? '',
-          p.headcount ?? '',
-          PLACEMENT_ROOM_TYPE_LABEL[p.roomType],
-        ]),
-      ),
-      [
-        '* 현재 배치(없으면 기본 배치 제안)가 채워져 있습니다. 별도시험장 행을 추가하거나 수정해서 올리세요.',
-        '* 파일에 포함된 시험만 배치를 교체합니다. 파일에 없는 시험의 배치는 그대로 둡니다.',
-      ],
-    );
-
   return (
     <Card>
       <h2 className="text-lg font-bold">시험 일정과 시험실 배치</h2>
       {editable ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button onClick={() => setModal({ kind: 'importSlots' })}>일정 엑셀 업로드</Button>
-          <DownloadButton onDownload={downloadSlotTemplate}>일정 양식</DownloadButton>
+          <Button onClick={() => setModal({ kind: 'slot', slot: null })}>+ 시험 추가</Button>
           <Button variant="secondary" onClick={() => void autoPlace()} disabled={busy || unplaced.length === 0}>
             기본 배치 자동 생성{unplaced.length ? ` (${unplaced.length}건)` : ''}
-          </Button>
-          <Button variant="secondary" onClick={() => setModal({ kind: 'importPlacements' })} disabled={slots.length === 0}>
-            배치 엑셀 업로드
-          </Button>
-          <DownloadButton onDownload={downloadPlacementTemplate} disabled={slots.length === 0}>
-            배치 양식
-          </DownloadButton>
-          <Button variant="ghost" onClick={() => setModal({ kind: 'slot', slot: null })}>
-            + 시험 추가
           </Button>
         </div>
       ) : (
@@ -569,68 +472,17 @@ function ScheduleCard({ sid, editable, slots, rooms }: { sid: string; editable: 
       {modal?.kind === 'placement' && (
         <PlacementEditor sid={sid} slot={modal.slot} slots={slots} rooms={rooms} onClose={() => setModal(null)} />
       )}
-      {modal?.kind === 'importSlots' && (
-        <ImportWizard
-          title="시험 일정 업로드"
-          fields={SLOT_FIELDS}
-          analyze={analyzeSlots}
-          notice="이 프로젝트의 시험 일정을 파일 내용으로 교체합니다. 파일에 없는 시험은 삭제되고, 같은 날짜·교시·학년 시험의 시험실 배치는 유지됩니다."
-          previewHead={['날짜', '교시', '시간', '학년', '과목', '유형']}
-          previewRow={(v) => [v.date, v.period, v.startTime ? `${v.startTime}~${v.endTime ?? ''}` : '', v.grade, v.subject, SLOT_TYPE_LABEL[v.type]]}
-          summary={(vs) => {
-            const removed = slots.filter((s) => !vs.some((v) => v.id === s.id)).length;
-            return (
-              <Alert tone={removed ? 'alert' : 'info'}>
-                시험 {vs.length}건을 저장합니다.{removed > 0 && ` 기존 시험 ${removed}건이 삭제됩니다.`}
-              </Alert>
-            );
-          }}
-          onSave={saveSlots}
-          onClose={() => setModal(null)}
-        />
-      )}
-      {modal?.kind === 'importPlacements' && (
-        <ImportWizard
-          title="시험실 배치 업로드"
-          fields={PLACEMENT_FIELDS}
-          analyze={analyzePlacements}
-          notice="파일에 포함된 시험의 배치만 파일 내용으로 교체합니다."
-          previewHead={['시험', '시험실', '반', '유형', '인원']}
-          previewRow={(v) => {
-            const s = slots.find((x) => x.id === v.slotId);
-            return [
-              s ? slotLabel(s) : v.slotId,
-              roomName.get(v.placement.roomId) ?? '',
-              v.placement.classNo ?? '',
-              PLACEMENT_ROOM_TYPE_LABEL[v.placement.roomType],
-              v.placement.headcount ?? '',
-            ];
-          }}
-          onSave={savePlacements}
-          onClose={() => setModal(null)}
-        />
-      )}
     </Card>
   );
 }
 
 // ───────────────────────── 기초시간표 카드 ─────────────────────────
 
-function TimetableCard({ sid, editable, session, teachers, timetable }: {
-  sid: string;
-  editable: boolean;
+function TimetableCard({ session, teachers, timetable }: {
   session: ExamSession;
   teachers: Teacher[];
   timetable: WithId<BaseTimetableDoc>[];
 }) {
-  const [importing, setImporting] = useState(false);
-  const teacherList = useMemo(() => teachers.map((t) => ({ id: t.id, name: t.name, email: t.email, active: t.active })), [teachers]);
-  const analyze = useCallback((rows: Cell[][], mapping: ColumnMapping) => parseTimetable(rows, mapping, teacherList), [teacherList]);
-  // 교사별 격자 시트가 있으면 학교 양식으로, 없으면 한 줄 목록 형식으로 읽는다
-  const analyzeWorkbook = useCallback(
-    (sheets: SheetData[]) => (sheets.some((s) => isGridSheet(s.rows)) ? parseTimetableGrid(sheets, teacherList) : null),
-    [teacherList],
-  );
   const nameOf = new Map(teachers.map((t) => [t.id, t.name]));
   const total = timetable.reduce((n, d) => n + d.entries.length, 0);
 
@@ -643,44 +495,13 @@ function TimetableCard({ sid, editable, session, teachers, timetable }: {
     );
   }
 
-  const save = async (values: TimetableImport[]) => {
-    const grouped = groupTimetable(values);
-    const ops: BatchOp[] = [...grouped].map(([teacherId, entries]) => ({
-      type: 'set',
-      ref: ref(`sessions/${sid}/baseTimetable`, teacherId),
-      data: { teacherId, entries },
-    }));
-    for (const d of timetable) if (!grouped.has(d.id)) ops.push({ type: 'delete', ref: ref(`sessions/${sid}/baseTimetable`, d.id) });
-    await commitOps(ops);
-    return `교사 ${grouped.size}명의 수업 ${values.length}건을 저장했습니다.`;
-  };
-
-  // 학교 기초시간표 양식: 교사별 시트 (교시 × 요일)
-  const download = () =>
-    downloadWorkbook('기초시간표_양식.xlsx', [
-      guideSheet('안내', [
-        {
-          title: '기초시간표 양식',
-          lines: [...TIMETABLE_GUIDE, '* 업로드하면 이 프로젝트의 기초시간표 전체를 파일 내용으로 교체합니다.'],
-        },
-      ]),
-      ...timetableSheets(teachers, timetable),
-    ]);
-
   return (
     <Card>
       <h2 className="text-lg font-bold">기초시간표</h2>
       <p className="mt-1 text-muted">
-        시험 시간에 해당 반을 원래 가르치던 교사에게 가점(+50)을 줍니다. 현재 교사 {timetable.length}명, 수업 {total}건.
+        시험 시간에 해당 반을 원래 가르치던 교사에게 가점(+50)을 줍니다. 현재 교사 {timetable.length}명, 수업 {total}건. 시간표는 개요의 통합 양식(교사별
+        시간표 시트)으로 올립니다.
       </p>
-      {editable && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button onClick={() => setImporting(true)} disabled={teachers.length === 0}>
-            시간표 엑셀 업로드
-          </Button>
-          <DownloadButton onDownload={download}>{timetable.length ? '현재 시간표 양식' : '양식 다운로드'}</DownloadButton>
-        </div>
-      )}
       {timetable.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
           {[...timetable]
@@ -691,24 +512,6 @@ function TimetableCard({ sid, editable, session, teachers, timetable }: {
               </span>
             ))}
         </div>
-      )}
-      {importing && (
-        <ImportWizard
-          title="기초시간표 업로드"
-          fields={TIMETABLE_FIELDS}
-          analyze={analyze}
-          analyzeWorkbook={analyzeWorkbook}
-          notice="학교 기초시간표 양식(교사별 시트)과 한 줄 목록 형식을 모두 읽습니다. 이 프로젝트의 기초시간표 전체를 파일 내용으로 교체합니다."
-          previewHead={['교사', '요일', '교시', '학년-반', '과목']}
-          previewRow={(v) => [v.teacherName, WEEKDAY_LABEL[v.weekday] ?? '', v.period, `${v.grade}-${v.classNo}`, v.subject ?? '']}
-          summary={(vs) => (
-            <Alert tone="info">
-              교사 {new Set(vs.map((v) => v.teacherId)).size}명의 수업 {vs.length}건을 저장합니다.
-            </Alert>
-          )}
-          onSave={save}
-          onClose={() => setImporting(false)}
-        />
       )}
     </Card>
   );
@@ -734,7 +537,7 @@ export function SessionSetupPage() {
     <div className="grid gap-6">
       <Readiness session={session} slots={slots.data} rooms={rooms.data} teachers={teachers.data} timetable={timetable.data} />
       <ScheduleCard sid={sid} editable={editable} slots={slots.data} rooms={rooms.data} />
-      <TimetableCard sid={sid} editable={editable} session={session} teachers={teachers.data} timetable={timetable.data} />
+      <TimetableCard session={session} teachers={teachers.data} timetable={timetable.data} />
     </div>
   );
 }

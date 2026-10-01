@@ -10,6 +10,8 @@ import {
   autoPlacements,
   groupPlacements,
   groupTimetable,
+  mergePlacements,
+  type Placement,
   teacherRoleCells,
   timetableGridRows,
   timetableSheetNames,
@@ -86,9 +88,17 @@ export function bundleSheets(opts: {
     ? sortedSlots.map((s) => [s.date, s.period, s.startTime ?? '', s.endTime ?? '', s.grade, s.subject, SLOT_TYPE_LABEL[s.type]])
     : [['2026-10-12', 1, '09:00', '09:45', 1, '국어', '시험']];
 
-  const placementRows = sortedSlots.flatMap((s) =>
-    s.rooms.map((p) => [s.date, s.period, s.grade, roomName.get(p.roomId) ?? '', p.classNo ?? '', p.headcount ?? '', PLACEMENT_ROOM_TYPE_LABEL[p.roomType]]),
-  );
+  // 기본 배치(같은 학년 교실 + 복도)와 같은 시험은 특별실 행만, 직접 바꾼 시험은 전체 행을 내보낸다
+  const placementRows = sortedSlots.flatMap((s) => {
+    const autoIds = new Set(autoPlacements(s, rooms).map((p) => p.roomId));
+    const isAuto = (roomId: string) => autoIds.has(roomId);
+    const standard = [...autoIds].every((id) => s.rooms.some((p) => p.roomId === id)) && s.rooms.every((p) => {
+      const r = rooms.find((x) => x.id === p.roomId);
+      return isAuto(p.roomId) || !r || r.spaceType === 'SEPARATE' || r.grade === null;
+    });
+    const list = standard ? s.rooms.filter((p) => !isAuto(p.roomId)) : s.rooms;
+    return list.map((p) => [s.date, s.period, s.grade, roomName.get(p.roomId) ?? '', p.classNo ?? '', p.headcount ?? '', PLACEMENT_ROOM_TYPE_LABEL[p.roomType]]);
+  });
 
   const guide = guideSheet(BUNDLE_SHEETS.guide, [
     {
@@ -98,7 +108,9 @@ export function bundleSheets(opts: {
         '2. 시트를 지우거나 제목 행만 남기면 그 항목은 바꾸지 않습니다.',
         '3. 교사·시험실: 기존 자료는 수정, 없는 자료는 새로 등록합니다 (삭제 없음).',
         '4. 시험일정: 이 프로젝트의 시험 일정 전체를 교체합니다 (파일에 없는 시험은 삭제).',
-        '5. 시험실배치: 비워 두면 업로드 후 같은 학년 교실·복도를 자동 배치합니다. 별도시험장은 행을 추가하세요.',
+        '5. 시험실배치(선택): 비워 두면 같은 학년 교실·복도가 자동 배치됩니다.',
+        '   · 별도시험장 등 특별실만 적으면 자동 배치에 그 특별실이 더해집니다.',
+        '   · 교실·복도까지 적은 시험은 적은 그대로 배치됩니다 (합반, 일부 반만 응시 등).',
         useBaseTimetable
           ? '6. 교사별 시간표 시트: 학교 기초시간표 양식과 같습니다. 이 프로젝트의 기초시간표 전체를 교체합니다.'
           : '6. 이 프로젝트는 기초시간표를 반영하지 않아 시간표 시트가 없습니다.',
@@ -170,11 +182,23 @@ export async function saveBundle(
     done.push(`시험 일정 ${plan.slots.length}건${removed.length ? ` (삭제 ${removed.length})` : ''}`);
   }
 
+  // 시험실배치 시트(선택): 특별실만 적은 시험은 기본 배치(같은 학년 교실 + 복도)에 더하고,
+  // 교실까지 적은 시험은 적은 그대로 쓴다
   if (plan.placements && plan.placements.length) {
     const grouped = groupPlacements(plan.placements);
-    await commitOps([...grouped].map(([slotId, rooms]) => ({ type: 'set', ref: ref(slotPath, slotId), data: { rooms }, merge: true })));
-    slotsAfter = slotsAfter.map((s) => (grouped.has(s.id) ? { ...s, rooms: grouped.get(s.id)! } : s));
-    done.push(`시험실 배치 ${grouped.size}건`);
+    const roomList = [...roomsAfter.values()];
+    const merged = new Map<string, Placement[]>();
+    for (const s of slotsAfter.filter((x) => grouped.has(x.id))) {
+      const busy = new Set(
+        slotsAfter
+          .filter((o) => o.id !== s.id && o.date === s.date && o.period === s.period)
+          .flatMap((o) => (merged.get(o.id) ?? (grouped.has(o.id) ? grouped.get(o.id)! : o.rooms)).map((p) => p.roomId)),
+      );
+      merged.set(s.id, mergePlacements(s, grouped.get(s.id)!, roomList, busy));
+    }
+    await commitOps([...merged].map(([slotId, rooms]) => ({ type: 'set', ref: ref(slotPath, slotId), data: { rooms }, merge: true })));
+    slotsAfter = slotsAfter.map((s) => (merged.has(s.id) ? { ...s, rooms: merged.get(s.id)! } : s));
+    done.push(`시험실 배치 ${merged.size}건`);
   }
 
   if (opts.autoPlace) {

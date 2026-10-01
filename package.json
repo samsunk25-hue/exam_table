@@ -14,7 +14,7 @@
     "emulators": "npm run build -w functions && firebase emulators:start",
     "dev:emu": "npm run dev:emu -w apps/web",
     "seed": "npm run seed -w functions",
-    "e2e": "node scripts/e2e/download-check.mjs"
+    "e2e": "node scripts/e2e/bundle-check.mjs && node scripts/e2e/sample-check.mjs"
   },
   "devDependencies": {
     "playwright-core": "^1.63.0"

@@ -1,24 +1,10 @@
-import { useCallback, useMemo, useState, type FormEvent } from 'react';
-import {
-  DEFAULT_ROLE_LABEL,
-  SELECTABLE_ROLES,
-  TEACHER_FIELDS,
-  nextId,
-  parseTeachers,
-  teacherRoleCells,
-  type Cell,
-  type ColumnMapping,
-  type DefaultRole,
-  type TeacherDoc,
-  type TeacherImport,
-  type WithId,
-} from '@sim/shared';
-import { ImportWizard } from '@/components/ImportWizard';
+import { useMemo, useState, type FormEvent } from 'react';
+import { DEFAULT_ROLE_LABEL, SELECTABLE_ROLES, nextId, type DefaultRole, type TeacherDoc, type WithId } from '@sim/shared';
+import { BundleHint } from '@/components/BundleHint';
 import { Modal } from '@/components/Modal';
-import { Alert, Button, Card, DownloadButton, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
-import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
+import { Alert, Button, Card, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
+import { commitOps, ref, useCollection } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
-import { downloadTemplate } from '@/lib/xlsx';
 
 type Teacher = WithId<TeacherDoc>;
 
@@ -30,40 +16,6 @@ function sortTeachers(list: Teacher[]): Teacher[] {
   return [...list].sort(
     (a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name, 'ko') || a.id.localeCompare(b.id),
   );
-}
-
-function downloadTeacherTemplate(teachers: Teacher[]) {
-  const rows =
-    teachers.length > 0
-      ? sortTeachers(teachers).map((t) => [
-          t.id,
-          t.name,
-          t.email ?? '',
-          t.subject ?? '',
-          t.homeroom?.grade ?? '',
-          t.homeroom?.classNo ?? '',
-          ...teacherRoleCells(t),
-        ])
-      : [
-          ['', '김국어', 'kim@school.kr', '국어', 1, 1, '일반', 'Y'],
-          ['', '박영어', 'park@school.kr', '영어', '', '', '복도전담', 'Y'],
-        ];
-  return downloadTemplate('교사명단_양식.xlsx', TEACHER_FIELDS, rows, [
-    '* 교사ID가 있으면 해당 교사를 수정하고, 없으면 이메일 → 이름 순으로 기존 교사를 찾습니다. 못 찾으면 새로 등록합니다.',
-    '* 업로드로 교사가 삭제되지는 않습니다. 삭제나 사용 중지는 화면에서 하세요.',
-  ]);
-}
-
-async function saveImported(values: TeacherImport[], existing: Teacher[]): Promise<string> {
-  const newIds = nextId('T', existing.map((t) => t.id), values.filter((v) => v.id === null).length);
-  let n = 0;
-  const ops: BatchOp[] = values.map(({ id, ...data }) =>
-    id
-      ? { type: 'set', ref: ref('teachers', id), data, merge: true }
-      : { type: 'set', ref: ref('teachers', newIds[n++]!), data: { ...data, cumulativeLoad: 0 } },
-  );
-  await commitOps(ops);
-  return `저장했습니다. 신규 ${n}명, 수정 ${values.length - n}명.`;
 }
 
 interface FormState {
@@ -211,21 +163,12 @@ export function TeachersPage() {
   const { data, loading, error } = useCollection<TeacherDoc>('teachers');
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Teacher | 'new' | null>(null);
-  const [importing, setImporting] = useState(false);
 
   const teachers = useMemo(() => sortTeachers(data), [data]);
   const shown = teachers.filter((t) => {
     const q = search.trim().toLowerCase();
     return !q || [t.name, t.email, t.subject, homeroomText(t)].some((v) => v?.toLowerCase().includes(q));
   });
-  const existing = useMemo(
-    () => data.map((t) => ({ id: t.id, name: t.name, email: t.email, homeroom: t.homeroom, active: t.active && t.defaultRole !== 'EXCLUDED' })),
-    [data],
-  );
-  const analyze = useCallback(
-    (rows: Cell[][], mapping: ColumnMapping) => parseTeachers(rows, mapping, existing),
-    [existing],
-  );
 
   const activeCount = data.filter((t) => t.active).length;
   const noEmail = data.filter((t) => t.active && !t.email).length;
@@ -234,14 +177,10 @@ export function TeachersPage() {
     <>
       <PageTitle sub={`사용 중 ${activeCount}명 / 전체 ${data.length}명`}>교사 관리</PageTitle>
 
+      <BundleHint what="교사 명단" />
+
       <div className="mb-4 flex flex-wrap gap-2">
-        <Button onClick={() => setImporting(true)}>엑셀 업로드</Button>
-        <DownloadButton onDownload={() => downloadTeacherTemplate(data)}>
-          {data.length ? '현재 명단 양식 다운로드' : '양식 다운로드'}
-        </DownloadButton>
-        <Button variant="secondary" onClick={() => setEditing('new')}>
-          + 교사 추가
-        </Button>
+        <Button onClick={() => setEditing('new')}>+ 교사 추가</Button>
       </div>
 
       {noEmail > 0 && (
@@ -260,7 +199,7 @@ export function TeachersPage() {
         />
         {loading && <Spinner />}
         {error && <Alert>{error}</Alert>}
-        {!loading && data.length === 0 && <p className="py-6 text-muted">등록된 교사가 없습니다. 양식을 내려받아 명단을 올려 주세요.</p>}
+        {!loading && data.length === 0 && <p className="py-6 text-muted">등록된 교사가 없습니다. 통합 양식으로 올리거나 "+ 교사 추가"로 입력하세요.</p>}
         {shown.length > 0 && (
           <Table head={['이름', '이메일', '담당교과', '담임', '감독구분', '누적점수', '']}>
             {shown.map((t) => (
@@ -286,31 +225,6 @@ export function TeachersPage() {
       </Card>
 
       {editing && <TeacherForm teacher={editing === 'new' ? null : editing} all={data} onClose={() => setEditing(null)} />}
-      {importing && (
-        <ImportWizard
-          title="교사 명단 업로드"
-          fields={TEACHER_FIELDS}
-          analyze={analyze}
-          notice="교사ID → 이메일 → 이름 순으로 기존 교사를 찾아 수정하고, 없으면 새로 등록합니다. 업로드로 삭제되는 교사는 없습니다."
-          previewHead={['등록', '이름', '이메일', '교과', '담임', '감독구분', '사용']}
-          previewRow={(v) => [
-            v.id ? `수정 (${v.id})` : '신규',
-            v.name,
-            v.email ?? '',
-            v.subject ?? '',
-            homeroomText(v),
-            DEFAULT_ROLE_LABEL[v.defaultRole],
-            v.active ? 'Y' : 'N',
-          ]}
-          summary={(vs) => (
-            <Alert tone="info">
-              신규 {vs.filter((v) => !v.id).length}명, 수정 {vs.filter((v) => v.id).length}명을 저장합니다.
-            </Alert>
-          )}
-          onSave={(vs) => saveImported(vs, data)}
-          onClose={() => setImporting(false)}
-        />
-      )}
     </>
   );
 }

@@ -1,23 +1,11 @@
-import { useCallback, useMemo, useState, type FormEvent } from 'react';
-import {
-  ROOM_FIELDS,
-  SPACE_TYPE_LABEL,
-  nextId,
-  parseRooms,
-  type Cell,
-  type ColumnMapping,
-  type RoomDoc,
-  type RoomImport,
-  type SpaceType,
-  type WithId,
-} from '@sim/shared';
-import { ImportWizard } from '@/components/ImportWizard';
-import { ClassroomSetupCard } from './ClassroomSetupCard';
+import { useMemo, useState, type FormEvent } from 'react';
+import { SPACE_TYPE_LABEL, nextId, type RoomDoc, type SpaceType, type WithId } from '@sim/shared';
+import { BundleHint } from '@/components/BundleHint';
 import { Modal } from '@/components/Modal';
-import { Alert, Button, Card, DownloadButton, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
-import { commitOps, ref, useCollection, type BatchOp } from '@/lib/data';
+import { Alert, Button, Card, Field, PageTitle, Select, Spinner, Table, Td } from '@/components/ui';
+import { commitOps, ref, useCollection } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
-import { downloadTemplate } from '@/lib/xlsx';
+import { ClassroomSetupCard } from './ClassroomSetupCard';
 
 type Room = WithId<RoomDoc>;
 
@@ -31,34 +19,6 @@ export function sortRooms<T extends RoomDoc>(list: T[]): T[] {
       (a.classNo ?? 99) - (b.classNo ?? 99) ||
       a.name.localeCompare(b.name, 'ko'),
   );
-}
-
-function downloadRoomTemplate(rooms: Room[]) {
-  const rows =
-    rooms.length > 0
-      ? sortRooms(rooms).map((r) => [r.name, SPACE_TYPE_LABEL[r.spaceType], r.grade ?? '', r.classNo ?? '', r.chiefCount, r.assistantCount])
-      : [
-          ['1-1', '교실', 1, 1, 1, 0],
-          ['1-2', '교실', 1, 2, 1, 0],
-          ['1학년 복도', '복도', 1, '', 1, 0],
-          ['별도시험장', '별도실', '', '', 1, 1],
-        ];
-  return downloadTemplate('시험실_양식.xlsx', ROOM_FIELDS, rows, [
-    '* 실명이 같은 시험실은 수정, 없으면 새로 등록합니다. 업로드로 삭제되는 시험실은 없습니다.',
-    '* 학년·반을 입력한 교실과 학년을 입력한 복도는 시험 일정의 "기본 배치 자동 생성"에 쓰입니다.',
-  ]);
-}
-
-async function saveImported(values: RoomImport[], existing: Room[]): Promise<string> {
-  const newIds = nextId('R', existing.map((r) => r.id), values.filter((v) => v.id === null).length);
-  let n = 0;
-  const ops: BatchOp[] = values.map(({ id, ...data }) => ({
-    type: 'set',
-    ref: ref('rooms', id ?? newIds[n++]!),
-    data,
-  }));
-  await commitOps(ops);
-  return `저장했습니다. 신규 ${n}개, 수정 ${values.length - n}개.`;
 }
 
 function RoomForm({ room, all, onClose }: { room: Room | null; all: Room[]; onClose: () => void }) {
@@ -166,26 +126,19 @@ function RoomForm({ room, all, onClose }: { room: Room | null; all: Room[]; onCl
 export function RoomsPage() {
   const { data, loading, error } = useCollection<RoomDoc>('rooms');
   const [editing, setEditing] = useState<Room | 'new' | null>(null);
-  const [importing, setImporting] = useState(false);
   const rooms = useMemo(() => sortRooms(data), [data]);
-  const existing = useMemo(() => data.map((r) => ({ id: r.id, name: r.name })), [data]);
-  const analyze = useCallback((rows: Cell[][], mapping: ColumnMapping) => parseRooms(rows, mapping, existing), [existing]);
   const seats = data.reduce((s, r) => s + r.chiefCount + r.assistantCount, 0);
 
   return (
     <>
       <PageTitle sub={`시험실 ${data.length}개 · 한 교시에 필요한 감독 ${seats}명 (모든 시험실 사용 시)`}>시험실 관리</PageTitle>
 
+      <BundleHint what="시험실 목록" />
+
       {!loading && !error && <ClassroomSetupCard rooms={data} />}
 
       <div className="mb-4 flex flex-wrap gap-2">
         <Button onClick={() => setEditing('new')}>+ 특별실 추가</Button>
-        <Button variant="secondary" onClick={() => setImporting(true)}>
-          엑셀 업로드
-        </Button>
-        <DownloadButton onDownload={() => downloadRoomTemplate(data)}>
-          {data.length ? '현재 목록 양식 다운로드' : '양식 다운로드'}
-        </DownloadButton>
       </div>
 
       <Card>
@@ -214,26 +167,6 @@ export function RoomsPage() {
       </Card>
 
       {editing && <RoomForm room={editing === 'new' ? null : editing} all={data} onClose={() => setEditing(null)} />}
-      {importing && (
-        <ImportWizard
-          title="시험실 업로드"
-          fields={ROOM_FIELDS}
-          analyze={analyze}
-          notice="실명이 같은 시험실은 수정하고, 없으면 새로 등록합니다. 업로드로 삭제되는 시험실은 없습니다."
-          previewHead={['구분', '실명', '공간유형', '학년', '반', '정감독', '부감독']}
-          previewRow={(v) => [
-            v.id ? '수정' : '신규',
-            v.name,
-            SPACE_TYPE_LABEL[v.spaceType],
-            v.grade ?? '',
-            v.classNo ?? '',
-            v.chiefCount,
-            v.assistantCount,
-          ]}
-          onSave={(vs) => saveImported(vs, data)}
-          onClose={() => setImporting(false)}
-        />
-      )}
     </>
   );
 }

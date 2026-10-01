@@ -15,7 +15,7 @@ export const PLACEMENT_FIELDS: FieldDef[] = [
   { key: 'date', label: '날짜', required: true, synonyms: ['일자', '시험일'] },
   { key: 'period', label: '교시', required: true },
   { key: 'grade', label: '학년', required: true },
-  { key: 'room', label: '시험실', required: true, synonyms: ['실명', '교실', '장소'], note: '시험실 관리에 등록된 실명' },
+  { key: 'room', label: '시험실', required: true, synonyms: ['실명', '교실', '장소'], note: '시험실 관리에 등록된 실명. 특별실만 적으면 같은 학년 교실·복도 자동 배치에 더해짐' },
   { key: 'classNo', label: '반', required: false, note: '해당 시험실에서 응시하는 반 (혼합이면 비움)' },
   { key: 'headcount', label: '응시인원', required: false, synonyms: ['인원'] },
   {
@@ -105,12 +105,14 @@ export function groupPlacements(values: PlacementImport[]): Map<string, Placemen
 }
 
 /** 학년이 같은 교실(반 번호 있음)과 복도를 기본 배치한다. 별도실은 수동 배치. */
-export function autoPlacements(slot: Pick<SlotDoc, 'grade'>, rooms: WithId<RoomDoc>[]): Placement[] {
+export function autoPlacements(slot: Pick<SlotDoc, 'grade'> & { type?: SlotType }, rooms: WithId<RoomDoc>[]): Placement[] {
+  // 자습 시간에는 복도 감독이 필요 없으므로 교실만 배치한다
+  const withHallway = slot.type !== 'STUDY';
   return rooms
     .filter(
       (r) =>
         r.grade === slot.grade &&
-        ((r.spaceType === 'CLASSROOM' && r.classNo !== null) || r.spaceType === 'HALLWAY'),
+        ((r.spaceType === 'CLASSROOM' && r.classNo !== null) || (withHallway && r.spaceType === 'HALLWAY')),
     )
     .sort((a, b) => (a.classNo ?? 99) - (b.classNo ?? 99) || a.name.localeCompare(b.name, 'ko'))
     .map((r) => ({
@@ -119,6 +121,34 @@ export function autoPlacements(slot: Pick<SlotDoc, 'grade'>, rooms: WithId<RoomD
       headcount: null,
       roomType: 'NORMAL' as const,
     }));
+}
+
+/** 교실(학년·반 있음)이나 학년 복도처럼 자동 배치 대상인 시험실인지 */
+function isAutoRoom(r: RoomDoc): boolean {
+  return (r.spaceType === 'CLASSROOM' && r.grade !== null && r.classNo !== null) || (r.spaceType === 'HALLWAY' && r.grade !== null);
+}
+
+/**
+ * 시험실배치 시트(선택 항목)의 한 시험 행들을 실제 배치로 바꾼다.
+ * - 특별실(별도시험장 등)만 적었으면: 같은 학년 기본 배치(교실 + 복도)에 특별실을 더한다.
+ * - 교실·복도까지 적었으면: 적은 그대로 쓴다 (합반, 일부 반 응시 등 직접 지정).
+ * busy: 같은 시간 다른 시험이 이미 쓰는 시험실 (자동 배치에서 뺀다)
+ */
+export function mergePlacements(
+  slot: Pick<SlotDoc, 'grade'> & { type?: SlotType },
+  listed: Placement[],
+  rooms: WithId<RoomDoc>[],
+  busy: Set<string> = new Set(),
+): Placement[] {
+  const roomById = new Map(rooms.map((r) => [r.id, r]));
+  const onlySpecial = listed.every((p) => {
+    const r = roomById.get(p.roomId);
+    return r ? !isAutoRoom(r) : true;
+  });
+  if (!onlySpecial) return listed;
+  const listedIds = new Set(listed.map((p) => p.roomId));
+  const auto = autoPlacements(slot, rooms).filter((p) => !busy.has(p.roomId) && !listedIds.has(p.roomId));
+  return [...auto, ...listed];
 }
 
 export type IssueLevel = 'error' | 'warning';

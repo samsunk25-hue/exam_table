@@ -40,6 +40,10 @@ check('샘플 시트 구성', wb.SheetNames.length === 5 + 25 && slotRows.length
 const day1g1 = slotRows.filter((r) => r[0] === slotRows[0][0] && r[4] === 1).map((r) => [r[1], r[2], r[3], r[6]]);
 check('45분 시험 + 15분 휴식, 3교시 자습', JSON.stringify(day1g1) === JSON.stringify([[1, '09:00', '09:45', '시험'], [2, '10:00', '10:45', '시험'], [3, '11:00', '11:45', '자습']]), JSON.stringify(day1g1));
 
+// 시험실배치(선택): 기본 배치와 같은 시험은 특별실 행만 들어 있어야 한다
+const placeRows = XLSX.utils.sheet_to_json(wb.Sheets['시험실배치'], { header: 1 }).slice(1);
+check('시험실배치 시트는 별도시험장 행만', placeRows.length === 3 && placeRows.every((r) => r[3] === '별도시험장'), JSON.stringify(placeRows));
+
 await page.getByRole('button', { name: '통합 양식 업로드' }).click();
 const dialog = page.getByRole('dialog', { name: '기초 자료 통합 양식 업로드' });
 await dialog.locator('input[type=file]').setInputFiles(file);
@@ -50,6 +54,12 @@ await dialog.getByText('저장했습니다.').waitFor({ timeout: 60000 });
 const done = (await dialog.locator('ul').innerText()).replace(/\n/g, ' / ');
 check('저장 (교사 25 · 시험 27 · 시간표)', done.includes('교사 25명 (신규 25)') && done.includes('시험 일정 27건') && done.includes('기초시간표 교사 25명'), done);
 await dialog.getByRole('button', { name: '닫기' }).first().click();
+
+const slotDocs = await db.collection(`sessions/${SID}/slots`).get();
+const p1g1 = slotDocs.docs.filter((d) => d.get('grade') === 1 && d.get('period') === 1);
+const roomsOf = (d) => d.get('rooms').map((p) => p.roomType === 'EXTENDED' ? 'SEP' : p.classNo ?? 'H').join(',');
+check('특별실 + 자동 배치가 합쳐짐 (1학년 1교시: 교실 4 + 복도 + 별도시험장)', p1g1.length === 3 && p1g1.every((d) => d.get('rooms').length === 6), p1g1.map(roomsOf).join(' / '));
+check('모든 시험에 시험실 배치', slotDocs.docs.every((d) => d.get('rooms').length > 0));
 
 await go(page, `/admin/sessions/${SID}/assign`);
 await page.getByRole('checkbox', { name: /대안 시나리오/ }).uncheck();

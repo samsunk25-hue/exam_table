@@ -98,13 +98,3 @@ export function guideSheet(name: string, sections: { title?: string; fields?: Fi
   }
   return { name, rows, widths: [16, 6, 80] };
 }
-
-/** 표준 양식: 데이터 시트 + 안내 시트 */
-export function downloadTemplate(fileName: string, fields: FieldDef[], rows: OutCell[][], guide: string[] = []): boolean {
-  return downloadWorkbook(fileName, [
-    tableSheet('데이터', fields, rows),
-    guideSheet('안내', [
-      { fields, lines: [...guide, '* 첫 번째 시트의 첫 행을 제목 행으로 읽습니다. 열 순서는 바꿔도 됩니다.'] },
-    ]),
-  ]);
-}

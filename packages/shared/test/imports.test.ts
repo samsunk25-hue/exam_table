@@ -8,6 +8,7 @@ import {
   autoMap,
   autoPlacements,
   checkSchedule,
+  mergePlacements,
   groupTimetable,
   missingRequired,
   nextId,
@@ -245,6 +246,19 @@ describe('시험 일정과 배치', () => {
     expect(r.rows[0]!.value).toMatchObject({ id: '2026-10-12_1_1', type: 'EXAM', startTime: '09:00' });
     expect(r.rows[1]!.errors[0]).toContain('중복');
     expect(r.rows[2]!.errors[0]).toContain('종료시간');
+  });
+
+  it('배치 시트(선택): 특별실만 적으면 기본 배치에 더하고, 교실까지 적으면 그대로 쓴다', () => {
+    const sep = { roomId: 'S', classNo: null, headcount: 2, roomType: 'EXTENDED' as const };
+    expect(mergePlacements({ grade: 1 }, [sep], rooms).map((p) => p.roomId)).toEqual(['R1', 'R2', 'H1', 'S']);
+    // 같은 시간 다른 시험이 쓰는 시험실은 자동 배치에서 뺀다
+    expect(mergePlacements({ grade: 1 }, [sep], rooms, new Set(['H1'])).map((p) => p.roomId)).toEqual(['R1', 'R2', 'S']);
+    const custom = [{ roomId: 'R1', classNo: 1, headcount: null, roomType: 'NORMAL' as const }, sep];
+    expect(mergePlacements({ grade: 1 }, custom, rooms).map((p) => p.roomId)).toEqual(['R1', 'S']);
+  });
+
+  it('자습 시간 기본 배치는 교실만 (복도 감독 없음)', () => {
+    expect(autoPlacements({ grade: 1, type: 'STUDY' }, rooms).map((p) => p.roomId)).toEqual(['R1', 'R2']);
   });
 
   it('기본 배치는 같은 학년 교실과 복도만', () => {

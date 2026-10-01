@@ -59,6 +59,7 @@ export async function loadData(sessionId: string, useBaseTimetable: boolean) {
     constraints: constraints.docs.map((d) => d.data() as ConstraintDoc),
     baseTimetable: withIds<BaseTimetableDoc>(baseTimetable),
     useBaseTimetable,
+    examWriterRule: (session as { settings?: { examWriter?: 'NONE' | 'PREFER_HALLWAY' | 'NO_ROOM' } }).settings?.examWriter ?? 'NONE',
   };
   return { data, current: withIds<AssignmentDoc>(assignments) };
 }

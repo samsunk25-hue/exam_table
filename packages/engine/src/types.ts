@@ -104,6 +104,8 @@ export type RoleWeights = Record<Role, number>;
 
 export interface Settings {
   useBaseTimetable: boolean;
+  /** 출제 교사: 자기 과목 시험 시간에 복도 대기 우선 / 교실 감독 제외(하드) */
+  examWriterRule?: 'NONE' | 'PREFER_HALLWAY' | 'NO_ROOM';
   weights?: Partial<Weights>;
   roleWeights?: Partial<RoleWeights>;
   /** 형평성 재배치 시 허용하는 소프트 점수 하락폭 */
@@ -168,7 +170,8 @@ export type ExclusionReason =
   | 'UNAVAILABLE'
   | 'CONSTRAINT'
   | 'BUSY'
-  | 'AFTER_EXTENDED';
+  | 'AFTER_EXTENDED'
+  | 'EXAM_WRITER';
 
 export interface UnassignedSeat {
   seat: Seat;

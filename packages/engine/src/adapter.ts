@@ -21,6 +21,7 @@ export interface SessionData {
   constraints: ConstraintDoc[];
   baseTimetable: WithId<BaseTimetableDoc>[];
   useBaseTimetable: boolean;
+  examWriterRule?: 'NONE' | 'PREFER_HALLWAY' | 'NO_ROOM';
   pinned?: PinnedAssignment[];
 }
 
@@ -82,7 +83,7 @@ export function buildEngineInput(d: SessionData): EngineInput {
     baseTimetable: d.baseTimetable.flatMap((doc) =>
       doc.entries.map((e) => ({ teacherId: doc.id, weekday: e.weekday, period: e.period, grade: e.grade, classNo: e.classNo, subject: e.subject ?? undefined })),
     ),
-    settings: { useBaseTimetable: d.useBaseTimetable },
+    settings: { useBaseTimetable: d.useBaseTimetable, examWriterRule: d.examWriterRule ?? 'NONE' },
     pinned: d.pinned,
   };
 }

@@ -284,3 +284,38 @@ describe('별도 시간 → 겹치는 교시', () => {
     expect(overlappingPeriods(slots, slots[0]!, { ...p, endTime: '09:55' })).toEqual([]);
   });
 });
+
+describe('출제 교사 규칙', () => {
+  // 1학년 국어 시험: 교실 1(정감독) + 복도 1, 교사 = 국어 교사 A + 수학 교사 B
+  const input = (rule: 'NONE' | 'PREFER_HALLWAY' | 'NO_ROOM', teachers = [teacher('A', { subject: '국어' }), teacher('B', { subject: '수학' })]) =>
+    emptyInput({
+      teachers,
+      rooms: [
+        { id: 'R11', name: '1-1', chiefCount: 1, assistantCount: 0, spaceType: 'CLASSROOM' },
+        { id: 'H1', name: '1학년 복도', chiefCount: 1, assistantCount: 0, spaceType: 'HALLWAY' },
+      ],
+      slots: [{ id: 'S1', date: '2026-10-12', period: 1, grade: 1, subject: '국어', type: 'EXAM' }],
+      groups: [
+        { id: 'G1', slotId: 'S1', roomId: 'R11', grade: 1, classNo: 1, roomType: 'NORMAL' },
+        { id: 'G2', slotId: 'S1', roomId: 'H1', grade: 1, classNo: null, roomType: 'NORMAL' },
+      ],
+      settings: { useBaseTimetable: false, examWriterRule: rule },
+    });
+
+  it('복도 대기 우선: 국어 교사가 국어 시험 시간에 복도로', () => {
+    const r = runAssignment(input('PREFER_HALLWAY'));
+    expect(r.assignments.find((a) => a.teacherId === 'A')!.role).toBe('HALLWAY');
+  });
+
+  it('교실 감독 제외: 국어 교사는 교실에 배정할 수 없다 (복도는 가능)', () => {
+    const only = input('NO_ROOM', [teacher('A', { subject: '국어' })]);
+    const r = runAssignment(only);
+    expect(r.assignments.map((a) => a.role)).toEqual(['HALLWAY']);
+    expect(validateAssignments(only, [{ seatId: 'G1_CHIEF_1', teacherId: 'A' }]).map((v) => v.reason)).toContain('EXAM_WRITER');
+  });
+
+  it('상관없음: 제한 없이 배정된다', () => {
+    const r = runAssignment(input('NONE', [teacher('A', { subject: '국어' })]));
+    expect(r.assignments).toHaveLength(1);
+  });
+});

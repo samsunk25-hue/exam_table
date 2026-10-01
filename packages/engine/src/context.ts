@@ -46,6 +46,7 @@ export const EXCLUSION_LABEL: Record<ExclusionReason, string> = {
   CONSTRAINT: '예외 규칙',
   BUSY: '동시간 타 감독',
   AFTER_EXTENDED: '연장 감독 인접',
+  EXAM_WRITER: '출제 과목 시험',
 };
 
 /** YYYY-MM-DD → 1=월 ... 7=일 */
@@ -120,7 +121,10 @@ export function buildSeats(input: EngineInput, roleWeights: RoleWeights): Seat[]
 }
 
 export function buildContext(input: EngineInput): Context {
-  const weights = { ...DEFAULT_WEIGHTS, ...input.settings.weights };
+  // 출제 교사 규칙이 있으면 복도 가점·교실 감점을 기본으로 (시나리오가 직접 정한 가중치가 우선)
+  const writer = input.settings.examWriterRule ?? 'NONE';
+  const writerWeights = writer === 'NONE' ? {} : { examSubjectHallway: 60, examSubjectRoom: -60 };
+  const weights = { ...DEFAULT_WEIGHTS, ...writerWeights, ...input.settings.weights };
   const roleWeights = { ...DEFAULT_ROLE_WEIGHTS, ...input.settings.roleWeights };
   const seats = buildSeats(input, roleWeights);
 
@@ -180,6 +184,10 @@ export function staticHardReason(ctx: Context, teacher: Teacher, seat: Seat): Ex
   // 일반 교사는 교실·복도 모두 가능, 복도전담 교사는 복도만
   if (teacher.defaultRole === 'HALLWAY' && seat.role !== 'HALLWAY') return 'ROLE_MISMATCH';
   if (seat.periods.some((p) => ctx.unavailable.has(`${teacher.id}|${seat.date}|${p}`))) return 'UNAVAILABLE';
+  // 출제 교사는 자기 과목 시험 시간에 교실 감독 불가 (복도 대기는 가능)
+  if (ctx.input.settings.examWriterRule === 'NO_ROOM' && teacher.subject && teacher.subject === seat.subject && seat.role !== 'HALLWAY') {
+    return 'EXAM_WRITER';
+  }
   const cs = ctx.constraintsByTeacher.get(teacher.id);
   if (cs?.some((c) => c.priority === 'HARD' && constraintApplies(c, teacher, seat))) {
     return 'CONSTRAINT';

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, NavLink, Outlet, useOutletContext, useParams } from 'react-router';
-import { STATUS_LABEL, TRANSITIONS, isSetupEditable, type Transition } from '@sim/shared';
+import { EXAM_WRITER_RULE_LABEL, STATUS_LABEL, TRANSITIONS, isSetupEditable, type ExamWriterRule, type Transition } from '@sim/shared';
 import { StatusStepper } from '@/components/StatusStepper';
 import { UndoConfirm, useUndoOps } from '@/components/UndoHistory';
 import { BundleSection } from './BundleCard';
@@ -155,6 +155,18 @@ export function SessionOverview() {
     }
   };
 
+  const saveWriter = async (v: ExamWriterRule) => {
+    setSaving(true);
+    setError(null);
+    try {
+      await updateSessionSettings(session.id, { ...session.settings, examWriter: v });
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="grid gap-6">
       <Card>
@@ -185,6 +197,23 @@ export function SessionOverview() {
           disabled={!editable || saving}
           onChange={(v) => void toggleBase(v)}
         />
+        <label className="mt-4 grid max-w-xl gap-1">
+          <span className="font-semibold">출제 교사 (자기 과목 시험 시간)</span>
+          <select
+            aria-label="출제 교사 규칙"
+            className="min-h-12 rounded-xl border border-line bg-surface px-3 disabled:bg-bg"
+            value={session.settings.examWriter ?? 'NONE'}
+            disabled={!editable || saving}
+            onChange={(e) => void saveWriter(e.target.value as ExamWriterRule)}
+          >
+            {Object.entries(EXAM_WRITER_RULE_LABEL).map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+          <span className="text-sm text-muted">담당 교과가 시험 과목과 같은 교사를 출제 교사로 봅니다. 시험 중 문항 질의에 대응하도록 복도 대기를 맡깁니다.</span>
+        </label>
         {!editable && <p className="mt-2 text-sm text-muted">교사 공개 이후에는 설정을 바꿀 수 없습니다.</p>}
         {error && (
           <div className="mt-3">

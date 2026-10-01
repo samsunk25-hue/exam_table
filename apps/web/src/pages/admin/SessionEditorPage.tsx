@@ -251,6 +251,7 @@ export function SessionEditorPage() {
       constraints: constraints.data,
       baseTimetable: timetable.data,
       useBaseTimetable: session.settings.useBaseTimetable,
+      examWriterRule: session.settings.examWriter ?? 'NONE',
     });
     const names = new Map(teachers.data.map((t) => [t.id, t.name]));
     return {
@@ -260,7 +261,7 @@ export function SessionEditorPage() {
       nameOf: (id) => names.get(id) ?? id,
       teachers: [...teachers.data].sort((a, b) => a.name.localeCompare(b.name, 'ko')),
     };
-  }, [loading, teachers.data, rooms.data, slots.data, availability.data, constraints.data, timetable.data, assignments.data, session.settings.useBaseTimetable]);
+  }, [loading, teachers.data, rooms.data, slots.data, availability.data, constraints.data, timetable.data, assignments.data, session.settings.useBaseTimetable, session.settings.examWriter]);
 
   if (loading) return <Spinner />;
   if (error) return <Alert>{error}</Alert>;

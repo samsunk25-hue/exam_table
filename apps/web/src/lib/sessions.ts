@@ -10,7 +10,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { sessionTerm, termKey, type SessionStatus, type TermRef } from '@sim/shared';
+import { sessionTerm, termKey, type ExamWriterRule, type SessionStatus, type TermRef } from '@sim/shared';
 import { commitOps } from './data';
 import { auth, db } from './firebase';
 
@@ -23,6 +23,8 @@ export interface SessionSettings {
   useBaseTimetable: boolean;
   /** 교시별 기본 시작·종료 시각 (시험 추가 시 자동 입력) — 키는 교시 번호 */
   periodTimes?: Record<string, PeriodTime>;
+  /** 출제 교사 배정 규칙 (없으면 상관없음) */
+  examWriter?: ExamWriterRule;
 }
 
 export interface ExamSession {

@@ -32,6 +32,14 @@ export function parseTermKey(key: string): TermRef | null {
   return school && Number(year) && Number(semester) ? { school, year: Number(year), semester: Number(semester) } : null;
 }
 
+/** 출제 교사(시험 과목 담당 교사)를 자기 과목 시험 시간에 어떻게 배정할지 */
+export type ExamWriterRule = 'NONE' | 'PREFER_HALLWAY' | 'NO_ROOM';
+export const EXAM_WRITER_RULE_LABEL: Record<ExamWriterRule, string> = {
+  NONE: '상관없음',
+  PREFER_HALLWAY: '복도 대기 우선 (가능하면 교실 감독 피함)',
+  NO_ROOM: '교실 감독 제외 (복도 대기만 가능)',
+};
+
 export interface Homeroom {
   grade: number;
   classNo: number;

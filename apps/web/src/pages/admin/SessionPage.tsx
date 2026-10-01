@@ -14,6 +14,7 @@ const TABS = [
   { to: 'availability', label: '불가시간' },
   { to: 'assign', label: '자동 배정' },
   { to: 'editor', label: '시간표 편집' },
+  { to: 'equity', label: '업무 점수' },
   { to: 'print', label: '출력' },
   { to: 'history', label: '변경 이력' },
 ];

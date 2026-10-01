@@ -12,6 +12,7 @@ import { RoomsPage } from '@/pages/admin/RoomsPage';
 import { SessionAssignPage } from '@/pages/admin/SessionAssignPage';
 import { SessionAvailabilityPage } from '@/pages/admin/SessionAvailabilityPage';
 import { SessionEditorPage } from '@/pages/admin/SessionEditorPage';
+import { SessionEquityPage } from '@/pages/admin/SessionEquityPage';
 import { SessionLayout, SessionOverview } from '@/pages/admin/SessionPage';
 import { MyAvailabilityPage } from '@/pages/teacher/MyAvailabilityPage';
 import { MySchedulePage } from '@/pages/teacher/MySchedulePage';
@@ -97,6 +98,7 @@ const router = createBrowserRouter([
                 path: 'editor',
                 element: <SessionEditorPage />,
               },
+              { path: 'equity', element: <SessionEquityPage /> },
               {
                 path: 'print',
                 element: <SessionPrintPage />,

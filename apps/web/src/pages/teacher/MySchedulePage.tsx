@@ -4,6 +4,7 @@ import { isPublished, isSetupEditable, type AssignmentDoc, type RoomDoc, type Sl
 import { useAuth } from '@/auth/AuthProvider';
 import { FullTimetable, PersonalTimetable } from '@/components/TimetableViews';
 import { Alert, Button, Card, DownloadButton, PageTitle, Spinner } from '@/components/ui';
+import { TeacherSwapPanel } from '@/components/SwapRequests';
 import { useCollection } from '@/lib/data';
 import { sessionTitle, useMySessions, type ExamSession, termWhere } from '@/lib/sessions';
 import { downloadCalendar, downloadFullTimetable, downloadPersonalTimetable, dutiesOf, type TimetableData } from '@/lib/timetable';
@@ -96,6 +97,14 @@ function PublishedSchedule({ session, teacherId }: { session: ExamSession; teach
           </>
         )}
       </Card>
+
+      <TeacherSwapPanel
+        sid={sid}
+        open={session.status === 'PUBLISHED' || session.status === 'SWAP'}
+        teacherId={teacherId}
+        duties={duties}
+        teachers={data.teachers.map((t) => ({ id: t.id, name: t.name }))}
+      />
     </div>
   );
 }

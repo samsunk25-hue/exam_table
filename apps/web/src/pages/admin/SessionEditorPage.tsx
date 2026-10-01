@@ -25,6 +25,7 @@ import {
 } from '@sim/shared';
 import { dateLabel } from '@/components/AvailabilityGrid';
 import { Modal } from '@/components/Modal';
+import { AdminSwapCard } from '@/components/SwapRequests';
 import { toast } from '@/components/Toast';
 import { Alert, Button, Card, Select, Spinner, Table, Td } from '@/components/ui';
 import { useCollection } from '@/lib/data';
@@ -290,6 +291,8 @@ export function SessionEditorPage() {
         )}
         {data.seats.length === 0 && <p className="mt-2 text-muted">시험 일정과 시험실 배치를 먼저 등록하세요.</p>}
       </Card>
+
+      <AdminSwapCard sid={session.id} name={data.nameOf} />
 
       {groupByDate(examTimes(slots.data)).map(([date, times]) => (
         <Card key={date}>

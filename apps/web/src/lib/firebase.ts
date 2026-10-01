@@ -65,6 +65,16 @@ export const callUndoOperation = httpsCallable<{ opId: string; preview?: boolean
   functions,
   'undoOperation',
 );
+type SwapOption = { kind: 'SWAP' | 'HANDOVER'; moves: { seatId: string; from: string; to: string; label: string }[]; summary: string[] };
+export const callSuggestSwaps = httpsCallable<{ sessionId: string; seatId: string; partnerId?: string }, { options: SwapOption[] }>(functions, 'suggestSwaps');
+export const callCreateSwapRequest = httpsCallable<
+  { sessionId: string; kind: SwapOption['kind']; moves: SwapOption['moves']; reason?: string },
+  { requestId: string; status: string }
+>(functions, 'createSwapRequest');
+export const callActSwapRequest = httpsCallable<
+  { sessionId: string; requestId: string; action: 'accept' | 'decline' | 'cancel' | 'approve' | 'reject'; note?: string },
+  { status: string }
+>(functions, 'actSwapRequest');
 export const callAddAdmin = httpsCallable<{ email: string }, { email: string; applied: boolean }>(functions, 'addAdmin');
 export const callRemoveAdmin = httpsCallable<{ email: string }, { email: string }>(functions, 'removeAdmin');
 export const callReviewAccessRequest = httpsCallable<{ uid: string; approve: boolean; note?: string }, { status: string }>(

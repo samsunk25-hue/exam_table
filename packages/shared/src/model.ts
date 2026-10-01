@@ -286,3 +286,47 @@ export function nextId(prefix: string, existing: string[], count = 1): string[] 
   }
   return Array.from({ length: count }, (_, i) => `${prefix}${String(max + i + 1).padStart(3, '0')}`);
 }
+
+// ───────── 교사 교환 요청: sessions/{sid}/swapRequests/{id} (함수만 쓴다) ─────────
+
+export type SwapKind = 'SWAP' | 'HANDOVER';
+export type SwapStatus = 'PENDING_PEERS' | 'PENDING_ADMIN' | 'APPROVED' | 'REJECTED' | 'DECLINED' | 'CANCELLED' | 'FAILED';
+export type SwapResponse = 'PENDING' | 'ACCEPTED' | 'DECLINED';
+
+export interface SwapMoveDoc {
+  seatId: string;
+  /** 지금 맡은 교사 */
+  from: string;
+  /** 새로 맡을 교사 */
+  to: string;
+  /** "10/12 1교시 1-1 정감독" */
+  label: string;
+}
+
+export interface SwapRequestDoc {
+  requesterId: string;
+  kind: SwapKind;
+  moves: SwapMoveDoc[];
+  /** 관련 교사 전체 (요청자 포함) — 교사는 자기가 들어 있는 요청만 읽는다 */
+  parties: string[];
+  /** 요청자를 뺀 교사들의 수락 여부 */
+  responses: Record<string, SwapResponse>;
+  status: SwapStatus;
+  reason: string | null;
+  /** 반려 사유·실패 사유 */
+  note: string | null;
+  /** 사람이 읽는 설명 ("김국어 ← 10/12 1교시 1-1 정감독 (이수학 대신)") */
+  summary: string[];
+}
+
+export const SWAP_STATUS_LABEL: Record<SwapStatus, string> = {
+  PENDING_PEERS: '동료 교사 수락 대기',
+  PENDING_ADMIN: '관리자 승인 대기',
+  APPROVED: '승인·반영됨',
+  REJECTED: '관리자 반려',
+  DECLINED: '동료 교사 거절',
+  CANCELLED: '요청 취소',
+  FAILED: '반영 실패',
+};
+
+export const OPEN_SWAP_STATUSES: SwapStatus[] = ['PENDING_PEERS', 'PENDING_ADMIN'];

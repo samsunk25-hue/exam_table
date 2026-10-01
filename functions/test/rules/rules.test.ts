@@ -109,6 +109,22 @@ describe('학교별 분리', () => {
   });
 });
 
+describe('교환 요청', () => {
+  it('관련 교사와 관리자만 읽고, 아무도 직접 쓸 수 없다', async () => {
+    await seed('PUBLISHED');
+    await env.withSecurityRulesDisabled((ctx) =>
+      setDoc(doc(ctx.firestore(), 'sessions/S1/swapRequests/Q1'), { requesterId: 'T002', parties: ['T002', 'T001'], status: 'PENDING_PEERS' }),
+    );
+    await env.withSecurityRulesDisabled((ctx) =>
+      setDoc(doc(ctx.firestore(), 'sessions/S1/swapRequests/Q2'), { requesterId: 'T002', parties: ['T002', 'T003'], status: 'PENDING_PEERS' }),
+    );
+    await assertSucceeds(getDoc(doc(kim(), 'sessions/S1/swapRequests/Q1')));
+    await assertFails(getDoc(doc(kim(), 'sessions/S1/swapRequests/Q2')));
+    await assertSucceeds(getDoc(doc(admin(), 'sessions/S1/swapRequests/Q2')));
+    await assertFails(setDoc(doc(kim(), 'sessions/S1/swapRequests/Q3'), { requesterId: 'T001', parties: ['T001'] }));
+  });
+});
+
 describe('되돌리기 기록', () => {
   const op = { label: '교사 수정', kind: 'DATA', sessionId: null, paths: ['teachers/T001'], count: 1, createdBy: 'admin', undone: false };
 

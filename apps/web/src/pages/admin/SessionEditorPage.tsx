@@ -35,6 +35,7 @@ import { callApplyChanges, errorMessage } from '@/lib/firebase';
 import { termWhere, updateSessionSettings, type ExamSession, useSessionTeachers } from '@/lib/sessions';
 import { sortRooms } from './RoomsPage';
 import { useCurrentSession } from './SessionPage';
+import { TempQuickAssign } from './TempStaffCard';
 
 type Assignment = WithId<AssignmentDoc>;
 
@@ -155,6 +156,14 @@ function SeatDialog({
             <span className="font-semibold">변경 사유 (최종 확정 이후 필수, 변경 이력에 남습니다)</span>
             <input className="min-h-12 rounded-xl border border-line px-4" value={reason} onChange={(e) => setReason(e.target.value)} />
           </label>
+        )}
+
+        {tab === 'change' && !current && (
+          <TempQuickAssign
+            session={session}
+            busy={busy}
+            onAssign={(id, name) => save([{ seatId: seat.id, teacherId: id }], '임시 감독자 배정', `${name}님(임시 감독자)을 배정했습니다.`)}
+          />
         )}
 
         {tab === 'change' && (

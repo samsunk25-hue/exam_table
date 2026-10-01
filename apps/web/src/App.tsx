@@ -15,6 +15,7 @@ import { SessionEditorPage } from '@/pages/admin/SessionEditorPage';
 import { SessionLayout, SessionOverview } from '@/pages/admin/SessionPage';
 import { MyAvailabilityPage } from '@/pages/teacher/MyAvailabilityPage';
 import { MySchedulePage } from '@/pages/teacher/MySchedulePage';
+import { AdminRequestPage } from '@/pages/teacher/AdminRequestPage';
 import { SessionPrintPage } from '@/pages/admin/SessionPrintPage';
 import { SessionHistoryPage } from '@/pages/admin/SessionHistoryPage';
 import { SessionSetupPage } from '@/pages/admin/SessionSetupPage';
@@ -31,6 +32,7 @@ const ADMIN_NAV: NavItem[] = [
 const TEACHER_NAV: NavItem[] = [
   { to: '/me', label: '내 감독 시간표', end: true },
   { to: '/me/availability', label: '불가 시간 관리' },
+  { to: '/me/admin-request', label: '관리자 권한 신청' },
 ];
 
 function homeFor(role: Role): string {
@@ -121,6 +123,7 @@ const router = createBrowserRouter([
             element: <MySchedulePage />,
           },
           { path: 'availability', element: <MyAvailabilityPage /> },
+          { path: 'admin-request', element: <AdminRequestPage /> },
         ],
       },
     ],

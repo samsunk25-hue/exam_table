@@ -61,6 +61,10 @@ export const callApplyChanges = httpsCallable<
 
 export const callAddAdmin = httpsCallable<{ email: string }, { email: string; applied: boolean }>(functions, 'addAdmin');
 export const callRemoveAdmin = httpsCallable<{ email: string }, { email: string }>(functions, 'removeAdmin');
+export const callReviewAccessRequest = httpsCallable<{ uid: string; approve: boolean; note?: string }, { status: string }>(
+  functions,
+  'reviewAccessRequest',
+);
 
 /** Firebase 오류를 사용자에게 보여줄 한국어 문장으로 */
 export function errorMessage(e: unknown): string {

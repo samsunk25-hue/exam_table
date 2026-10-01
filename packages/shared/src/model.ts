@@ -163,6 +163,23 @@ export interface RunDoc {
   elapsedMs: number;
 }
 
+export type AccessKind = 'TEACHER' | 'ADMIN';
+export type AccessStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+/** accessRequests/{uid} — 가입(교사) 또는 관리자 권한 신청. 승인·반려는 서버 함수만 */
+export interface AccessRequestDoc {
+  uid: string;
+  /** 로그인한 Google 계정 이메일 (소문자) — 승인 후 이 계정으로 로그인 */
+  email: string;
+  name: string;
+  subject: string | null;
+  kind: AccessKind;
+  status: AccessStatus;
+  note: string | null;
+}
+
+export const ACCESS_KIND_LABEL: Record<AccessKind, string> = { TEACHER: '교사(사용자)', ADMIN: '관리자' };
+
 export type WithId<T> = T & { id: string };
 
 export function slotIdOf(date: string, period: number, grade: number): string {

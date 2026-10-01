@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '@/auth/AuthProvider';
 import { Alert, Button, Card, Field, PageTitle, Spinner } from '@/components/ui';
 import { callAddAdmin, callRemoveAdmin, db, errorMessage } from '@/lib/firebase';
+import { AccessRequestsCard } from './AccessRequestsCard';
 
 interface AdminEntry {
   email: string;
@@ -109,6 +110,7 @@ export function AdminsPage() {
   return (
     <>
       <PageTitle sub="관리자는 모든 시험 프로젝트의 설정·배정·확정을 할 수 있습니다.">관리자 관리</PageTitle>
+      <AccessRequestsCard />
 
       <Card className="mb-6">
         <form onSubmit={(e) => void add(e)} className="flex flex-col gap-3 sm:flex-row sm:items-end">

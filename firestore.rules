@@ -32,6 +32,19 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // 가입·관리자 권한 신청: 본인이 대기 상태로만 작성(반려되면 다시 신청), 승인·반려는 함수만
+    match /accessRequests/{uid} {
+      allow read: if (signedIn() && request.auth.uid == uid) || isAdmin();
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email.lower()
+        && request.resource.data.status == 'PENDING'
+        && request.resource.data.kind in ['TEACHER', 'ADMIN']
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && (resource == null || resource.data.status != 'APPROVED' || request.resource.data.kind != resource.data.kind);
+      allow delete: if false;
+    }
+
     // 관리자 목록: addAdmin / removeAdmin 함수로만 변경
     match /admins/{email} {
       allow read: if isAdmin();

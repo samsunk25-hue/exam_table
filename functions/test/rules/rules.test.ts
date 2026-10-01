@@ -56,6 +56,24 @@ describe('역할', () => {
   });
 });
 
+describe('가입·권한 신청', () => {
+  const newbie = () => env.authenticatedContext('nb', { email: 'NB@test.kr' }).firestore();
+  const req = { uid: 'nb', email: 'nb@test.kr', name: '신규', subject: null, kind: 'TEACHER', status: 'PENDING', note: null };
+
+  it('본인 신청만 대기 상태로 쓸 수 있고, 승인 상태로는 쓸 수 없다', async () => {
+    await assertSucceeds(setDoc(doc(newbie(), 'accessRequests/nb'), req));
+    await assertFails(setDoc(doc(newbie(), 'accessRequests/other'), { ...req, uid: 'other' }));
+    await assertFails(setDoc(doc(newbie(), 'accessRequests/nb'), { ...req, status: 'APPROVED' }));
+    await assertFails(setDoc(doc(newbie(), 'accessRequests/nb'), { ...req, email: 'someone@else.kr' }));
+  });
+
+  it('신청 목록은 관리자만 볼 수 있다', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'accessRequests/nb'), req));
+    await assertSucceeds(getDoc(doc(admin(), 'accessRequests/nb')));
+    await assertFails(getDoc(doc(kim(), 'accessRequests/nb')));
+  });
+});
+
 describe('세션 상태', () => {
   it('관리자는 DRAFT로만 세션을 만들고, 상태 필드는 직접 바꿀 수 없다', async () => {
     await assertSucceeds(setDoc(doc(admin(), 'sessions/S9'), { status: 'DRAFT', updatedBy: 'admin' }));

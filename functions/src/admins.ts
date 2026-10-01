@@ -14,7 +14,7 @@ async function findUser(email: string): Promise<UserRecord | null> {
 }
 
 /** 이미 가입한 사용자면 역할을 즉시 다시 계산한다. 아직 로그인 전이면 첫 로그인 때 반영된다. */
-async function refreshUserRole(email: string): Promise<UserRecord | null> {
+export async function refreshUserRole(email: string): Promise<UserRecord | null> {
   const user = await findUser(email);
   if (!user) return null;
   const { role, teacherId } = await lookupRole(email);

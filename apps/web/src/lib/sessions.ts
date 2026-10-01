@@ -13,8 +13,15 @@ import { useEffect, useState } from 'react';
 import type { SessionStatus } from '@sim/shared';
 import { auth, db } from './firebase';
 
+export interface PeriodTime {
+  start: string;
+  end: string;
+}
+
 export interface SessionSettings {
   useBaseTimetable: boolean;
+  /** 교시별 기본 시작·종료 시각 (시험 추가 시 자동 입력) — 키는 교시 번호 */
+  periodTimes?: Record<string, PeriodTime>;
 }
 
 export interface ExamSession {

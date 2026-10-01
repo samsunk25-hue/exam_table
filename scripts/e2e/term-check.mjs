@@ -38,6 +38,8 @@ const teacher = (name, email, load, homeroom, t) => ({
   name, email, subject: '국어', homeroom, defaultRole: 'NORMAL', active: true, cumulativeLoad: load, ...t, updatedBy: 'seed',
 });
 await db.doc('teachers/T001').set(teacher('일학기쌤', 'one@term.kr', 5, { grade: 1, classNo: 1 }, term(2026, 1)));
+// 1학기에만 있는 교사: 불러올 때 체크를 풀어 빼 본다
+await db.doc('teachers/T010').set(teacher('제외쌤', 'skip@term.kr', 0, null, term(2026, 1)));
 await db.doc('teachers/T002').set(teacher('작년쌤', 'old@term.kr', 7, { grade: 2, classNo: 1 }, term(2025, 2)));
 await db.doc('teachers/T003').set(teacher('예전쌤', null, 0, null, {}));
 await db.doc('rooms/R001').set({ name: '1-1', spaceType: 'CLASSROOM', grade: 1, classNo: 1, chiefCount: 1, assistantCount: 0, ...term(2026, 1), updatedBy: 'seed' });
@@ -49,19 +51,21 @@ const picker = page.getByLabel('학교·학기');
 check('처음 학기 = 가장 최근 프로젝트 (2026-2)', (await picker.inputValue()) === `${SCHOOL}|2026|2`, await picker.inputValue());
 check('이 학기 명단은 비어 있음', await page.getByText('이 학기에 등록된 교사가 없습니다').isVisible());
 
-async function importFrom(label) {
+async function importFrom(label, skip) {
   await page.getByRole('button', { name: '다른 학기에서 불러오기' }).click();
   const dlg = page.getByRole('dialog', { name: '다른 학기 교사 불러오기' });
   await dlg.getByRole('button', { name: label }).click();
-  await dlg.getByRole('button', { name: '불러오기', exact: true }).click();
+  if (skip) await dlg.getByRole('checkbox', { name: `${skip} 가져오기` }).uncheck();
+  await dlg.getByRole('button', { name: /^\d+(명|개) 불러오기$/ }).click();
   await dlg.waitFor({ state: 'detached' }); // 창이 닫히면 저장 완료
 }
 const inTerm = async (t) => (await db.collection('teachers').where('term', '==', t).get()).docs;
 
 // 같은 학년도(2026-1) → 점수·담임 유지, 새 ID
-await importFrom(/2026학년도 1학기/);
+await importFrom(/2026학년도 1학기/, '제외쌤');
 let now = await inTerm(`${SCHOOL}|2026|2`);
 const one = now.find((d) => d.get('email') === 'one@term.kr');
+check('체크 해제한 교사는 가져오지 않음', !now.some((d) => d.get('email') === 'skip@term.kr'));
 check('같은 학년도 불러오기: 누적점수·담임 유지, 새 ID', one && one.id !== 'T001' && one.get('cumulativeLoad') === 5 && one.get('homeroom')?.classNo === 1, one?.id);
 
 // 다른 학년도(2025-2) → 0점, 담임 비움
@@ -79,14 +83,14 @@ check('화면: 이 학기 교사 3명', (await page.locator('tbody tr').count())
 // 다른 학기로 바꾸면 그 학기 명단
 await picker.selectOption(`${SCHOOL}|2026|1`);
 await page.getByRole('cell', { name: '일학기쌤' }).waitFor();
-check('학기 바꾸기 → 그 학기 명단만', (await page.locator('tbody tr').count()) === 1);
+check('학기 바꾸기 → 그 학기 명단만 (1학기 2명)', (await page.locator('tbody tr').count()) === 2);
 
 // 프로젝트 개요: 시험실이 비어 있으면 불러오기
 await go(page, '/admin/sessions/TERM_26_2');
 await page.getByRole('button', { name: '시험실 불러오기' }).click();
 const rd = page.getByRole('dialog', { name: '다른 학기 시험실 불러오기' });
 await rd.getByRole('button', { name: /2026학년도 1학기/ }).click();
-await rd.getByRole('button', { name: '불러오기', exact: true }).click();
+await rd.getByRole('button', { name: /^\d+(명|개) 불러오기$/ }).click();
 await rd.waitFor({ state: 'detached' });
 let rooms = 0;
 for (let i = 0; i < 20 && rooms !== 1; i++) {

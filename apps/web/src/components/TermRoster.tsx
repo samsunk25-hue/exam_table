@@ -76,6 +76,16 @@ export function TermPicker({ terms, value, onChange }: { terms: TermRef[]; value
 
 type Doc = WithId<TeacherDoc> | WithId<RoomDoc>;
 
+/** 목록에 보여 줄 설명 (교사: 이름 교과 이메일, 시험실: 실명 학년-반) */
+function describe(kind: RosterKind, d: Doc): string {
+  if (kind === 'rooms') {
+    const r = d as WithId<RoomDoc>;
+    return `${r.name}${r.grade ? ` · ${r.grade}학년` : ''}`;
+  }
+  const t = d as WithId<TeacherDoc>;
+  return [t.name, t.subject, t.email].filter(Boolean).join(' · ');
+}
+
 /** 같은 대상인지 (중복으로 불러오지 않게): 교사는 이메일 또는 이름, 시험실은 실명 */
 function sameKey(kind: RosterKind, d: Doc): string {
   if (kind === 'rooms') return d.name;
@@ -87,7 +97,7 @@ function sameKey(kind: RosterKind, d: Doc): string {
  * 다른 학기 명단을 이 학기로 불러온다.
  * - 다른 학기: 새 ID로 복사. 같은 학교·학년도면 누적 업무점수를 이어받고, 학년도가 다르면 0점·담임 비움(선택)
  * - 학기 미지정(예전 자료): 그대로 이 학기로 지정 (ID 유지 → 기존 배정 기록 연결)
- * 이 학기에 이미 있는 대상(이메일·이름·실명 기준)은 건너뛴다.
+ * 이 학기에 이미 있는 대상(이메일·이름·실명 기준)은 건너뛴다. 목록에서 체크한 것만 가져온다.
  */
 export function RosterImportDialog({ kind, target, all, onClose }: { kind: RosterKind; target: TermRef; all: Doc[]; onClose: () => void }) {
   const targetKey = termKey(target);
@@ -100,6 +110,9 @@ export function RosterImportDialog({ kind, target, all, onClose }: { kind: Roste
   const [clearHomeroom, setClearHomeroom] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 가져올 대상 (처음에는 모두 체크)
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
 
   const src = source === 'legacy' ? null : source ? parseTermKey(source) : null;
   const sameYear = Boolean(src && src.school === target.school && src.year === target.year);
@@ -108,6 +121,23 @@ export function RosterImportDialog({ kind, target, all, onClose }: { kind: Roste
   const existing = new Set(all.filter((d) => d.term === targetKey).map((d) => sameKey(kind, d)));
   const picked = source === 'legacy' ? legacy : all.filter((d) => d.term === source);
   const fresh = picked.filter((d) => !existing.has(sameKey(kind, d)));
+  const freshKey = fresh.map((d) => d.id).join(',');
+  // 다른 학기를 고르면 그 학기 대상을 모두 체크한 상태로 시작
+  useEffect(() => {
+    setChecked(new Set(freshKey ? freshKey.split(',') : []));
+    setSearch('');
+  }, [freshKey]);
+  const chosen = fresh.filter((d) => checked.has(d.id));
+  const q = search.trim().toLowerCase();
+  const shown = [...fresh]
+    .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+    .filter((d) => !q || describe(kind, d).toLowerCase().includes(q));
+  const toggle = (id: string, on: boolean) => {
+    const next = new Set(checked);
+    if (on) next.add(id);
+    else next.delete(id);
+    setChecked(next);
+  };
 
   const save = async () => {
     setBusy(true);
@@ -115,10 +145,10 @@ export function RosterImportDialog({ kind, target, all, onClose }: { kind: Roste
     const tf = termFields(target);
     const ops: BatchOp[] = [];
     if (source === 'legacy') {
-      for (const d of fresh) ops.push({ type: 'set', ref: ref(kind, d.id), data: { ...tf }, merge: true });
+      for (const d of chosen) ops.push({ type: 'set', ref: ref(kind, d.id), data: { ...tf }, merge: true });
     } else {
-      const ids = nextId(kind === 'teachers' ? 'T' : 'R', all.map((d) => d.id), fresh.length);
-      fresh.forEach(({ id: _id, term: _t, school: _s, year: _y, semester: _m, ...d }, i) => {
+      const ids = nextId(kind === 'teachers' ? 'T' : 'R', all.map((d) => d.id), chosen.length);
+      chosen.forEach(({ id: _id, term: _t, school: _s, year: _y, semester: _m, ...d }, i) => {
         const data: Record<string, unknown> = { ...d, ...tf };
         if (kind === 'teachers') {
           if (!sameYear) data.cumulativeLoad = 0;
@@ -129,7 +159,7 @@ export function RosterImportDialog({ kind, target, all, onClose }: { kind: Roste
     }
     try {
       await commitOps(ops, `${KIND_LABEL[kind]} 명단 불러오기`);
-      toast(`${KIND_LABEL[kind]} ${fresh.length}${kind === 'teachers' ? '명을' : '개를'} ${termLabel(target)}(으)로 불러왔습니다.`);
+      toast(`${KIND_LABEL[kind]} ${chosen.length}${kind === 'teachers' ? '명을' : '개를'} ${termLabel(target)}(으)로 불러왔습니다.`);
       onClose();
     } catch (e) {
       setError(errorMessage(e));
@@ -163,11 +193,52 @@ export function RosterImportDialog({ kind, target, all, onClose }: { kind: Roste
         )}
         {source && (
           <div className="grid gap-2 rounded-xl bg-bg p-3">
-            <p>
-              {KIND_LABEL[kind]} {fresh.length}
-              {kind === 'teachers' ? '명을' : '개를'} 불러옵니다
-              {picked.length > fresh.length && ` (이 학기에 이미 있는 ${picked.length - fresh.length}건은 건너뜀)`}.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-semibold">
+                {fresh.length}
+                {kind === 'teachers' ? '명' : '개'} 중 {chosen.length}
+                {kind === 'teachers' ? '명' : '개'} 선택
+                {picked.length > fresh.length && (
+                  <span className="font-normal text-muted"> (이 학기에 이미 있는 {picked.length - fresh.length}건은 제외)</span>
+                )}
+              </p>
+              <div className="flex gap-1">
+                <Button variant="ghost" onClick={() => setChecked(new Set([...checked, ...shown.map((d) => d.id)]))}>
+                  {q ? '검색 결과 모두 선택' : '모두 선택'}
+                </Button>
+                <Button variant="ghost" onClick={() => setChecked(new Set([...checked].filter((id) => !shown.some((d) => d.id === id))))}>
+                  {q ? '검색 결과 선택 해제' : '모두 해제'}
+                </Button>
+              </div>
+            </div>
+            {fresh.length > 8 && (
+              <input
+                type="search"
+                aria-label="불러올 명단 검색"
+                placeholder={kind === 'teachers' ? '이름·교과·이메일 검색' : '실명 검색'}
+                className="min-h-12 rounded-xl border border-line bg-surface px-4"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            )}
+            <ul className="grid max-h-72 gap-1 overflow-y-auto rounded-xl border border-line bg-surface p-2 sm:grid-cols-2">
+              {shown.map((d) => (
+                <li key={d.id}>
+                  <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-2 hover:bg-bg">
+                    <input
+                      type="checkbox"
+                      className="size-5 accent-primary"
+                      aria-label={`${d.name} 가져오기`}
+                      checked={checked.has(d.id)}
+                      onChange={(e) => toggle(d.id, e.target.checked)}
+                    />
+                    <span className="font-semibold">{d.name}</span>
+                    <span className="truncate text-sm text-muted">{describe(kind, d).slice(d.name.length)}</span>
+                  </label>
+                </li>
+              ))}
+              {shown.length === 0 && <li className="p-2 text-muted">검색 결과가 없습니다.</li>}
+            </ul>
             {source === 'legacy' && <p className="text-sm text-muted">예전 자료는 복사하지 않고 이 학기로 지정합니다 (지난 배정 기록이 그대로 연결됩니다).</p>}
             {kind === 'teachers' && src && (
               <>
@@ -184,8 +255,8 @@ export function RosterImportDialog({ kind, target, all, onClose }: { kind: Roste
         )}
         {error && <Alert>{error}</Alert>}
         <div className="flex gap-2">
-          <Button onClick={() => void save()} disabled={busy || !source || fresh.length === 0}>
-            {busy ? '불러오는 중…' : '불러오기'}
+          <Button onClick={() => void save()} disabled={busy || !source || chosen.length === 0}>
+            {busy ? '불러오는 중…' : `${chosen.length ? `${chosen.length}${kind === 'teachers' ? '명' : '개'} ` : ''}불러오기`}
           </Button>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             취소

@@ -15,12 +15,12 @@ export function AppTitle({ size = 'md', as: Tag = 'div' }: { size?: 'md' | 'lg';
 }
 
 /** 대문 그림 (public/hero.jpg). 파일이 없으면 아무것도 그리지 않는다. */
-export function HeroImage({ className = '' }: { className?: string }) {
+export function HeroImage({ className = '', src = '/hero.jpg' }: { className?: string; src?: string }) {
   const [missing, setMissing] = useState(false);
   if (missing) return null;
   return (
     <img
-      src="/hero.jpg"
+      src={src}
       alt="시험 감독 시간표를 태블릿으로 확인하는 선생님"
       className={className}
       onError={() => setMissing(true)}

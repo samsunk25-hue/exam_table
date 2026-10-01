@@ -14,6 +14,7 @@ import {
 import { Modal } from '@/components/Modal';
 import { Alert, Button, Card, DownloadButton, Spinner } from '@/components/ui';
 import { useCollection } from '@/lib/data';
+import { Readiness } from './Readiness';
 import { bundleSheets, saveBundle } from '@/lib/bundle';
 import { errorMessage } from '@/lib/firebase';
 import type { ExamSession } from '@/lib/sessions';
@@ -192,14 +193,17 @@ export function BundleSection({ session }: { session: ExamSession }) {
   const error = all.find((x) => x.error)?.error;
   if (error) return <Alert>{error}</Alert>;
   return (
-    <BundleCard
-      session={session}
-      editable={isSetupEditable(session.status)}
-      teachers={teachers.data}
-      rooms={rooms.data}
-      slots={slots.data}
-      timetable={timetable.data}
-    />
+    <>
+      <Readiness session={session} slots={slots.data} rooms={rooms.data} teachers={teachers.data} timetable={timetable.data} />
+      <BundleCard
+        session={session}
+        editable={isSetupEditable(session.status)}
+        teachers={teachers.data}
+        rooms={rooms.data}
+        slots={slots.data}
+        timetable={timetable.data}
+      />
+    </>
   );
 }
 

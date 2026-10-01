@@ -81,7 +81,9 @@ function MyAvailabilityForm({ session, teacherId }: { session: ExamSession; teac
     <div className="grid gap-6">
       <Card>
         <h2 className="text-lg font-bold">근무할 수 없는 시간을 누르세요</h2>
-        <p className="mt-1 text-muted">여러 칸을 고른 뒤 사유를 선택하고 제출합니다. 승인 대기 중인 칸을 누르면 제출을 취소할 수 있습니다.</p>
+        <p className="mt-1 text-muted">
+          여러 칸을 고른 뒤 사유를 선택하고 제출합니다. 이미 제출한 칸을 누르면 취소할 수 있습니다 (승인된 것도 교사 공개 전까지 취소 가능).
+        </p>
         <div className="my-4">
           <GridLegend />
         </div>
@@ -90,11 +92,7 @@ function MyAvailabilityForm({ session, teacherId }: { session: ExamSession; teac
           entries={entries}
           selected={selected}
           onToggle={toggle}
-          onEntryClick={(entry) =>
-            entry.status === 'PENDING'
-              ? setCancelTarget(entry)
-              : toast(`${AVAILABILITY_STATUS_LABEL[entry.status]}된 항목입니다. 바꾸려면 관리자에게 요청하세요.`)
-          }
+          onEntryClick={setCancelTarget}
         />
       </Card>
 
@@ -137,10 +135,14 @@ function MyAvailabilityForm({ session, teacherId }: { session: ExamSession; teac
       </Card>
 
       {cancelTarget && (
-        <Modal title="제출 취소" onClose={() => setCancelTarget(null)}>
+        <Modal title={cancelTarget.status === 'APPROVED' ? '승인된 불가 시간 취소' : '제출 취소'} onClose={() => setCancelTarget(null)}>
           <p>
-            {dateLabel(cancelTarget.date)} {cancelTarget.period}교시 ({cancelTarget.reason}) 제출을 취소할까요?
+            {dateLabel(cancelTarget.date)} {cancelTarget.period}교시 ({cancelTarget.reason}, {AVAILABILITY_STATUS_LABEL[cancelTarget.status]}) 을(를)
+            취소할까요?
           </p>
+          {cancelTarget.status === 'APPROVED' && (
+            <p className="mt-2 text-muted">취소하면 이 시간에도 감독이 배정될 수 있습니다. 이미 자동 배정이 끝났다면 관리자에게도 알려 주세요.</p>
+          )}
           <div className="mt-4 flex gap-2">
             <Button variant="danger" onClick={() => void cancel()} disabled={busy}>
               제출 취소

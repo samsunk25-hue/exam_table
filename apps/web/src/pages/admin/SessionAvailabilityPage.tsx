@@ -122,9 +122,17 @@ function RequestsCard({ sid, list, nameOf }: { sid: string; list: Availability[]
                   {a.adminNote && <div className="text-sm text-muted">{a.adminNote}</div>}
                 </Td>
                 <Td className="whitespace-nowrap">
-                  {a.status !== 'APPROVED' && (
+                  {a.status !== 'APPROVED' ? (
                     <Button variant="ghost" disabled={busy} onClick={() => void run(() => reviewAvailability(sid, [a.id], 'APPROVED'), '승인했습니다.')}>
                       승인
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => void run(() => reviewAvailability(sid, [a.id], 'PENDING'), '승인을 취소했습니다 (승인 대기로 돌림).')}
+                    >
+                      승인 취소
                     </Button>
                   )}
                   {a.status !== 'REJECTED' && (

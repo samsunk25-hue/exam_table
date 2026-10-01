@@ -101,6 +101,19 @@ describe('불가시간', () => {
     await assertFails(deleteDoc(doc(kim(), 'sessions/S1/availability/V2')));
   });
 
+  it('교사는 본인 불가시간을 승인 후에도 취소할 수 있지만, 교사 공개 이후에는 안 된다', async () => {
+    await seed('DRAFT');
+    await env.withSecurityRulesDisabled((ctx) =>
+      setDoc(doc(ctx.firestore(), 'sessions/S1/availability/V5'), { ...mine, status: 'APPROVED', updatedBy: 'admin' }),
+    );
+    await assertSucceeds(deleteDoc(doc(kim(), 'sessions/S1/availability/V5')));
+    await seed('PUBLISHED');
+    await env.withSecurityRulesDisabled((ctx) =>
+      setDoc(doc(ctx.firestore(), 'sessions/S1/availability/V6'), { ...mine, status: 'APPROVED', updatedBy: 'admin' }),
+    );
+    await assertFails(deleteDoc(doc(kim(), 'sessions/S1/availability/V6')));
+  });
+
   it('관리자는 승인할 수 있다', async () => {
     await seed('DRAFT');
     await assertSucceeds(updateDoc(doc(admin(), 'sessions/S1/availability/V2'), { status: 'APPROVED', updatedBy: 'admin' }));

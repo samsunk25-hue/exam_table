@@ -100,10 +100,10 @@ service cloud.firestore {
           && request.resource.data.teacherId == myTeacherId()
           && request.resource.data.status == 'PENDING'
           && request.resource.data.source == 'TEACHER';
+        // 본인 제출은 승인된 뒤에도 교사 공개 전까지 취소(삭제)할 수 있다
         allow delete: if isTeacher()
           && setupEditable(sid)
-          && resource.data.teacherId == myTeacherId()
-          && resource.data.status == 'PENDING';
+          && resource.data.teacherId == myTeacherId();
         allow write: if isAdmin() && (request.method == 'delete' || stamped());
       }
 

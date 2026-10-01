@@ -19,22 +19,22 @@ export function AppShell({ nav, modeLabel }: { nav: NavItem[]; modeLabel: string
         <div className="bg-mint-soft px-4 py-1 text-center text-sm">로컬 에뮬레이터 연결 중 (실제 데이터 아님)</div>
       )}
       <header className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-          <div className="min-w-0">
+        <div className="mx-auto flex max-w-[1440px] items-center gap-4 px-4 py-3 lg:px-8">
+          <div className="min-w-0 shrink-0">
             <AppTitle />
             <div className="mt-1 truncate text-sm text-muted">
               {modeLabel} · {user?.email}
             </div>
           </div>
-          {/* 오른쪽 빈 공간에 대문 그림 (좁은 화면에서는 숨김) */}
-          <div className="flex shrink-0 items-center gap-4">
-            <HeroImage className="hidden h-20 w-[152px] rounded-xl object-cover shadow-sm md:block" />
-            <Button variant="secondary" onClick={() => void signOut()}>
-              로그아웃
-            </Button>
+          {/* 제목과 로그아웃 사이 빈 공간을 가로 배너로 채운다 (비율 유지, 좁으면 작아지고 휴대폰에서는 숨김) */}
+          <div className="hidden min-w-0 flex-1 justify-end md:flex">
+            <HeroImage src="/banner.jpg" className="h-24 w-auto max-w-full rounded-xl object-contain shadow-sm" />
           </div>
+          <Button variant="secondary" className="ml-auto shrink-0 md:ml-0" onClick={() => void signOut()}>
+            로그아웃
+          </Button>
         </div>
-        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-2 pb-2" aria-label="주 메뉴">
+        <nav className="mx-auto flex max-w-[1440px] gap-1 overflow-x-auto px-2 pb-2 lg:px-6" aria-label="주 메뉴">
           {nav.map((item) => (
             <NavLink
               key={item.to}
@@ -51,7 +51,7 @@ export function AppShell({ nav, modeLabel }: { nav: NavItem[]; modeLabel: string
           ))}
         </nav>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className="mx-auto max-w-[1440px] px-4 py-6 lg:px-8">
         <Outlet />
       </main>
     </div>

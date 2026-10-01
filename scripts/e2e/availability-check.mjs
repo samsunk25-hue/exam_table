@@ -81,9 +81,26 @@ for (const period of [1, 2]) {
   await go(page, '/me/availability');
   await page.getByRole('button', { name: /1교시\s*승인 · 연수/ }).waitFor();
   check('교사 화면: 승인 표시', true);
+  const docs = await db.collection(`sessions/${SID}/availability`).get();
+  check('저장된 문서 (교사 1 + 대리 1, 모두 승인)', docs.size === 2 && docs.docs.every((d) => d.get('status') === 'APPROVED'), docs.docs.map((d) => `${d.id}:${d.get('status')}:${d.get('source')}`).join(', '));
+
+  // 4. 승인 후 교사가 직접 취소
+  await page.getByRole('button', { name: /1교시\s*승인 · 연수/ }).click();
+  const modal = page.getByRole('dialog', { name: '승인된 불가 시간 취소' });
+  await modal.getByRole('button', { name: '제출 취소' }).click();
+  await page.getByRole('status').filter({ hasText: '제출을 취소했습니다' }).waitFor();
+  check('교사: 승인된 불가 시간 취소', !(await db.doc(`sessions/${SID}/availability/T001_2026-10-12_1`).get()).exists);
   await browser.close();
 }
 
-const docs = await db.collection(`sessions/${SID}/availability`).get();
-check('저장된 문서 (교사 1 + 대리 1, 모두 승인)', docs.size === 2 && docs.docs.every((d) => d.get('status') === 'APPROVED'), docs.docs.map((d) => `${d.id}:${d.get('status')}:${d.get('source')}`).join(', '));
+// 5. 관리자 승인 취소 → 승인 대기로
+{
+  const { browser, page } = await openApp();
+  await go(page, `/admin/sessions/${SID}/availability`);
+  await page.getByRole('button', { name: /전체 1/ }).click();
+  await page.getByRole('button', { name: '승인 취소' }).click();
+  await page.getByRole('status').filter({ hasText: '승인을 취소했습니다' }).waitFor();
+  check('관리자: 승인 취소 → 승인 대기', (await db.doc(`sessions/${SID}/availability/T003_2026-10-12_2`).get()).get('status') === 'PENDING');
+  await browser.close();
+}
 process.exit(failures ? 1 : 0);

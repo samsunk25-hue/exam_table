@@ -55,14 +55,16 @@ export function bundleSheets(opts: {
   slots: Slot[];
   timetable: WithId<BaseTimetableDoc>[];
   useBaseTimetable: boolean;
+  /** 샘플처럼 아직 등록되지 않은 교사는 교사ID 칸을 비워 새로 등록되게 한다 */
+  blankTeacherIds?: boolean;
 }): OutSheet[] {
-  const { teachers, rooms, slots, timetable, useBaseTimetable } = opts;
+  const { teachers, rooms, slots, timetable, useBaseTimetable, blankTeacherIds } = opts;
   const roomName = new Map(rooms.map((r) => [r.id, r.name]));
   const sortedSlots = [...slots].sort((a, b) => a.date.localeCompare(b.date) || a.period - b.period || a.grade - b.grade);
 
   const teacherRows = teachers.length
     ? [...teachers].sort(byName).map((t) => [
-        t.id,
+        blankTeacherIds ? '' : t.id,
         t.name,
         t.email ?? '',
         t.subject ?? '',

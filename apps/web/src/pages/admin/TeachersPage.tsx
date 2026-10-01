@@ -218,7 +218,10 @@ export function TeachersPage() {
     const q = search.trim().toLowerCase();
     return !q || [t.name, t.email, t.subject, homeroomText(t)].some((v) => v?.toLowerCase().includes(q));
   });
-  const existing = useMemo(() => data.map((t) => ({ id: t.id, name: t.name, email: t.email })), [data]);
+  const existing = useMemo(
+    () => data.map((t) => ({ id: t.id, name: t.name, email: t.email, homeroom: t.homeroom, active: t.active && t.defaultRole !== 'EXCLUDED' })),
+    [data],
+  );
   const analyze = useCallback(
     (rows: Cell[][], mapping: ColumnMapping) => parseTeachers(rows, mapping, existing),
     [existing],

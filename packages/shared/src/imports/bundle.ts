@@ -92,7 +92,7 @@ export function analyzeBundle(sheets: SheetRows[], ctx: BundleContext): BundleRe
   if (tSheet) {
     const r = tSheet.missing.length
       ? blocked(`필수 열이 없습니다: ${tSheet.missing.join(', ')}`)
-      : parseTeachers(tSheet.data, tSheet.mapping, teacherList);
+      : parseTeachers(tSheet.data, tSheet.mapping, ctx.teachers);
     const vs = values(r);
     const newIds = nextId('T', ctx.teachers.map((t) => t.id), vs.filter((v) => !v.id).length);
     let n = 0;

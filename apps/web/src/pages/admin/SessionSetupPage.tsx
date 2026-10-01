@@ -39,7 +39,6 @@ import { errorMessage } from '@/lib/firebase';
 import type { ExamSession } from '@/lib/sessions';
 import { TIMETABLE_GUIDE, timetableSheets } from '@/lib/bundle';
 import { downloadTemplate, downloadWorkbook, guideSheet, type SheetData } from '@/lib/xlsx';
-import { BundleCard } from './BundleCard';
 import { useCurrentSession } from './SessionPage';
 import { sortRooms } from './RoomsPage';
 
@@ -734,14 +733,6 @@ export function SessionSetupPage() {
   return (
     <div className="grid gap-6">
       <Readiness session={session} slots={slots.data} rooms={rooms.data} teachers={teachers.data} timetable={timetable.data} />
-      <BundleCard
-        session={session}
-        editable={editable}
-        teachers={teachers.data}
-        rooms={rooms.data}
-        slots={slots.data}
-        timetable={timetable.data}
-      />
       <ScheduleCard sid={sid} editable={editable} slots={slots.data} rooms={rooms.data} />
       <TimetableCard sid={sid} editable={editable} session={session} teachers={teachers.data} timetable={timetable.data} />
     </div>

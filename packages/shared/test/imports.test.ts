@@ -120,6 +120,23 @@ describe('교사 업로드', () => {
     ]);
   });
 
+  it('파일에 없는 기존 교사와 담임 반이 겹치면 오류, 그 교사를 함께 고치면 통과', () => {
+    const db = [{ id: 'T001', name: '김국어', email: null, homeroom: { grade: 1, classNo: 1 }, active: true }];
+    const { header, data } = sheet([
+      ['이름', '담임학년', '담임반'],
+      ['새담임', 1, 1],
+    ]);
+    const r = parseTeachers(data, autoMap(header, TEACHER_FIELDS), db);
+    expect(r.rows[0]!.errors[0]).toContain('이미 김국어 교사');
+
+    const both = sheet([
+      ['교사ID', '이름', '담임학년', '담임반'],
+      ['T001', '김국어', '', ''],
+      ['', '새담임', 1, 1],
+    ]);
+    expect(parseTeachers(both.data, autoMap(both.header, TEACHER_FIELDS), db).errorCount).toBe(0);
+  });
+
   it('같은 담임 반이 두 번 나오면 오류', () => {
     const { header, data } = sheet([
       ['이름', '담임학년', '담임반'],

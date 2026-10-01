@@ -22,7 +22,6 @@ await page.getByLabel('학교명').fill('점검중학교');
 await page.getByLabel('시험명').fill(`통합양식 점검 ${Date.now() % 10000}`);
 await page.getByRole('button', { name: '만들기' }).click();
 await page.waitForURL(/\/admin\/sessions\/[^/]+$/);
-await page.getByRole('link', { name: '기본 설정' }).click();
 await page.getByText('기초 자료 한 번에 입력').waitFor();
 
 // 2. 통합 양식 다운로드
@@ -60,7 +59,9 @@ await dialog.getByText('저장했습니다.').waitFor();
 check('저장 결과', true, (await dialog.locator('ul').innerText()).replace(/\n/g, ' / '));
 await dialog.getByRole('button', { name: '닫기' }).first().click();
 
-// 5. 화면 반영 확인
+// 5. 화면 반영 확인 (기본 설정 탭)
+await page.getByRole('link', { name: '기본 설정' }).click();
+await page.getByText('시험 일정과 시험실 배치').waitFor();
 await page.getByText('배치 없음').first().waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
 const setupText = await page.locator('main').innerText();
 check('시험 2건 표시', setupText.includes('국어') && setupText.includes('수학'));

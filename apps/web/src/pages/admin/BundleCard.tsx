@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import {
   BUNDLE_SHEETS,
   analyzeBundle,
+  buildSampleSchool,
+  isSetupEditable,
   type BaseTimetableDoc,
   type BundleKey,
   type RoomDoc,
@@ -10,7 +12,8 @@ import {
   type WithId,
 } from '@sim/shared';
 import { Modal } from '@/components/Modal';
-import { Alert, Button, Card, DownloadButton } from '@/components/ui';
+import { Alert, Button, Card, DownloadButton, Spinner } from '@/components/ui';
+import { useCollection } from '@/lib/data';
 import { bundleSheets, saveBundle } from '@/lib/bundle';
 import { errorMessage } from '@/lib/firebase';
 import type { ExamSession } from '@/lib/sessions';
@@ -178,6 +181,28 @@ function BundleImportDialog({ session, editable, teachers, rooms, slots, timetab
   );
 }
 
+/** 필요한 자료를 직접 불러오는 통합 양식 카드 (개요 탭용) */
+export function BundleSection({ session }: { session: ExamSession }) {
+  const teachers = useCollection<TeacherDoc>('teachers');
+  const rooms = useCollection<RoomDoc>('rooms');
+  const slots = useCollection<SlotDoc>(`sessions/${session.id}/slots`);
+  const timetable = useCollection<BaseTimetableDoc>(`sessions/${session.id}/baseTimetable`);
+  const all = [teachers, rooms, slots, timetable];
+  if (all.some((x) => x.loading)) return <Spinner />;
+  const error = all.find((x) => x.error)?.error;
+  if (error) return <Alert>{error}</Alert>;
+  return (
+    <BundleCard
+      session={session}
+      editable={isSetupEditable(session.status)}
+      teachers={teachers.data}
+      rooms={rooms.data}
+      slots={slots.data}
+      timetable={timetable.data}
+    />
+  );
+}
+
 export function BundleCard(props: Props) {
   const [importing, setImporting] = useState(false);
   const { session, teachers, rooms, slots, timetable } = props;
@@ -187,6 +212,20 @@ export function BundleCard(props: Props) {
       `기초자료_입력양식_${session.examName.replace(/\s+/g, '')}.xlsx`,
       bundleSheets({ teachers, rooms, slots, timetable, useBaseTimetable: session.settings.useBaseTimetable }),
     );
+
+  // 교사 25명 중학교 예시: 3일 × 하루 3교시(1·2교시 시험 45분 + 휴식 15분, 3교시 자습)
+  const downloadSample = () => {
+    const firstMonday = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7));
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    })();
+    const sample = buildSampleSchool(firstMonday);
+    return downloadWorkbook(
+      '기초자료_샘플_교사25명.xlsx',
+      bundleSheets({ ...sample, useBaseTimetable: session.settings.useBaseTimetable, blankTeacherIds: true }),
+    );
+  };
 
   return (
     <Card>
@@ -202,7 +241,12 @@ export function BundleCard(props: Props) {
         <Button variant="secondary" onClick={() => setImporting(true)}>
           통합 양식 업로드
         </Button>
+        <DownloadButton onDownload={downloadSample}>샘플 양식 (교사 25명)</DownloadButton>
       </div>
+      <p className="mt-2 text-sm text-muted">
+        샘플: 교사 25명 · 3학년 × 4반 · 다음 주 월요일부터 3일, 하루 3교시(1·2교시 시험 45분 + 쉬는 시간 15분, 3교시 자습). 작성 방법을 보거나 연습용으로
+        쓰세요. 그대로 올리면 가상 교사 25명이 실제로 등록됩니다.
+      </p>
       {importing && <BundleImportDialog {...props} onClose={() => setImporting(false)} />}
     </Card>
   );

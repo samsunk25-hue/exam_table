@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, NavLink, Outlet, useOutletContext, useParams } from 'react-router';
 import { STATUS_LABEL, TRANSITIONS, isSetupEditable, type Transition } from '@sim/shared';
 import { StatusStepper } from '@/components/StatusStepper';
+import { BundleSection } from './BundleCard';
 import { Alert, Button, Card, PageTitle, Spinner, Toggle } from '@/components/ui';
 import { callTransitionSession, errorMessage } from '@/lib/firebase';
 import { sessionTitle, updateSessionSettings, useSession, type ExamSession } from '@/lib/sessions';
@@ -150,6 +151,8 @@ export function SessionOverview() {
           ))}
         </div>
       </Card>
+
+      <BundleSection session={session} />
 
       <Card>
         <h2 className="mb-2 text-lg font-bold">배정 설정</h2>

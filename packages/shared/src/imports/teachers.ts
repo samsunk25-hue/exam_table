@@ -30,6 +30,9 @@ export interface ExistingTeacher {
   id: string;
   name: string;
   email: string | null;
+  /** 주면 파일 밖 기존 교사와의 담임 반 중복도 검사한다 */
+  homeroom?: Homeroom | null;
+  active?: boolean;
 }
 
 export interface TeacherImport {
@@ -111,6 +114,23 @@ export function parseTeachers(dataRows: Cell[][], mapping: ColumnMapping, existi
     (v) => (v.homeroom && v.active ? `${v.homeroom.grade}-${v.homeroom.classNo}` : null),
     (key, first) => `${key}반 담임이 ${first}행과 중복됩니다.`,
   );
+
+  // 파일에 없는(수정되지 않는) 기존 교사와 담임 반이 겹치는지
+  const touched = new Set(rows.flatMap((r) => (r.value?.id ? [r.value.id] : [])));
+  const homeroomOwner = new Map(
+    existing
+      .filter((t) => t.homeroom && t.active !== false && !touched.has(t.id))
+      .map((t) => [`${t.homeroom!.grade}-${t.homeroom!.classNo}`, t.name]),
+  );
+  for (const r of rows) {
+    const v = r.value;
+    if (!v?.homeroom || !v.active) continue;
+    const owner = homeroomOwner.get(`${v.homeroom.grade}-${v.homeroom.classNo}`);
+    if (owner) {
+      r.errors.push(`${v.homeroom.grade}-${v.homeroom.classNo}반 담임은 이미 ${owner} 교사입니다. 기존 교사의 담임을 먼저 바꾸거나 이 행을 고치세요.`);
+      r.value = null;
+    }
+  }
 
   return finish(rows);
 }

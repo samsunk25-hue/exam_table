@@ -57,7 +57,26 @@ const ROLE_OPTIONS: Record<string, DefaultRole> = {
 };
 const YES_NO: Record<string, 'Y' | 'N'> = { Y: 'Y', 예: 'Y', 사용: 'Y', O: 'Y', N: 'N', 아니오: 'N', 미사용: 'N', X: 'N' };
 
-export function parseTeachers(dataRows: Cell[][], mapping: ColumnMapping, existing: ExistingTeacher[]): ImportResult<TeacherImport> {
+/** 파일 교사가 기존(파일 밖) 교사의 담임 반을 넘겨받는 경우 */
+export interface HomeroomTakeover {
+  /** 담임이 풀리는 기존 교사 */
+  fromId: string;
+  fromName: string;
+  toName: string;
+  grade: number;
+  classNo: number;
+}
+
+/**
+ * opts.takeover가 있으면 파일 밖 기존 교사와 담임 반이 겹쳐도 오류로 보지 않고,
+ * 파일을 기준으로 기존 교사의 담임을 푼다(목록을 takeover에 채운다).
+ */
+export function parseTeachers(
+  dataRows: Cell[][],
+  mapping: ColumnMapping,
+  existing: ExistingTeacher[],
+  opts: { takeover?: HomeroomTakeover[] } = {},
+): ImportResult<TeacherImport> {
   const byId = new Map(existing.map((t) => [t.id, t]));
   const byEmail = new Map(existing.filter((t) => t.email).map((t) => [t.email!, t]));
 
@@ -120,14 +139,16 @@ export function parseTeachers(dataRows: Cell[][], mapping: ColumnMapping, existi
   const homeroomOwner = new Map(
     existing
       .filter((t) => t.homeroom && t.active !== false && !touched.has(t.id))
-      .map((t) => [`${t.homeroom!.grade}-${t.homeroom!.classNo}`, t.name]),
+      .map((t) => [`${t.homeroom!.grade}-${t.homeroom!.classNo}`, t]),
   );
   for (const r of rows) {
     const v = r.value;
     if (!v?.homeroom || !v.active) continue;
     const owner = homeroomOwner.get(`${v.homeroom.grade}-${v.homeroom.classNo}`);
-    if (owner) {
-      r.errors.push(`${v.homeroom.grade}-${v.homeroom.classNo}반 담임은 이미 ${owner} 교사입니다. 기존 교사의 담임을 먼저 바꾸거나 이 행을 고치세요.`);
+    if (owner && opts.takeover) {
+      opts.takeover.push({ fromId: owner.id, fromName: owner.name, toName: v.name, ...v.homeroom });
+    } else if (owner) {
+      r.errors.push(`${v.homeroom.grade}-${v.homeroom.classNo}반 담임은 이미 ${owner.name} 교사입니다. 기존 교사의 담임을 먼저 바꾸거나 이 행을 고치세요.`);
       r.value = null;
     }
   }

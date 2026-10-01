@@ -37,6 +37,8 @@ export const callTransitionSession = httpsCallable<
   { status: SessionStatus }
 >(functions, 'transitionSession');
 
+export const callDeleteSession = httpsCallable<{ sessionId: string }, { revertedTeachers: number }>(functions, 'deleteSession');
+
 export const callRunAssignment = httpsCallable<
   { sessionId: string; keepManual: boolean; scenarios: boolean },
   {

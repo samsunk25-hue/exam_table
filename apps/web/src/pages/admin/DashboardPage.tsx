@@ -1,9 +1,54 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { Modal } from '@/components/Modal';
 import { StatusBadge } from '@/components/StatusStepper';
+import { toast } from '@/components/Toast';
 import { Alert, Button, Card, Field, PageTitle, Spinner, Toggle } from '@/components/ui';
-import { errorMessage } from '@/lib/firebase';
-import { createSession, sessionTitle, useSessions } from '@/lib/sessions';
+import { callDeleteSession, errorMessage } from '@/lib/firebase';
+import { createSession, sessionTitle, useSessions, type ExamSession } from '@/lib/sessions';
+
+type SessionItem = ExamSession;
+
+/** 프로젝트 삭제 확인: 이름을 직접 입력해야 지운다. */
+function DeleteSessionDialog({ session, onClose }: { session: SessionItem; onClose: () => void }) {
+  const title = sessionTitle(session);
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const confirmed = session.status === 'CONFIRMED' || session.status === 'LOCKED';
+
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await callDeleteSession({ sessionId: session.id });
+      toast(`"${title}" 프로젝트를 삭제했습니다.`);
+      onClose();
+    } catch (err) {
+      toast(errorMessage(err), 'alert');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title="시험 프로젝트 삭제" onClose={() => !busy && onClose()}>
+      <div className="grid gap-4">
+        <p>
+          <b>{title}</b> ({session.schoolName}) 프로젝트와 그 안의 시험 일정·감독 배정·불가시간·변경 이력을 모두 지웁니다.
+          되돌릴 수 없습니다. 교사 명단과 시험실은 그대로 남습니다.
+        </p>
+        {confirmed && <Alert>최종 확정된 프로젝트입니다. 지우면 교사 누적 업무점수에서 이 시험의 점수도 빠집니다.</Alert>}
+        <Field label={`확인을 위해 시험명 "${session.examName}"을(를) 입력하세요`} value={typed} onChange={(e) => setTyped(e.target.value)} />
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
+            취소
+          </Button>
+          <Button variant="danger" onClick={() => void remove()} disabled={busy || typed.trim() !== session.examName}>
+            {busy ? '삭제 중…' : '삭제'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 function currentSchoolYear(): number {
   const now = new Date();
@@ -91,6 +136,7 @@ function CreateSessionForm({ onDone }: { onDone: () => void }) {
 export function DashboardPage() {
   const { data: sessions, loading, error } = useSessions();
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<SessionItem | null>(null);
 
   return (
     <>
@@ -114,7 +160,16 @@ export function DashboardPage() {
 
       <ul className="grid gap-3 md:grid-cols-2">
         {sessions.map((s) => (
-          <li key={s.id}>
+          <li key={s.id} className="relative">
+            <button
+              type="button"
+              aria-label={`${sessionTitle(s)} 삭제`}
+              title="프로젝트 삭제"
+              onClick={() => setDeleting(s)}
+              className="absolute top-3 right-3 z-10 cursor-pointer rounded-lg px-3 py-2 text-sm text-muted hover:bg-alert-soft hover:text-alert"
+            >
+              삭제
+            </button>
             <Link
               to={`/admin/sessions/${s.id}`}
               className="block rounded-card border border-line bg-surface p-5 shadow-sm transition-colors hover:border-primary"
@@ -128,6 +183,7 @@ export function DashboardPage() {
           </li>
         ))}
       </ul>
+      {deleting && <DeleteSessionDialog session={deleting} onClose={() => setDeleting(null)} />}
     </>
   );
 }

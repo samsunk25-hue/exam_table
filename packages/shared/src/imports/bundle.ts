@@ -14,7 +14,7 @@ import {
 } from './core';
 import { ROOM_FIELDS, parseRooms, type RoomImport } from './rooms';
 import { PLACEMENT_FIELDS, SLOT_FIELDS, parsePlacements, parseSlots, type PlacementImport, type SlotImport } from './schedule';
-import { TEACHER_FIELDS, parseTeachers, type TeacherImport } from './teachers';
+import { TEACHER_FIELDS, parseTeachers, type HomeroomTakeover, type TeacherImport } from './teachers';
 import type { TimetableImport, TimetableTeacher } from './timetable';
 import { isGridSheet, parseTimetableGrid } from './timetableGrid';
 
@@ -41,6 +41,8 @@ export interface BundleSection {
 export interface BundlePlan {
   /** 새 교사는 id가 미리 배정되어 있다 */
   teachers: (Omit<TeacherImport, 'id'> & { id: string; isNew: boolean })[];
+  /** 파일 교사에게 담임을 넘기고 담임이 풀리는 기존 교사 */
+  homeroomTakeovers: HomeroomTakeover[];
   rooms: (Omit<RoomImport, 'id'> & { id: string; isNew: boolean })[];
   /** null이면 시험 일정 변경 없음 */
   slots: SlotImport[] | null;
@@ -82,7 +84,7 @@ function blocked(message: string): ImportResult<never> {
 
 export function analyzeBundle(sheets: SheetRows[], ctx: BundleContext): BundleResult {
   const sections: BundleSection[] = [];
-  const plan: BundlePlan = { teachers: [], rooms: [], slots: null, placements: null, timetable: null };
+  const plan: BundlePlan = { teachers: [], homeroomTakeovers: [], rooms: [], slots: null, placements: null, timetable: null };
   const add = (key: BundleKey, label: string, result: ImportResult<unknown> | null, notes: string[] = []) =>
     sections.push({ key, label, present: result !== null, result, notes });
 
@@ -92,7 +94,7 @@ export function analyzeBundle(sheets: SheetRows[], ctx: BundleContext): BundleRe
   if (tSheet) {
     const r = tSheet.missing.length
       ? blocked(`필수 열이 없습니다: ${tSheet.missing.join(', ')}`)
-      : parseTeachers(tSheet.data, tSheet.mapping, ctx.teachers);
+      : parseTeachers(tSheet.data, tSheet.mapping, ctx.teachers, { takeover: plan.homeroomTakeovers });
     const vs = values(r);
     const newIds = nextId('T', ctx.teachers.map((t) => t.id), vs.filter((v) => !v.id).length);
     let n = 0;
@@ -100,7 +102,12 @@ export function analyzeBundle(sheets: SheetRows[], ctx: BundleContext): BundleRe
     const byId = new Map(teacherList.map((t) => [t.id, t]));
     for (const t of plan.teachers) byId.set(t.id, { id: t.id, name: t.name, email: t.email, active: t.active });
     teacherList = [...byId.values()];
-    add('teachers', '교사', r);
+    add(
+      'teachers',
+      '교사',
+      r,
+      plan.homeroomTakeovers.map((h) => `${h.grade}-${h.classNo}반 담임: 기존 ${h.fromName} → ${h.toName} (기존 교사의 담임은 해제됩니다)`),
+    );
   } else add('teachers', '교사', null);
 
   // 2. 시험실

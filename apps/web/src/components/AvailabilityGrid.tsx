@@ -14,8 +14,9 @@ const STATUS_STYLE: Record<Availability['status'], string> = {
 };
 
 /**
- * 시험 날짜·교시 칸. 빈 칸을 눌러 선택하고, 이미 제출된 칸은 상태를 보여준다.
- * onEntryClick이 있으면 제출된 칸을 눌렀을 때 호출한다 (예: 대기 중 제출 취소).
+ * 시험 시간표 표: 행 = 날짜, 열 = 교시. 빈 칸을 눌러 불가 시간으로 선택하고, 제출된 칸은 상태를 보여준다.
+ * 날짜를 누르면 그날 남은 칸을 한꺼번에 선택/해제한다.
+ * onEntryClick이 있으면 제출된 칸을 눌렀을 때 호출한다 (예: 제출 취소).
  */
 export function AvailabilityGrid({
   times,
@@ -32,46 +33,75 @@ export function AvailabilityGrid({
   onEntryClick?: (entry: Availability) => void;
   disabled?: boolean;
 }) {
+  const periods = [...new Set(times.map((t) => t.period))].sort((a, b) => a - b);
+  // 교시 머리글에 시간 표시 (날짜마다 다르면 첫 날짜 기준)
+  const timeOf = new Map<number, string>();
+  for (const t of times) if (!timeOf.has(t.period) && t.startTime) timeOf.set(t.period, `${t.startTime}${t.endTime ? `~${t.endTime}` : ''}`);
+
   return (
-    <div className="grid gap-4">
-      {groupByDate(times).map(([date, list]) => (
-        <section key={date}>
-          <h3 className="mb-2 font-bold">{dateLabel(date)}</h3>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-            {list.map((t) => {
-              const key = cellKey(t);
-              const entry = entries.get(key);
-              const isSelected = selected.has(key);
-              const cls = entry
-                ? STATUS_STYLE[entry.status]
-                : isSelected
-                  ? 'border-2 border-primary bg-primary text-white'
-                  : 'border border-line bg-surface hover:border-primary';
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  disabled={disabled || (Boolean(entry) && !onEntryClick)}
-                  aria-pressed={isSelected}
-                  onClick={() => (entry ? onEntryClick?.(entry) : onToggle(key))}
-                  className={`flex min-h-16 flex-col items-center justify-center rounded-xl px-2 py-2 text-center transition-colors disabled:cursor-default ${cls}`}
-                >
-                  <span className="text-lg font-bold">{t.period}교시</span>
-                  <span className="text-xs">
-                    {entry
-                      ? `${AVAILABILITY_STATUS_LABEL[entry.status]} · ${entry.reason}`
-                      : isSelected
-                        ? '선택됨'
-                        : t.startTime
-                          ? `${t.startTime}${t.endTime ? `~${t.endTime}` : ''}`
-                          : '가능'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      ))}
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-max border-separate border-spacing-1.5">
+        <thead>
+          <tr>
+            <th className="w-32 px-2 text-left text-sm text-muted">날짜</th>
+            {periods.map((p) => (
+              <th key={p} className="min-w-24 px-2 text-center">
+                <div className="font-bold">{p}교시</div>
+                {timeOf.get(p) && <div className="text-xs font-normal text-muted">{timeOf.get(p)}</div>}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {groupByDate(times).map(([date, list]) => {
+            const free = list.map(cellKey).filter((k) => !entries.has(k));
+            const allSelected = free.length > 0 && free.every((k) => selected.has(k));
+            return (
+              <tr key={date}>
+                <th className="px-1 text-left">
+                  <button
+                    type="button"
+                    disabled={disabled || free.length === 0}
+                    title="그날 남은 칸 모두 선택/해제"
+                    onClick={() => free.filter((k) => selected.has(k) === allSelected).forEach(onToggle)}
+                    className="min-h-14 w-full cursor-pointer rounded-xl px-2 text-left font-bold hover:bg-primary-soft disabled:cursor-default disabled:hover:bg-transparent"
+                  >
+                    {dateLabel(date)}
+                  </button>
+                </th>
+                {periods.map((p) => {
+                  const t = list.find((x) => x.period === p);
+                  if (!t) return <td key={p} className="rounded-xl bg-bg text-center text-sm text-muted">시험 없음</td>;
+                  const key = cellKey(t);
+                  const entry = entries.get(key);
+                  const isSelected = selected.has(key);
+                  const state = entry ? `${AVAILABILITY_STATUS_LABEL[entry.status]} · ${entry.reason}` : isSelected ? '선택됨' : '가능';
+                  const cls = entry
+                    ? STATUS_STYLE[entry.status]
+                    : isSelected
+                      ? 'border-2 border-primary bg-primary text-white'
+                      : 'border border-line bg-surface hover:border-primary hover:bg-primary-soft';
+                  return (
+                    <td key={p} className="p-0">
+                      <button
+                        type="button"
+                        disabled={disabled || (Boolean(entry) && !onEntryClick)}
+                        aria-pressed={isSelected}
+                        aria-label={`${p}교시 ${state} · ${dateLabel(date)}`}
+                        onClick={() => (entry ? onEntryClick?.(entry) : onToggle(key))}
+                        className={`flex min-h-14 w-full cursor-pointer flex-col items-center justify-center rounded-xl px-2 text-center text-sm font-semibold transition-colors disabled:cursor-default ${cls}`}
+                      >
+                        {isSelected && !entry ? '✓ 선택' : entry ? AVAILABILITY_STATUS_LABEL[entry.status] : ''}
+                        {entry && <span className="text-xs font-normal">{entry.reason}</span>}
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

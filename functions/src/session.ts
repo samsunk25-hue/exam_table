@@ -68,3 +68,33 @@ export const transitionSession = onCall(async (req) => {
 
   return { status: to };
 });
+
+/**
+ * 시험 프로젝트 삭제: 하위 자료(일정·배정·불가시간·이력 등)를 모두 지운다.
+ * 확정되어 누적 업무점수에 반영된 프로젝트면 그 점수를 되돌린다.
+ */
+export const deleteSession = onCall({ timeoutSeconds: 300 }, async (req) => {
+  const uid = requireAdmin(req);
+  const { sessionId } = (req.data ?? {}) as { sessionId?: unknown };
+  if (typeof sessionId !== 'string' || !sessionId) throw new HttpsError('invalid-argument', '세션 ID를 확인해 주세요.');
+  const firestore = db();
+  const ref = firestore.doc(`sessions/${sessionId}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', '세션을 찾을 수 없습니다.');
+
+  // 감사 트리거가 지우는 동안 이력을 다시 만들지 않도록 표시
+  await ref.update({ deleting: true, updatedBy: uid, updatedAt: serverTimestamp() });
+
+  const ledger = await firestore.collection('loadLedger').where('sessionId', '==', sessionId).get();
+  for (let i = 0; i < ledger.docs.length; i += 200) {
+    const batch = firestore.batch();
+    for (const d of ledger.docs.slice(i, i + 200)) {
+      batch.update(firestore.doc(`teachers/${d.get('teacherId') as string}`), { cumulativeLoad: increment(-(d.get('load') as number)) });
+      batch.delete(d.ref);
+    }
+    await batch.commit();
+  }
+
+  await firestore.recursiveDelete(ref);
+  return { revertedTeachers: ledger.size };
+});

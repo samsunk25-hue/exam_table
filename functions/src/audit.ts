@@ -18,9 +18,13 @@ async function record(logCollection: string, targetType: string, targetId: strin
     .set({ ...buildAuditLog(targetType, targetId, before, after), createdAt: serverTimestamp() });
 }
 
-export const auditSession = onDocumentWritten('sessions/{sid}', (event) =>
-  record(`sessions/${event.params.sid}/auditLogs`, 'sessions', event.params.sid, event),
-);
+// 세션이 삭제되면 그 아래 이력도 지워지므로 삭제 기록은 전체 이력(auditLogs)에 남긴다.
+export const auditSession = onDocumentWritten('sessions/{sid}', (event) => {
+  const sid = event.params.sid;
+  if (!event.data?.after.exists) return record('auditLogs', 'sessions', sid, event);
+  if (event.data.after.get('deleting')) return;
+  return record(`sessions/${sid}/auditLogs`, 'sessions', sid, event);
+});
 
 // 배정은 자동 배정 적용 한 번에 수백 건이 바뀌므로 교사 공개(PUBLISHED) 이후 변경만 기록한다.
 // 공개 전 적용 내역은 세션 문서의 assignmentStats·lastChangeReason 변경으로 남는다.
@@ -29,8 +33,11 @@ const ASSIGNMENT_AUDIT_FROM = new Set(['PUBLISHED', 'SWAP', 'CONFIRMED', 'LOCKED
 export const auditSessionChild = onDocumentWritten('sessions/{sid}/{coll}/{docId}', async (event) => {
   const { sid, coll, docId } = event.params;
   if (!coll || !docId || SKIP.has(coll)) return;
+  const session = await db().doc(`sessions/${sid}`).get();
+  // 삭제 중이거나 이미 삭제된 세션에는 기록하지 않는다 (지운 이력이 되살아나지 않게)
+  if (!session.exists || session.get('deleting')) return;
   if (coll === 'assignments') {
-    const status = (await db().doc(`sessions/${sid}`).get()).get('status') as string | undefined;
+    const status = session.get('status') as string | undefined;
     if (!status || !ASSIGNMENT_AUDIT_FROM.has(status)) return;
   }
   return record(`sessions/${sid}/auditLogs`, coll, docId, event);

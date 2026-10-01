@@ -181,6 +181,12 @@ export async function saveBundle(
     done.push(`파일에 없는 시험실 ${gone.rooms.length}개 삭제`);
   }
 
+  if (plan.homeroomTakeovers.length) {
+    const ids = [...new Set(plan.homeroomTakeovers.map((h) => h.fromId))];
+    await commitOps(ids.map((id) => ({ type: 'set', ref: ref('teachers', id), data: { homeroom: null }, merge: true })));
+    done.push(`담임 넘김 ${plan.homeroomTakeovers.length}건 (기존 교사 담임 해제)`);
+  }
+
   if (plan.teachers.length) {
     await commitOps(
       plan.teachers.map(({ id, isNew, ...data }) => ({

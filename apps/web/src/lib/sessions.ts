@@ -6,10 +6,11 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  where,
   type Timestamp,
 } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { sessionTerm, termKey, type SessionStatus } from '@sim/shared';
+import { sessionTerm, termKey, type SessionStatus, type TermRef } from '@sim/shared';
 import { commitOps } from './data';
 import { auth, db } from './firebase';
 
@@ -110,20 +111,32 @@ export function termWhere(s: Pick<ExamSession, 'schoolName' | 'year' | 'semester
 }
 
 /**
- * 교사 화면용: 내 교사 문서의 학교·학기 프로젝트만 (다른 학교·학기 프로젝트는 보이지 않게).
- * 학기가 지정되지 않은 예전 교사 문서면 전체를 보여 준다.
+ * 교사 화면용: 내 학교·학기 프로젝트만 조회한다 (보안 규칙도 다른 학교·학기 프로젝트는 막는다).
+ * 학교·학기가 지정되지 않은 교사는 볼 수 있는 프로젝트가 없다.
  */
-export function useMySessions(teacherId: string | null): Live<ExamSession[]> {
-  const all = useSessions();
-  const [term, setTerm] = useState<string | null | undefined>(undefined);
+export function useMySessions(term: TermRef | null): Live<ExamSession[]> {
+  const [state, setState] = useState<Live<ExamSession[]>>({ data: [], loading: true, error: null });
+  const key = term ? termKey(term) : null;
   useEffect(() => {
-    if (!teacherId) return setTerm(null);
+    if (!term) return setState({ data: [], loading: false, error: null });
     return onSnapshot(
-      doc(db, 'teachers', teacherId),
-      (snap) => setTerm((snap.get('term') as string | undefined) ?? null),
-      () => setTerm(null),
+      query(
+        collection(db, 'sessions'),
+        where('schoolName', '==', term.school),
+        where('year', '==', term.year),
+        where('semester', '==', term.semester),
+      ),
+      (snap) =>
+        setState({
+          // 색인 없이 조회하려고 정렬은 화면에서 (최신순)
+          data: snap.docs
+            .map((d) => ({ id: d.id, ...d.data() }) as ExamSession)
+            .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0)),
+          loading: false,
+          error: null,
+        }),
+      (e) => setState({ data: [], loading: false, error: e.message }),
     );
-  }, [teacherId]);
-  if (term === undefined) return { data: [], loading: true, error: all.error };
-  return { ...all, data: term ? all.data.filter((s) => termKey(sessionTerm(s)) === term) : all.data };
+  }, [key]);
+  return state;
 }

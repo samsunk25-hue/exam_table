@@ -14,6 +14,19 @@ service cloud.firestore {
     function myTeacherId() { return request.auth.token.teacherId; }
     function stamped() { return request.resource.data.updatedBy == request.auth.uid; }
 
+    // 학교별 분리: 교사는 로그인 정보(Custom Claims)의 학교·학기와 같은 자료만 읽는다
+    function myTerm() { return request.auth.token.get('term', ''); }
+    function inMyTerm(data) { return isTeacher() && myTerm() != '' && data.get('term', '') == myTerm(); }
+    function sessionInMyTerm(data) {
+      return isTeacher() && myTerm() != ''
+        && data.schoolName == request.auth.token.school
+        && data.year == request.auth.token.year
+        && data.semester == request.auth.token.semester;
+    }
+    function teacherSeesSession(sid) {
+      return sessionInMyTerm(get(/databases/$(database)/documents/sessions/$(sid)).data);
+    }
+
     function sessionStatus(sid) {
       return get(/databases/$(database)/documents/sessions/$(sid)).data.status;
     }
@@ -51,15 +64,15 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // 학교 공통 데이터
+    // 학교·학기별 명단 (교사는 자기 학교·학기 명단과 본인 문서만)
     match /teachers/{teacherId} {
-      allow read: if isMember();
+      allow read: if isAdmin() || inMyTerm(resource.data) || (isTeacher() && teacherId == myTeacherId());
       allow create, update: if isAdmin() && stamped();
       allow delete: if isAdmin();
     }
 
     match /rooms/{roomId} {
-      allow read: if isMember();
+      allow read: if isAdmin() || inMyTerm(resource.data);
       allow create, update: if isAdmin() && stamped();
       allow delete: if isAdmin();
     }
@@ -90,7 +103,7 @@ service cloud.firestore {
     }
 
     match /sessions/{sid} {
-      allow read: if isMember();
+      allow read: if isAdmin() || sessionInMyTerm(resource.data);
       allow create: if isAdmin() && stamped() && request.resource.data.status == 'DRAFT';
       allow update: if isAdmin() && stamped()
         && request.resource.data.status == resource.data.status;
@@ -104,7 +117,7 @@ service cloud.firestore {
 
       // 시험 1건 = 문서 1개, 시험실 배치는 rooms 배열
       match /slots/{id} {
-        allow read: if isMember();
+        allow read: if isAdmin() || teacherSeesSession(sid);
         allow write: if adminSetupWrite(sid);
       }
 
@@ -117,6 +130,7 @@ service cloud.firestore {
       match /availability/{id} {
         allow read: if isAdmin() || (isTeacher() && resource.data.teacherId == myTeacherId());
         allow create: if isTeacher() && stamped()
+          && teacherSeesSession(sid)
           && setupEditable(sid)
           && request.resource.data.teacherId == myTeacherId()
           && request.resource.data.status == 'PENDING'
@@ -136,7 +150,7 @@ service cloud.firestore {
       }
 
       match /assignments/{id} {
-        allow read: if isAdmin() || (isTeacher() && published(sid));
+        allow read: if isAdmin() || (teacherSeesSession(sid) && published(sid));
         allow write: if false;
       }
 

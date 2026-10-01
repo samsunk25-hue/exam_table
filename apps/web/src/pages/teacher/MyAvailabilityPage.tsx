@@ -158,8 +158,8 @@ function MyAvailabilityForm({ session, teacherId }: { session: ExamSession; teac
 }
 
 export function MyAvailabilityPage() {
-  const { teacherId } = useAuth();
-  const { data: sessions, loading, error } = useMySessions(teacherId);
+  const { teacherId, term } = useAuth();
+  const { data: sessions, loading, error } = useMySessions(term);
   const open = sessions.filter((s) => isSetupEditable(s.status));
   const [sid, setSid] = useState<string | null>(null);
   const current = open.find((s) => s.id === sid) ?? open[0];

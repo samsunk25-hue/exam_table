@@ -101,8 +101,8 @@ function PublishedSchedule({ session, teacherId }: { session: ExamSession; teach
 }
 
 export function MySchedulePage() {
-  const { teacherId } = useAuth();
-  const { data: sessions, loading, error } = useMySessions(teacherId);
+  const { teacherId, term } = useAuth();
+  const { data: sessions, loading, error } = useMySessions(term);
   const published = sessions.filter((s) => isPublished(s.status));
   const open = sessions.filter((s) => isSetupEditable(s.status));
   const [sid, setSid] = useState<string | null>(null);

@@ -19,7 +19,16 @@ export function resolveRole(isAdmin: boolean, teacherId: string | null): UserRol
   return teacherId ? 'TEACHER' : 'NONE';
 }
 
-export function claimsFor(role: UserRole, teacherId: string | null): Record<string, string> {
+/** 교사가 속한 학교·학기 (보안 규칙이 같은 학교·학기 자료만 읽게 하는 데 쓴다) */
+export interface TermClaim {
+  term: string;
+  school: string;
+  year: number;
+  semester: number;
+}
+
+export function claimsFor(role: UserRole, teacherId: string | null, term: TermClaim | null = null): Record<string, string | number> {
   if (role === 'NONE') return {};
-  return teacherId ? { role, teacherId } : { role };
+  if (!teacherId) return { role };
+  return term ? { role, teacherId, ...term } : { role, teacherId };
 }

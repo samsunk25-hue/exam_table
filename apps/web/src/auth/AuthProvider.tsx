@@ -1,5 +1,6 @@
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import type { TermRef } from '@sim/shared';
 import { auth, callSyncProfile, errorMessage, type Role } from '@/lib/firebase';
 
 interface AuthState {
@@ -7,6 +8,8 @@ interface AuthState {
   user: User | null;
   role: Role;
   teacherId: string | null;
+  /** 교사의 학교·학기 (보안 규칙상 이 학교·학기 자료만 읽을 수 있다) */
+  term: TermRef | null;
   error: string | null;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -25,20 +28,22 @@ async function loadRole(user: User): Promise<State> {
     const token = await user.getIdTokenResult(data.refreshed);
     const role = (token.claims.role as Role | undefined) ?? 'NONE';
     const teacherId = (token.claims.teacherId as string | undefined) ?? null;
-    return { loading: false, user, role, teacherId, error: null };
+    const c = token.claims as { school?: string; year?: number; semester?: number };
+    const term = c.school && c.year && c.semester ? { school: c.school, year: c.year, semester: c.semester } : null;
+    return { loading: false, user, role, teacherId, term, error: null };
   } catch (e) {
-    return { loading: false, user, role: 'NONE', teacherId: null, error: errorMessage(e) };
+    return { loading: false, user, role: 'NONE', teacherId: null, term: null, error: errorMessage(e) };
   }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<State>({ loading: true, user: null, role: 'NONE', teacherId: null, error: null });
+  const [state, setState] = useState<State>({ loading: true, user: null, role: 'NONE', teacherId: null, term: null, error: null });
 
   useEffect(
     () =>
       onAuthStateChanged(auth, async (user) => {
         if (!user) {
-          setState({ loading: false, user: null, role: 'NONE', teacherId: null, error: null });
+          setState({ loading: false, user: null, role: 'NONE', teacherId: null, term: null, error: null });
           return;
         }
         setState((s) => ({ ...s, loading: true }));

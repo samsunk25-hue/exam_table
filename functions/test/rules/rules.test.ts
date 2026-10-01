@@ -13,16 +13,23 @@ import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 let env: RulesTestEnvironment;
 
 const admin = () => env.authenticatedContext('admin', { role: 'ADMIN' }).firestore();
-const kim = () => env.authenticatedContext('kim', { role: 'TEACHER', teacherId: 'T001' }).firestore();
+const TERM = { term: '가중|2026|2', school: '가중', year: 2026, semester: 2 };
+const kim = () => env.authenticatedContext('kim', { role: 'TEACHER', teacherId: 'T001', ...TERM }).firestore();
+/** 다른 학교 교사 */
+const other = () =>
+  env.authenticatedContext('other', { role: 'TEACHER', teacherId: 'T900', term: '나중|2026|2', school: '나중', year: 2026, semester: 2 }).firestore();
 const stranger = () => env.authenticatedContext('stranger', {}).firestore();
 
 async function seed(status: string) {
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
-    await setDoc(doc(db, 'sessions/S1'), { status, updatedBy: 'admin' });
+    await setDoc(doc(db, 'sessions/S1'), { status, schoolName: '가중', year: 2026, semester: 2, updatedBy: 'admin' });
     await setDoc(doc(db, 'sessions/S1/assignments/A1'), { teacherId: 'T001', weight: 1 });
     await setDoc(doc(db, 'sessions/S1/availability/V2'), { teacherId: 'T002', status: 'PENDING', source: 'TEACHER' });
-    await setDoc(doc(db, 'teachers/T001'), { name: '김교사', updatedBy: 'admin' });
+    await setDoc(doc(db, 'teachers/T001'), { name: '김교사', ...TERM, updatedBy: 'admin' });
+    await setDoc(doc(db, 'teachers/T002'), { name: '이교사', ...TERM, updatedBy: 'admin' });
+    await setDoc(doc(db, 'rooms/R1'), { name: '1-1', ...TERM, updatedBy: 'admin' });
+    await setDoc(doc(db, 'sessions/S1/slots/X1'), { period: 1, updatedBy: 'admin' });
   });
 }
 
@@ -71,6 +78,34 @@ describe('가입·권한 신청', () => {
     await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'accessRequests/nb'), req));
     await assertSucceeds(getDoc(doc(admin(), 'accessRequests/nb')));
     await assertFails(getDoc(doc(kim(), 'accessRequests/nb')));
+  });
+});
+
+describe('학교별 분리', () => {
+  it('교사는 같은 학교·학기 교사 명단·시험실·프로젝트·시험만 읽는다', async () => {
+    await seed('PUBLISHED');
+    await assertSucceeds(getDoc(doc(kim(), 'teachers/T002')));
+    await assertSucceeds(getDoc(doc(kim(), 'rooms/R1')));
+    await assertSucceeds(getDoc(doc(kim(), 'sessions/S1')));
+    await assertSucceeds(getDoc(doc(kim(), 'sessions/S1/slots/X1')));
+    await assertSucceeds(getDoc(doc(kim(), 'sessions/S1/assignments/A1')));
+  });
+
+  it('다른 학교 교사는 읽을 수 없다', async () => {
+    await seed('PUBLISHED');
+    await assertFails(getDoc(doc(other(), 'teachers/T002')));
+    await assertFails(getDoc(doc(other(), 'rooms/R1')));
+    await assertFails(getDoc(doc(other(), 'sessions/S1')));
+    await assertFails(getDoc(doc(other(), 'sessions/S1/slots/X1')));
+    await assertFails(getDoc(doc(other(), 'sessions/S1/assignments/A1')));
+  });
+
+  it('학교·학기가 지정되지 않은 교사는 본인 문서만 읽는다', async () => {
+    await seed('PUBLISHED');
+    const legacy = env.authenticatedContext('kim', { role: 'TEACHER', teacherId: 'T001' }).firestore();
+    await assertSucceeds(getDoc(doc(legacy, 'teachers/T001')));
+    await assertFails(getDoc(doc(legacy, 'teachers/T002')));
+    await assertFails(getDoc(doc(legacy, 'sessions/S1')));
   });
 });
 

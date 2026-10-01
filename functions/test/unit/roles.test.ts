@@ -23,6 +23,8 @@ describe('역할 판정', () => {
     expect(claimsFor('NONE', null)).toEqual({});
     expect(claimsFor('TEACHER', 'T001')).toEqual({ role: 'TEACHER', teacherId: 'T001' });
     expect(claimsFor('ADMIN', null)).toEqual({ role: 'ADMIN' });
+    const term = { term: '가중|2026|2', school: '가중', year: 2026, semester: 2 };
+    expect(claimsFor('TEACHER', 'T001', term)).toEqual({ role: 'TEACHER', teacherId: 'T001', ...term });
   });
 });
 

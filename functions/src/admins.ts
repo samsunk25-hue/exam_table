@@ -17,8 +17,8 @@ async function findUser(email: string): Promise<UserRecord | null> {
 export async function refreshUserRole(email: string): Promise<UserRecord | null> {
   const user = await findUser(email);
   if (!user) return null;
-  const { role, teacherId } = await lookupRole(email);
-  await applyClaims(user.uid, user.customClaims ?? {}, role, teacherId);
+  const { role, teacherId, term } = await lookupRole(email);
+  await applyClaims(user.uid, user.customClaims ?? {}, role, teacherId, term);
   await db().doc(`users/${user.uid}`).set({ role, teacherId, active: role !== 'NONE' }, { merge: true });
   return user;
 }

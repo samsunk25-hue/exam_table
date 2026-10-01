@@ -1,7 +1,7 @@
 import { defineString } from 'firebase-functions/params';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { adminAuth, db, serverTimestamp } from './common';
-import { claimsFor, parseEmails, resolveRole, type UserRole } from './roles';
+import { claimsFor, parseEmails, resolveRole, type TermClaim, type UserRole } from './roles';
 
 // 최초(기본) 관리자. 앱에서 추가한 관리자는 admins 컬렉션에 저장된다.
 const ADMIN_EMAILS = defineString('ADMIN_EMAILS', { default: '' });
@@ -11,7 +11,7 @@ export function bootstrapAdmins(): string[] {
 }
 
 /** 이메일로 역할과 교사 ID를 판정한다. 기본 관리자는 admins 컬렉션에도 등록해 목록에 보이게 한다. */
-export async function lookupRole(email: string): Promise<{ role: UserRole; teacherId: string | null }> {
+export async function lookupRole(email: string): Promise<{ role: UserRole; teacherId: string | null; term: TermClaim | null }> {
   const firestore = db();
   const isBootstrap = bootstrapAdmins().includes(email);
   const [teacherSnap, adminSnap] = await Promise.all([
@@ -33,7 +33,11 @@ export async function lookupRole(email: string): Promise<{ role: UserRole; teach
     (a, b) => ((b.get('year') as number) ?? 0) - ((a.get('year') as number) ?? 0) || ((b.get('semester') as number) ?? 0) - ((a.get('semester') as number) ?? 0),
   )[0];
   const teacherId = latest?.id ?? null;
-  return { role: resolveRole(isBootstrap || adminSnap.exists, teacherId), teacherId };
+  const t = latest?.get('term') as string | undefined;
+  const term: TermClaim | null = latest && t
+    ? { term: t, school: latest.get('school') as string, year: latest.get('year') as number, semester: latest.get('semester') as number }
+    : null;
+  return { role: resolveRole(isBootstrap || adminSnap.exists, teacherId), teacherId, term };
 }
 
 /** Custom Claims가 판정 결과와 다르면 갱신한다. 갱신했으면 true. */
@@ -42,9 +46,12 @@ export async function applyClaims(
   current: Record<string, unknown>,
   role: UserRole,
   teacherId: string | null,
+  term: TermClaim | null = null,
 ): Promise<boolean> {
-  const changed = (current.role ?? 'NONE') !== role || (current.teacherId ?? null) !== teacherId;
-  if (changed) await adminAuth().setCustomUserClaims(uid, claimsFor(role, teacherId));
+  const next = claimsFor(role, teacherId, term);
+  const keys = ['role', 'teacherId', 'term', 'school', 'year', 'semester'];
+  const changed = keys.some((k) => (current[k] ?? null) !== (next[k] ?? null));
+  if (changed) await adminAuth().setCustomUserClaims(uid, next);
   return changed;
 }
 
@@ -60,8 +67,8 @@ export const syncProfile = onCall(async (req) => {
     throw new HttpsError('permission-denied', '이메일이 확인된 Google 계정으로 로그인해 주세요.');
   }
 
-  const { role, teacherId } = await lookupRole(email);
-  const refreshed = await applyClaims(uid, token, role, teacherId);
+  const { role, teacherId, term } = await lookupRole(email);
+  const refreshed = await applyClaims(uid, token, role, teacherId, term);
 
   await db()
     .doc(`users/${uid}`)

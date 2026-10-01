@@ -1,5 +1,17 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { DEFAULT_ROLE_LABEL, SELECTABLE_ROLES, nextId, termFields, termLabel, type DefaultRole, type TeacherDoc, type TermRef, type WithId } from '@sim/shared';
+import {
+  DEFAULT_ROLE_LABEL,
+  SELECTABLE_ROLES,
+  nextId,
+  parseTermKey,
+  termFields,
+  termKey,
+  termLabel,
+  type DefaultRole,
+  type TeacherDoc,
+  type TermRef,
+  type WithId,
+} from '@sim/shared';
 import { BundleHint } from '@/components/BundleHint';
 import { Modal } from '@/components/Modal';
 import { UndoHistory } from '@/components/UndoHistory';
@@ -30,19 +42,32 @@ interface FormState {
   active: boolean;
 }
 
+const NEW_TERM = '__new';
+
 function TeacherForm({
   teacher,
-  all,
+  everyone,
+  terms,
   takenIds,
   term,
   onClose,
 }: {
   teacher: Teacher | null;
-  all: Teacher[];
+  /** 모든 학교·학기 교사 (옮길 학교·학기에서 이메일·담임 중복 검사) */
+  everyone: Teacher[];
+  /** 고를 수 있는 학교·학기 */
+  terms: TermRef[];
   takenIds: string[];
   term: TermRef;
   onClose: () => void;
 }) {
+  // 소속 학교·학기: 바꾸면 그 학교·학기 명단으로 옮긴다
+  const [target, setTarget] = useState(termKey(term));
+  const [custom, setCustom] = useState<TermRef>({ school: '', year: term.year, semester: term.semester });
+  const targetTerm: TermRef = target === NEW_TERM ? { ...custom, school: custom.school.trim() } : (parseTermKey(target) ?? term);
+  const moving = Boolean(teacher) && termKey(targetTerm) !== termKey(term);
+  const otherSchoolOrYear = targetTerm.school !== term.school || targetTerm.year !== term.year;
+  const all = everyone.filter((t) => t.term === termKey(targetTerm));
   const [f, setF] = useState<FormState>({
     name: teacher?.name ?? '',
     email: teacher?.email ?? '',
@@ -61,6 +86,7 @@ function TeacherForm({
   const validate = (): string | null => {
     const email = f.email.trim().toLowerCase();
     if (!f.name.trim()) return '이름을 입력해 주세요.';
+    if (target === NEW_TERM && !custom.school.trim()) return '옮길 학교명을 입력해 주세요.';
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return '이메일 형식이 아닙니다.';
     const dup = all.find((t) => t.id !== teacher?.id && email && t.email === email);
     if (dup) return `${dup.name} 교사가 이미 이 이메일을 사용 중입니다.`;
@@ -87,10 +113,16 @@ function TeacherForm({
       homeroom: f.grade ? { grade: Number(f.grade), classNo: Number(f.classNo) } : null,
       defaultRole: f.defaultRole,
       active: f.active,
-      ...termFields(term),
+      ...termFields(targetTerm),
+      // 다른 학교나 학년도로 옮기면 누적 업무점수는 그 학교·학년도 기준으로 새로 센다
+      ...(moving && otherSchoolOrYear ? { cumulativeLoad: 0 } : {}),
     };
     try {
-      if (teacher) await commitOps([{ type: 'set', ref: ref('teachers', teacher.id), data, merge: true }], '교사 수정');
+      if (teacher)
+        await commitOps(
+          [{ type: 'set', ref: ref('teachers', teacher.id), data, merge: true }],
+          moving ? `교사 이동: ${data.name} → ${termLabel(targetTerm)}` : '교사 수정',
+        );
       else {
         const [id] = nextId('T', takenIds);
         await commitOps([{ type: 'set', ref: ref('teachers', id!), data: { ...data, cumulativeLoad: 0 } }], '교사 추가');
@@ -125,6 +157,51 @@ function TeacherForm({
           onChange={(e) => set({ email: e.target.value })}
         />
         <Field label="담당교과" value={f.subject} onChange={(e) => set({ subject: e.target.value })} />
+        <div className="grid gap-2 rounded-xl bg-bg p-3">
+          <label className="grid gap-1">
+            <span className="font-semibold">소속 학교·학기</span>
+            <select
+              aria-label="소속 학교·학기"
+              className="min-h-12 rounded-xl border border-line bg-surface px-3"
+              value={target}
+              onChange={(e) => {
+                setTarget(e.target.value);
+                // 다른 학교로 옮기면 담임 정보는 비운다 (그 학교 반이 아니므로)
+                const next = e.target.value === NEW_TERM ? null : parseTermKey(e.target.value);
+                if (!next || next.school !== term.school) set({ grade: '', classNo: '' });
+              }}
+            >
+              {terms.map((t) => (
+                <option key={termKey(t)} value={termKey(t)}>
+                  {termLabel(t)}
+                  {termKey(t) === termKey(term) ? ' (현재)' : ''}
+                </option>
+              ))}
+              <option value={NEW_TERM}>다른 학교·학기 직접 입력…</option>
+            </select>
+          </label>
+          {target === NEW_TERM && (
+            <div className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr]">
+              <Field label="학교명" value={custom.school} onChange={(e) => setCustom({ ...custom, school: e.target.value })} />
+              <Field label="학년도" type="number" value={custom.year} onChange={(e) => setCustom({ ...custom, year: Number(e.target.value) })} />
+              <Select
+                label="학기"
+                value={String(custom.semester)}
+                onChange={(e) => setCustom({ ...custom, semester: Number(e.target.value) })}
+                options={[
+                  { value: '1', label: '1학기' },
+                  { value: '2', label: '2학기' },
+                ]}
+              />
+            </div>
+          )}
+          {moving && (
+            <p className="text-sm text-alert">
+              저장하면 {termLabel(targetTerm)} 명단으로 옮겨집니다. 지금 학기 시험 프로젝트의 배정·불가시간에서는 빠지니, 배정된 감독이 있으면 시간표 편집에서 다시
+              채워 주세요.{otherSchoolOrYear ? ' 다른 학교·학년도라 누적 업무점수는 0점부터 다시 셉니다.' : ''}
+            </p>
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="담임학년" type="number" min={1} max={6} value={f.grade} onChange={(e) => set({ grade: e.target.value })} />
           <Field label="담임반" type="number" min={1} max={30} value={f.classNo} onChange={(e) => set({ classNo: e.target.value })} />
@@ -274,7 +351,8 @@ export function TeachersPage() {
       {editing && choice.current && (
         <TeacherForm
           teacher={editing === 'new' ? null : editing}
-          all={data}
+          everyone={everyone.data}
+          terms={choice.terms}
           takenIds={everyone.data.map((t) => t.id)}
           term={choice.current}
           onClose={() => setEditing(null)}

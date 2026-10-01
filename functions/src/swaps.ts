@@ -13,6 +13,7 @@ import {
 } from '@sim/shared';
 import { db, serverTimestamp } from './common';
 import { loadData } from './runs';
+import { notifyAdmins, notifyTeachers } from './notify';
 import { recordOp } from './undo';
 
 /** 교환은 교사 공개 이후 확정 전까지만 */
@@ -137,6 +138,12 @@ export const createSwapRequest = onCall({ timeoutSeconds: 60 }, async (req) => {
     summary,
   };
   const ref = await col.add({ ...doc, createdBy: who.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  const requester = L.names.get(requesterId) ?? '교사';
+  if (others.length) {
+    await notifyTeachers(others, { sessionId, title: '교환 요청 받음', body: `${requester} 선생님이 감독 교환을 요청했습니다. 수락 또는 거절해 주세요.`, link: '/me' });
+  } else {
+    await notifyAdmins({ sessionId, title: '교환 승인 대기', body: `${requester} 선생님의 교환 요청이 승인을 기다립니다.`, link: `/admin/sessions/${sessionId}/editor` });
+  }
   return { requestId: ref.id, status: doc.status };
 });
 
@@ -166,16 +173,25 @@ export const actSwapRequest = onCall({ timeoutSeconds: 60 }, async (req) => {
     const responses = { ...r.responses, [who.teacherId]: act === 'accept' ? 'ACCEPTED' : 'DECLINED' };
     const status: SwapStatus = act === 'decline' ? 'DECLINED' : Object.values(responses).every((v) => v === 'ACCEPTED') ? 'PENDING_ADMIN' : 'PENDING_PEERS';
     await update(status, { responses, ...(act === 'decline' ? { note: noteText } : {}) });
+    if (status === 'DECLINED') {
+      await notifyTeachers([r.requesterId], { sessionId, title: '교환 거절', body: '요청한 감독 교환을 상대 교사가 거절했습니다.', link: '/me' });
+    } else if (status === 'PENDING_ADMIN') {
+      await notifyTeachers([r.requesterId], { sessionId, title: '교환 수락', body: '관련 교사가 모두 수락했습니다. 관리자 승인을 기다립니다.', link: '/me' });
+      await notifyAdmins({ sessionId, title: '교환 승인 대기', body: `교사 교환 요청이 승인을 기다립니다: ${r.summary.join(' / ')}`, link: `/admin/sessions/${sessionId}/editor` });
+    }
     return { status };
   }
   if (act === 'cancel') {
     if (!who.admin && who.teacherId !== r.requesterId) throw new HttpsError('permission-denied', '요청한 교사만 취소할 수 있습니다.');
     await update('CANCELLED');
+    const waiting = Object.entries(r.responses).filter(([, v]) => v !== 'DECLINED').map(([t]) => t);
+    await notifyTeachers(waiting, { sessionId, title: '교환 요청 취소', body: '받은 감독 교환 요청이 취소되었습니다.', link: '/me' });
     return { status: 'CANCELLED' };
   }
   if (!who.admin) throw new HttpsError('permission-denied', '관리자만 승인·반려할 수 있습니다.');
   if (act === 'reject') {
     await update('REJECTED', { note: noteText });
+    await notifyTeachers(r.parties, { sessionId, title: '교환 반려', body: `감독 교환 요청이 반려되었습니다.${noteText ? ` (사유: ${noteText})` : ''}`, link: '/me' });
     return { status: 'REJECTED' };
   }
 
@@ -217,5 +233,11 @@ export const actSwapRequest = onCall({ timeoutSeconds: 60 }, async (req) => {
   }
   batch.update(ref, { status: 'APPROVED', note: noteText, updatedAt: serverTimestamp(), updatedBy: who.uid });
   await batch.commit();
+  await notifyTeachers(r.parties, (t) => ({
+    sessionId,
+    title: '교환 승인',
+    body: `감독 교환이 승인되어 시간표에 반영되었습니다: ${r.summary.filter((s) => s.startsWith(L.names.get(t) ?? '?')).join(', ') || r.summary.join(', ')}`,
+    link: '/me',
+  }));
   return { status: 'APPROVED' };
 });

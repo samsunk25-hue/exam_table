@@ -3,6 +3,7 @@ import { DEFAULT_ROLE_WEIGHTS, buildEngineInput, buildSeats, validateAssignments
 import type { AssignmentDoc, SessionStatus } from '@sim/shared';
 import { db, requireAdmin, serverTimestamp } from './common';
 import { loadData } from './runs';
+import { notifyTeachers } from './notify';
 import { recordOp } from './undo';
 
 interface Change {
@@ -82,5 +83,26 @@ export const applyAssignmentChanges = onCall({ timeoutSeconds: 60 }, async (req)
     batch.set(col.doc(c.seatId), { ...doc, updatedBy: uid, updatedAt: serverTimestamp(), lastChangeReason: reasonText || null });
   }
   await batch.commit();
+
+  if (status === 'PUBLISHED' || status === 'SWAP' || status === 'CONFIRMED') {
+    const before = new Map(current.map((a) => [a.id, a.teacherId]));
+    const affected = new Map<string, string[]>();
+    const add = (t: string | undefined | null, line: string) => t && affected.set(t, [...(affected.get(t) ?? []), line]);
+    for (const c of list) {
+      const seat = seatById.get(c.seatId)!;
+      const where = `${Number(seat.date.slice(5, 7))}/${Number(seat.date.slice(8, 10))} ${seat.period}교시 ${seat.roomName}`;
+      const prev = before.get(c.seatId);
+      if (prev === c.teacherId) continue;
+      add(prev, `${where} 감독에서 빠짐`);
+      add(c.teacherId, `${where} 감독 배정`);
+    }
+    const exam = sessionSnap.get('examName') as string;
+    await notifyTeachers(affected.keys(), (t) => ({
+      sessionId,
+      title: '감독 변경',
+      body: `${exam}: ${affected.get(t)!.join(', ')}${reasonText ? ` (사유: ${reasonText})` : ''}`,
+      link: '/me',
+    }));
+  }
   return { changed: list.length };
 });

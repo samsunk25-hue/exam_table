@@ -8,4 +8,5 @@ export { auditSession, auditSessionChild, auditTeacher, auditRoom, auditAdmin } 
 export { applyAssignmentChanges } from './edits';
 export { reviewAccessRequest } from './requests';
 export { undoOperation } from './undo';
+export { notifyAccessRequest, notifyAvailability } from './notify';
 export { actSwapRequest, createSwapRequest, suggestSwaps } from './swaps';

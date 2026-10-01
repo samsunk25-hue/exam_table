@@ -20,3 +20,6 @@ ui-debug.log
 
 # hero source image (5MB): only cropped apps/web/public/*.jpg are committed
 hero-source.png
+
+# 원본 영상 (웹에는 apps/web/public/login.mp4만 올린다)
+/*.mp4

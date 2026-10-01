@@ -54,6 +54,9 @@ async function approveIn(adminPage, name, approve = true, note = '') {
   await u.page.getByRole('heading', { name: '가입 신청' }).waitFor();
   await u.page.getByLabel('이름').fill('신규교사');
   await u.page.getByLabel('담당 과목').fill('과학');
+  await u.page.getByLabel('학교명').fill('가입중학교');
+  await u.page.getByLabel('학년도').fill('2026');
+  await u.page.getByLabel('학기').selectOption('2');
   await u.page.getByRole('button', { name: '교사(사용자) 승인 신청' }).click();
   await u.page.getByText('교사(사용자) 승인 대기 중입니다.').waitFor();
   check('미등록 계정: 가입 신청 → 승인 대기', true);
@@ -63,6 +66,11 @@ async function approveIn(adminPage, name, approve = true, note = '') {
   await u.page.getByRole('heading', { name: '내 감독 시간표' }).waitFor();
   const t = (await db.collection('teachers').where('email', '==', 'newbie@test.kr').get()).docs[0];
   check('승인 → 교사 명단 등록 + 화면이 자동으로 교사 화면으로', t?.get('name') === '신규교사' && t?.get('subject') === '과학');
+  check('신청한 학교·학기 명단으로 등록', t?.get('term') === '가입중학교|2026|2', t?.get('term'));
+  // 교사 관리에서 그 학교·학기로 바로 구분되어 보임
+  await go(admin.page, '/admin/teachers');
+  await admin.page.getByLabel('학교·학기').selectOption('가입중학교|2026|2');
+  check('교사 관리: 가입한 학교·학기 명단에 표시', await admin.page.getByRole('cell', { name: '신규교사' }).waitFor({ timeout: 10000 }).then(() => true).catch(() => false));
   check('신청자 화면 콘솔 오류 없음', u.errors.length === 0, u.errors.join(' / '));
   await u.browser.close();
 
@@ -90,6 +98,7 @@ async function approveIn(adminPage, name, approve = true, note = '') {
 {
   const r = await openApp({ email: 'reject@test.kr' });
   await r.page.getByLabel('이름').fill('반려대상');
+  await r.page.getByLabel('학교명').fill('가입중학교');
   await r.page.getByRole('button', { name: '교사(사용자) 승인 신청' }).click();
   await r.page.getByText('승인 대기 중').waitFor();
   await approveIn(admin.page, '반려대상', false, '우리 학교 교사가 아닙니다');

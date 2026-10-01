@@ -216,6 +216,10 @@ export interface AccessRequestDoc {
   kind: AccessKind;
   status: AccessStatus;
   note: string | null;
+  /** 교사 가입: 소속 학교·학년도·학기 (승인하면 이 학교·학기 명단에 등록) */
+  school?: string | null;
+  year?: number | null;
+  semester?: number | null;
 }
 
 export const ACCESS_KIND_LABEL: Record<AccessKind, string> = { TEACHER: '교사(사용자)', ADMIN: '관리자' };

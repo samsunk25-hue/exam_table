@@ -2,6 +2,7 @@ import type { Transaction } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { findTransition, isSessionStatus, sumLoads, type SessionStatus } from '@sim/shared';
 import { db, increment, requireAdmin, serverTimestamp } from './common';
+import { notifyTeachers } from './notify';
 import { recordOp } from './undo';
 
 /**
@@ -95,8 +96,35 @@ export const transitionSession = onCall(async (req) => {
     });
   });
 
+  await notifyStatus(sessionId, before.get('status') as SessionStatus, to);
   return { status: to };
 });
+
+/** 공개·교환 기간·확정·공개 취소를 배정된 교사들에게 알린다 */
+async function notifyStatus(sessionId: string, from: SessionStatus, to: SessionStatus) {
+  const MESSAGES: Partial<Record<SessionStatus, [string, string]>> = {
+    PUBLISHED: ['감독 시간표 공개', '감독 시간표가 공개되었습니다. 내 감독을 확인하세요.'],
+    SWAP: ['교환 기간 시작', '감독 교환 기간이 시작되었습니다. 필요하면 교환을 요청하세요.'],
+    CONFIRMED: ['감독 시간표 최종 확정', '감독 시간표가 최종 확정되었습니다.'],
+  };
+  let msg = MESSAGES[to];
+  if (to === 'CONFIRMED' && from === 'LOCKED') msg = undefined; // 잠금 해제는 알리지 않음
+  if (to === 'REVIEW' && from === 'PUBLISHED') msg = ['시간표 공개 취소', '공개된 감독 시간표가 다시 검토 중입니다. 다시 공개되면 알려 드립니다.'];
+  if (!msg) return;
+  const [session, assigns] = await Promise.all([
+    db().doc(`sessions/${sessionId}`).get(),
+    db().collection(`sessions/${sessionId}/assignments`).get(),
+  ]);
+  const count = new Map<string, number>();
+  for (const d of assigns.docs) count.set(d.get('teacherId') as string, (count.get(d.get('teacherId') as string) ?? 0) + 1);
+  const exam = session.get('examName') as string;
+  await notifyTeachers(count.keys(), (t) => ({
+    sessionId,
+    title: msg![0],
+    body: `${exam}: ${msg![1]}${to === 'PUBLISHED' || to === 'CONFIRMED' ? ` (감독 ${count.get(t)}회)` : ''}`,
+    link: '/me',
+  }));
+}
 
 /**
  * 시험 프로젝트 삭제: 하위 자료(일정·배정·불가시간·이력 등)를 모두 지운다.

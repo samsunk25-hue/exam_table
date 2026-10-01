@@ -52,6 +52,7 @@ const request = async () => (await db.collection(`sessions/${SID}/swapRequests`)
 // 1. 김국어: 교환 방법 찾기 → 맞바꾸기 요청
 const K = await openApp({ email: 'kim@test.kr' });
 await go(K.page, '/me');
+await K.page.getByRole('button', { name: /교환 점검/ }).click({ timeout: 3000 }).catch(() => {}); // 공개된 프로젝트가 여럿이면 이 점검 프로젝트로
 await K.page.getByRole('button', { name: /10\/12 1교시 교환-1 교환/ }).click();
 const dlg = K.page.getByRole('dialog', { name: '감독 교환 요청' });
 await dlg.getByLabel('바꾸고 싶은 선생님').selectOption({ label: '이수학' });
@@ -68,6 +69,7 @@ await K.browser.close();
 // 2. 이수학: 수락
 const L = await openApp({ email: 'lee@test.kr' });
 await go(L.page, '/me');
+await L.page.getByRole('button', { name: /교환 점검/ }).click({ timeout: 3000 }).catch(() => {});
 await L.page.getByText('응답 필요 1').waitFor({ timeout: 20000 });
 await L.page.getByRole('button', { name: '수락', exact: true }).click();
 check('상대 교사 수락 → 관리자 승인 대기', await until(async () => (await request())?.status === 'PENDING_ADMIN'));

@@ -27,14 +27,19 @@ export const reviewAccessRequest = onCall(async (req) => {
   }
 
   if (r.kind === 'TEACHER') {
-    // 가장 최근 시험 프로젝트의 학교·학기 명단에 넣는다
+    // 신청서의 학교·학기 명단에 넣는다 (예전 신청서는 가장 최근 시험 프로젝트의 학교·학기)
     const [teachers, latest] = await Promise.all([
       db().collection('teachers').get(),
       db().collection('sessions').orderBy('createdAt', 'desc').limit(1).get(),
     ]);
     const s = latest.docs[0];
-    const term = s ? termFields(sessionTerm({ schoolName: s.get('schoolName') as string, year: s.get('year') as number, semester: s.get('semester') as number })) : {};
-    const existing = teachers.docs.find((d) => d.get('email') === r.email && (!s || d.get('term') === (term as { term?: string }).term));
+    const term =
+      r.school && r.year && r.semester
+        ? termFields({ school: r.school, year: r.year, semester: r.semester })
+        : s
+          ? termFields(sessionTerm({ schoolName: s.get('schoolName') as string, year: s.get('year') as number, semester: s.get('semester') as number }))
+          : null;
+    const existing = teachers.docs.find((d) => d.get('email') === r.email && (!term || d.get('term') === term.term));
     if (existing) {
       await existing.ref.set({ active: true, updatedBy: reviewer, updatedAt: serverTimestamp() }, { merge: true });
     } else {
@@ -48,7 +53,7 @@ export const reviewAccessRequest = onCall(async (req) => {
         defaultRole: 'NORMAL',
         active: true,
         cumulativeLoad: 0,
-        ...term,
+        ...(term ?? {}),
         updatedBy: reviewer,
         updatedAt: serverTimestamp(),
       });

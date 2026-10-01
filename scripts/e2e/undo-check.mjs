@@ -58,7 +58,7 @@ async function openSchoolHistory() {
 // 1. 교사 수정 → 되돌리기
 await editSubject('국어A');
 let hist = await openSchoolHistory();
-await hist.getByRole('button', { name: '교사 수정 전으로 되돌리기' }).first().click();
+await hist.getByRole('button', { name: '교사 수정 전으로 되돌리기', exact: true }).first().click();
 let confirm = page.getByRole('dialog', { name: '작업 되돌리기' });
 await confirm.getByRole('button', { name: '되돌리기', exact: true }).click();
 await confirm.waitFor({ state: 'detached', timeout: 30000 });
@@ -69,7 +69,9 @@ await page.keyboard.press('Escape');
 await editSubject('국어B');
 await editSubject('국어C');
 hist = await openSchoolHistory();
-await hist.getByRole('button', { name: '교사 수정 전으로 되돌리기' }).nth(1).click(); // 최신순이므로 두 번째 = 국어B 작업
+const editButtons = hist.getByRole('button', { name: '교사 수정 전으로 되돌리기', exact: true });
+for (let i = 0; i < 50 && (await editButtons.count()) < 2; i++) await page.waitForTimeout(200); // 국어B·국어C 기록이 목록에 뜰 때까지
+await editButtons.nth(1).click(); // 최신순이므로 두 번째 = 국어B 작업
 confirm = page.getByRole('dialog', { name: '작업 되돌리기' });
 await confirm.getByText(/함께 되돌려집니다/).waitFor();
 await page.screenshot({ path: `${OUT}/undo-confirm.png` });

@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { AppTitle, HeroImage } from '@/components/Brand';
+import { NotificationBell } from '@/components/NotificationBell';
 import { Button } from '@/components/ui';
 import { usingEmulators } from '@/lib/firebase';
 
@@ -30,9 +31,12 @@ export function AppShell({ nav, modeLabel }: { nav: NavItem[]; modeLabel: string
           <div className="hidden min-w-0 flex-1 justify-end md:flex">
             <HeroImage src="/hero.jpg" className="h-28 w-auto max-w-full rounded-xl object-contain shadow-sm" />
           </div>
-          <Button variant="secondary" className="ml-auto shrink-0 md:ml-0" onClick={() => void signOut()}>
-            로그아웃
-          </Button>
+          <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-0">
+            <NotificationBell />
+            <Button variant="secondary" className="shrink-0" onClick={() => void signOut()}>
+              로그아웃
+            </Button>
+          </div>
         </div>
         <nav className="mx-auto flex max-w-[1440px] gap-1 overflow-x-auto px-2 pb-2 lg:px-6" aria-label="주 메뉴">
           {nav.map((item) => (

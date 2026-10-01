@@ -54,6 +54,10 @@ service cloud.firestore {
         && request.resource.data.status == 'PENDING'
         && request.resource.data.kind in ['TEACHER', 'ADMIN']
         && request.resource.data.name is string && request.resource.data.name.size() > 0
+        // 교사 가입은 소속 학교·학년도·학기가 필요
+        && (request.resource.data.kind != 'TEACHER'
+          || (request.resource.data.school is string && request.resource.data.school.size() > 0
+            && request.resource.data.year is int && request.resource.data.semester in [1, 2]))
         && (resource == null || resource.data.status != 'APPROVED' || request.resource.data.kind != resource.data.kind);
       allow delete: if false;
     }
@@ -90,6 +94,20 @@ service cloud.firestore {
         allow create: if isAdmin() && getAfter(/databases/$(database)/documents/undoOps/$(opId)).data.createdBy == request.auth.uid;
         allow update, delete: if false;
       }
+    }
+
+    // 앱 알림: 함수만 만든다. 교사는 본인 알림의 read만, 관리자는 관리자 알림의 readBy에 본인만 추가
+    match /notifications/{id} {
+      allow read: if (isAdmin() && resource.data.audience == 'ADMIN')
+        || (isTeacher() && resource.data.teacherId == myTeacherId());
+      allow update: if (isTeacher() && resource.data.teacherId == myTeacherId()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']))
+        || (isAdmin() && resource.data.audience == 'ADMIN'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
+          && request.resource.data.readBy.hasAll(resource.data.readBy)
+          && request.resource.data.readBy.size() == resource.data.readBy.size() + 1
+          && request.auth.uid in request.resource.data.readBy);
+      allow create, delete: if false;
     }
 
     match /loadLedger/{ledgerId} {

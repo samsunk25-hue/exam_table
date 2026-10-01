@@ -35,7 +35,7 @@ export function AccessRequestsCard() {
         교사(사용자) 신청을 승인하면 교사 명단에 등록되고, 관리자 신청을 승인하면 관리자가 됩니다. 신청자는 다음부터 이 이메일(Google 계정)로 로그인합니다.
       </p>
       <div className="mt-3">
-        <Table head={['신청', '이름', '과목', '이메일', '']}>
+        <Table head={['신청', '이름', '과목', '학교·학기', '이메일', '']}>
           {data.map((r) => (
             <tr key={r.uid}>
               <Td>
@@ -45,6 +45,7 @@ export function AccessRequestsCard() {
               </Td>
               <Td className="font-bold">{r.name}</Td>
               <Td>{r.subject ?? ''}</Td>
+              <Td>{r.school ? `${r.school} · ${r.year}학년도 ${r.semester}학기` : ''}</Td>
               <Td>{r.email}</Td>
               <Td className="whitespace-nowrap">
                 <Button disabled={busy !== null} onClick={() => void review(r, true)}>

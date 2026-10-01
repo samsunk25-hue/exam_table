@@ -65,13 +65,15 @@ describe('역할', () => {
 
 describe('가입·권한 신청', () => {
   const newbie = () => env.authenticatedContext('nb', { email: 'NB@test.kr' }).firestore();
-  const req = { uid: 'nb', email: 'nb@test.kr', name: '신규', subject: null, kind: 'TEACHER', status: 'PENDING', note: null };
+  const req = { uid: 'nb', email: 'nb@test.kr', name: '신규', subject: null, kind: 'TEACHER', status: 'PENDING', note: null, school: '가중', year: 2026, semester: 2 };
 
   it('본인 신청만 대기 상태로 쓸 수 있고, 승인 상태로는 쓸 수 없다', async () => {
     await assertSucceeds(setDoc(doc(newbie(), 'accessRequests/nb'), req));
     await assertFails(setDoc(doc(newbie(), 'accessRequests/other'), { ...req, uid: 'other' }));
     await assertFails(setDoc(doc(newbie(), 'accessRequests/nb'), { ...req, status: 'APPROVED' }));
     await assertFails(setDoc(doc(newbie(), 'accessRequests/nb'), { ...req, email: 'someone@else.kr' }));
+    await assertFails(setDoc(doc(newbie(), 'accessRequests/nb'), { ...req, school: '' }));
+    await assertSucceeds(setDoc(doc(newbie(), 'accessRequests/nb'), { ...req, kind: 'ADMIN', school: null, year: null, semester: null }));
   });
 
   it('신청 목록은 관리자만 볼 수 있다', async () => {
@@ -122,6 +124,30 @@ describe('교환 요청', () => {
     await assertFails(getDoc(doc(kim(), 'sessions/S1/swapRequests/Q2')));
     await assertSucceeds(getDoc(doc(admin(), 'sessions/S1/swapRequests/Q2')));
     await assertFails(setDoc(doc(kim(), 'sessions/S1/swapRequests/Q3'), { requesterId: 'T001', parties: ['T001'] }));
+  });
+});
+
+describe('앱 알림', () => {
+  const put = (id: string, data: Record<string, unknown>) => env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `notifications/${id}`), data));
+
+  it('교사는 본인 알림만 읽고 읽음 표시만 바꾼다', async () => {
+    await put('N1', { audience: 'TEACHER', teacherId: 'T001', title: 'a', read: false });
+    await put('N2', { audience: 'TEACHER', teacherId: 'T002', title: 'b', read: false });
+    await assertSucceeds(getDoc(doc(kim(), 'notifications/N1')));
+    await assertFails(getDoc(doc(kim(), 'notifications/N2')));
+    await assertSucceeds(updateDoc(doc(kim(), 'notifications/N1'), { read: true }));
+    await assertFails(updateDoc(doc(kim(), 'notifications/N1'), { title: '바꿈' }));
+    await assertFails(setDoc(doc(kim(), 'notifications/N3'), { audience: 'TEACHER', teacherId: 'T001' }));
+  });
+
+  it('관리자는 관리자 알림만 읽고 본인 읽음만 추가한다', async () => {
+    await put('A1', { audience: 'ADMIN', teacherId: null, title: 'x', readBy: [] });
+    await put('N2', { audience: 'TEACHER', teacherId: 'T002', title: 'b', read: false });
+    await assertSucceeds(getDoc(doc(admin(), 'notifications/A1')));
+    await assertFails(getDoc(doc(admin(), 'notifications/N2')));
+    await assertFails(getDoc(doc(kim(), 'notifications/A1')));
+    await assertFails(updateDoc(doc(admin(), 'notifications/A1'), { readBy: ['someone'] }));
+    await assertSucceeds(updateDoc(doc(admin(), 'notifications/A1'), { readBy: ['admin'] }));
   });
 });
 

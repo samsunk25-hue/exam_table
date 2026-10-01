@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router';
 import { useAuth } from '@/auth/AuthProvider';
+import { APP_NAME, APP_SUBTITLE, HeroImage } from '@/components/Brand';
 import { Button } from '@/components/ui';
 import { usingEmulators } from '@/lib/firebase';
 
@@ -19,10 +20,16 @@ export function AppShell({ nav, modeLabel }: { nav: NavItem[]; modeLabel: string
       )}
       <header className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-          <div className="min-w-0">
-            <div className="text-[1.3rem] font-bold leading-tight">시험 감독 매니저</div>
-            <div className="truncate text-sm text-muted">
-              {modeLabel} · {user?.email}
+          <div className="flex min-w-0 items-center gap-3">
+            <HeroImage className="hidden h-16 w-[122px] shrink-0 rounded-xl object-cover sm:block" />
+            <div className="min-w-0">
+              <div className="text-[1.3rem] leading-tight font-bold">
+                <span className="text-primary-strong">{APP_NAME}</span>
+                <span className="text-ink">: {APP_SUBTITLE}</span>
+              </div>
+              <div className="truncate text-sm text-muted">
+                {modeLabel} · {user?.email}
+              </div>
             </div>
           </div>
           <Button variant="secondary" onClick={() => void signOut()}>

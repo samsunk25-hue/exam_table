@@ -1,0 +1,310 @@
+// AI 기능 (Claude API): 학교 문서에서 시험 일정·교사 명단 읽기, 배정 이유 설명, 공정성 점검 리포트.
+// API 키는 Firebase 비밀값 ANTHROPIC_API_KEY. 에뮬레이터에서 키가 없으면 가짜 응답으로 흐름만 점검한다.
+import { defineSecret } from 'firebase-functions/params';
+import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
+import { DEFAULT_ROLE_WEIGHTS, buildEngineInput, buildSeats, seatCandidates, type Seat } from '@sim/engine';
+import { SEAT_ROLE_LABEL, type SessionStatus } from '@sim/shared';
+import { db, requireAdmin } from './common';
+import { loadData } from './runs';
+
+const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
+const MODEL = 'claude-opus-5-5';
+const AI_OPTIONS = { timeoutSeconds: 300, memory: '512MiB' as const, secrets: [ANTHROPIC_API_KEY] };
+
+type Block = Record<string, unknown>;
+interface Tool {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}
+
+const fakeMode = () => !ANTHROPIC_API_KEY.value() && process.env.FUNCTIONS_EMULATOR === 'true';
+
+/** Claude 호출. tool을 주면 그 도구 입력(JSON)을, 아니면 글을 돌려준다. */
+async function claude(o: { system: string; content: Block[]; tool?: Tool; maxTokens?: number }): Promise<unknown> {
+  const key = ANTHROPIC_API_KEY.value();
+  if (!key) throw new HttpsError('failed-precondition', 'AI 키가 설정되지 않았습니다. 관리자가 ANTHROPIC_API_KEY를 등록해야 합니다.');
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: o.maxTokens ?? 4000,
+      system: o.system,
+      messages: [{ role: 'user', content: o.content }],
+      ...(o.tool ? { tools: [o.tool], tool_choice: { type: 'tool', name: o.tool.name } } : {}),
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new HttpsError('unavailable', `AI 응답 오류 (${res.status}): ${body.slice(0, 200)}`);
+  }
+  const json = (await res.json()) as { content: { type: string; text?: string; input?: unknown }[] };
+  if (o.tool) {
+    const used = json.content.find((c) => c.type === 'tool_use');
+    if (!used) throw new HttpsError('internal', 'AI가 결과를 정해진 형식으로 주지 않았습니다. 다시 시도해 주세요.');
+    return used.input;
+  }
+  return json.content.filter((c) => c.type === 'text').map((c) => c.text ?? '').join('\n').trim();
+}
+
+// ───────────────────────── 3. 학교 문서에서 자료 읽기 ─────────────────────────
+
+const EXTRACT_TOOL: Tool = {
+  name: 'record_school_data',
+  description: '문서에서 읽은 시험 일정과 교사 명단을 기록한다.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      slots: {
+        type: 'array',
+        description: '시험 1건 = 날짜·교시·학년 하나. 같은 교시에 학년이 여러 개면 학년마다 한 줄.',
+        items: {
+          type: 'object',
+          properties: {
+            date: { type: 'string', description: 'YYYY-MM-DD' },
+            period: { type: 'integer' },
+            startTime: { type: ['string', 'null'], description: 'HH:MM (없으면 null)' },
+            endTime: { type: ['string', 'null'], description: 'HH:MM (없으면 null)' },
+            grade: { type: 'integer' },
+            subject: { type: 'string' },
+            type: { type: 'string', enum: ['시험', '자습'] },
+          },
+          required: ['date', 'period', 'grade', 'subject', 'type'],
+        },
+      },
+      teachers: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            subject: { type: ['string', 'null'] },
+            homeroomGrade: { type: ['integer', 'null'] },
+            homeroomClass: { type: ['integer', 'null'] },
+            email: { type: ['string', 'null'] },
+          },
+          required: ['name'],
+        },
+      },
+      notes: { type: 'array', items: { type: 'string' }, description: '읽기 어려웠던 부분, 확인이 필요한 점 (한국어, 짧게)' },
+    },
+    required: ['slots', 'teachers', 'notes'],
+  },
+};
+
+interface ExtractResult {
+  slots: { date: string; period: number; startTime?: string | null; endTime?: string | null; grade: number; subject: string; type: '시험' | '자습' }[];
+  teachers: { name: string; subject?: string | null; homeroomGrade?: number | null; homeroomClass?: number | null; email?: string | null }[];
+  notes: string[];
+}
+
+const MEDIA = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'text/plain', 'text/csv']);
+
+/** 교육계획서·시험 시간표·업무 분장표 등(PDF·사진·글)에서 시험 일정과 교사 명단을 읽는다 */
+export const aiExtract = onCall(AI_OPTIONS, async (req) => {
+  requireAdmin(req);
+  const { kind, files, text, year } = (req.data ?? {}) as {
+    kind?: unknown;
+    files?: { name?: unknown; mediaType?: unknown; data?: unknown }[];
+    text?: unknown;
+    year?: unknown;
+  };
+  const want = kind === 'schedule' || kind === 'teachers' ? kind : 'both';
+  const list = Array.isArray(files) ? files.slice(0, 4) : [];
+  const content: Block[] = [];
+  for (const f of list) {
+    const mediaType = String(f.mediaType);
+    const data = String(f.data ?? '');
+    if (!MEDIA.has(mediaType) || !data) throw new HttpsError('invalid-argument', `읽을 수 없는 파일 형식입니다: ${String(f.name)}`);
+    if (mediaType === 'application/pdf') content.push({ type: 'document', source: { type: 'base64', media_type: mediaType, data } });
+    else if (mediaType.startsWith('image/')) content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data } });
+    else content.push({ type: 'text', text: Buffer.from(data, 'base64').toString('utf8').slice(0, 100_000) });
+  }
+  if (typeof text === 'string' && text.trim()) content.push({ type: 'text', text: text.slice(0, 100_000) });
+  if (!content.length) throw new HttpsError('invalid-argument', '읽을 파일이나 글을 넣어 주세요.');
+
+  const y = typeof year === 'number' ? year : new Date().getFullYear();
+  const task =
+    want === 'schedule' ? '시험 일정만 읽으세요 (teachers는 빈 배열).' : want === 'teachers' ? '교사 명단만 읽으세요 (slots는 빈 배열).' : '시험 일정과 교사 명단을 모두 읽으세요.';
+  content.push({
+    type: 'text',
+    text: `위 학교 문서에서 ${task}
+- 학년도는 ${y}학년도입니다. 날짜에 연도가 없으면 3~12월은 ${y}년, 1~2월은 ${y + 1}년으로 쓰세요.
+- 시험 일정: 날짜·교시·학년마다 한 줄. "자습"·"자율학습"은 type을 자습으로. 시간이 적혀 있으면 HH:MM으로.
+- 교사 명단: 교사(담임·교과 교사)만. 행정직원은 빼세요. 담임은 "1-3" 같은 표기를 학년·반 숫자로.
+- 문서에 없는 값은 지어내지 말고 null로 두고, 애매한 점은 notes에 적으세요.`,
+  });
+
+  const out = fakeMode()
+    ? fakeExtract(y)
+    : ((await claude({
+        system: '당신은 한국 중·고등학교 교무 문서를 정확히 표로 옮기는 도우미입니다. 반드시 record_school_data 도구로만 답합니다.',
+        content,
+        tool: EXTRACT_TOOL,
+        maxTokens: 8000,
+      })) as ExtractResult);
+  return {
+    slots: want === 'teachers' ? [] : (out.slots ?? []),
+    teachers: want === 'schedule' ? [] : (out.teachers ?? []),
+    notes: out.notes ?? [],
+  };
+});
+
+function fakeExtract(y: number): ExtractResult {
+  return {
+    slots: [
+      { date: `${y}-10-12`, period: 1, startTime: '09:00', endTime: '09:45', grade: 1, subject: '국어', type: '시험' },
+      { date: `${y}-10-12`, period: 1, startTime: '09:00', endTime: '09:45', grade: 2, subject: '수학', type: '시험' },
+      { date: `${y}-10-12`, period: 2, startTime: '10:00', endTime: '10:45', grade: 1, subject: '자습', type: '자습' },
+    ],
+    teachers: [
+      { name: '문서교사가', subject: '국어', homeroomGrade: 1, homeroomClass: 5, email: null },
+      { name: '문서교사나', subject: '수학', homeroomGrade: null, homeroomClass: null, email: 'doc.b@test.kr' },
+    ],
+    notes: ['(에뮬레이터 가짜 응답) 실제 AI 키가 없어서 예시 자료를 돌려줍니다.'],
+  };
+}
+
+// ───────────────────────── 2. 배정 설명과 공정성 리포트 ─────────────────────────
+
+const round = (n: number) => Math.round(n * 10) / 10;
+const seatLabel = (s: Seat) => `${Number(s.date.slice(5, 7))}/${Number(s.date.slice(8, 10))} ${s.period}교시 ${s.roomName} ${SEAT_ROLE_LABEL[s.role]}`;
+
+async function loadSession(sessionId: string, req: CallableRequest, admin: boolean) {
+  const snap = await db().doc(`sessions/${sessionId}`).get();
+  if (!snap.exists) throw new HttpsError('not-found', '시험 프로젝트를 찾을 수 없습니다.');
+  if (!admin) {
+    const t = req.auth!.token;
+    if (snap.get('schoolName') !== t.school || snap.get('year') !== t.year || snap.get('semester') !== t.semester) {
+      throw new HttpsError('permission-denied', '다른 학교·학기 시험입니다.');
+    }
+  }
+  const { data, current } = await loadData(sessionId, snap.get('settings.useBaseTimetable') === true);
+  const input = buildEngineInput(data);
+  const seats = new Map(buildSeats(input, DEFAULT_ROLE_WEIGHTS).map((s) => [s.id, s]));
+  return { snap, status: snap.get('status') as SessionStatus, data, current, input, seats };
+}
+
+/** 교사별 이번 시험 점수·학년도 누적·연속·하루 최다 */
+function loadStats(L: Awaited<ReturnType<typeof loadSession>>) {
+  const confirmed = L.status === 'CONFIRMED' || L.status === 'LOCKED';
+  return L.data.teachers
+    .filter((t) => t.active)
+    .map((t) => {
+      const mine = L.current.filter((a) => a.teacherId === t.id);
+      const load = round(mine.reduce((s, a) => s + a.weight, 0));
+      const prior = round(confirmed ? (t.cumulativeLoad ?? 0) - load : (t.cumulativeLoad ?? 0));
+      const times = new Set(mine.map((a) => `${a.date}|${a.period}`));
+      const consecutive = [...times].filter((k) => times.has(`${k.split('|')[0]}|${Number(k.split('|')[1]) + 1}`)).length;
+      const perDay = new Map<string, number>();
+      for (const a of mine) perDay.set(a.date, (perDay.get(a.date) ?? 0) + 1);
+      return { id: t.id, name: t.name, count: mine.length, load, total: round(prior + load), consecutive, maxDay: Math.max(0, ...perDay.values()) };
+    });
+}
+
+/** 교사: "왜 이렇게 배정됐나요?" — 본인 감독과 점수 이유를 쉬운 말로 (다른 교사 정보는 이름 없이 통계만) */
+export const aiExplainDuties = onCall(AI_OPTIONS, async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', '로그인이 필요합니다.');
+  const admin = req.auth.token.role === 'ADMIN';
+  const { sessionId, teacherId: asked } = (req.data ?? {}) as { sessionId?: unknown; teacherId?: unknown };
+  const teacherId = admin && typeof asked === 'string' ? asked : (req.auth.token.teacherId as string | undefined);
+  if (typeof sessionId !== 'string' || !teacherId) throw new HttpsError('invalid-argument', '시험과 교사를 확인해 주세요.');
+  const L = await loadSession(sessionId, req, admin);
+  if (!admin && !['PUBLISHED', 'SWAP', 'CONFIRMED', 'LOCKED'].includes(L.status)) {
+    throw new HttpsError('failed-precondition', '시간표가 공개된 뒤에 설명을 볼 수 있습니다.');
+  }
+  const me = L.data.teachers.find((t) => t.id === teacherId);
+  if (!me) throw new HttpsError('not-found', '교사 명단에 없습니다.');
+  const stats = loadStats(L);
+  const mine = stats.find((s) => s.id === teacherId);
+  const loads = stats.map((s) => s.total).sort((a, b) => a - b);
+  const mean = round(loads.reduce((s, x) => s + x, 0) / (loads.length || 1));
+  const rank = loads.filter((x) => x > (mine?.total ?? 0)).length + 1;
+  const duties = L.current
+    .filter((a) => a.teacherId === teacherId)
+    .map((a) => `- ${L.seats.get(a.id) ? seatLabel(L.seats.get(a.id)!) : a.id}: 점수 이유 ${a.reason || '(수동 배정)'}`);
+  const unavailable = L.data.availability.filter((a) => a.teacherId === teacherId && a.status !== 'REJECTED').map((a) => `${a.date} ${a.period}교시`);
+
+  const facts = `교사: ${me.name} (${me.subject ?? '교과 미상'}${me.homeroom ? `, ${me.homeroom.grade}-${me.homeroom.classNo} 담임` : ''})
+이번 시험 감독 ${mine?.count ?? 0}회, 이번 업무 점수 ${mine?.load ?? 0}, 학년도 누적 ${mine?.total ?? 0}
+학교 전체 학년도 누적: 평균 ${mean}, 최저 ${loads[0] ?? 0}, 최고 ${loads[loads.length - 1] ?? 0} (교사 ${loads.length}명 중 높은 순 ${rank}위)
+연속 감독 ${mine?.consecutive ?? 0}쌍, 하루 최다 ${mine?.maxDay ?? 0}회
+신청한 불가시간: ${unavailable.join(', ') || '없음'}
+감독 목록과 배정 점수 이유:
+${duties.join('\n') || '- 없음'}
+점수 이유 읽는 법: 기초일치=그 시간 원래 수업하던 반, 부담하위=누적이 적어 우선, 부담상위=누적이 많아 감점, 비담임=그 학년 담임이 아님, 연속=이어지는 교시 감점, 복도전담·출제교사 복도=역할 맞춤.
+배정 원칙: 불가시간·동시간 중복·연장 감독 직후는 절대 배정하지 않고, 나머지는 위 점수가 높은 교사를 고르며, 누적이 적은 교사를 먼저 배정해 형평을 맞춘다.`;
+
+  const text = fakeMode()
+    ? `(에뮬레이터 가짜 응답) ${me.name} 선생님은 이번 시험에서 감독 ${mine?.count ?? 0}회를 맡았습니다. 학년도 누적 ${mine?.total ?? 0}점으로 학교 평균 ${mean}점과 비교됩니다.`
+    : ((await claude({
+        system:
+          '당신은 학교 시험 감독 배정 결과를 교사에게 친절하게 설명하는 도우미입니다. 주어진 사실만 쓰고 지어내지 마세요. 다른 교사의 이름이나 개인 사정은 언급하지 마세요. 한국어 존댓말로, 5~8문장, 필요하면 "- "로 시작하는 짧은 목록을 쓰고 마크다운 제목·굵은 글씨는 쓰지 마세요.',
+        content: [{ type: 'text', text: `${facts}\n\n이 교사가 "왜 이렇게 배정됐나요?"라고 물었습니다. 감독 횟수와 시간이 정해진 이유, 다른 교사와 비교한 형평성, 바꾸고 싶을 때 할 수 있는 일(교환 요청)을 설명해 주세요.` }],
+        maxTokens: 1200,
+      })) as string);
+  return { text };
+});
+
+/** 관리자: 공정성 점검 리포트 + 바로 적용할 수 있는 감독 옮기기 제안 */
+export const aiFairnessReport = onCall(AI_OPTIONS, async (req) => {
+  requireAdmin(req);
+  const { sessionId } = (req.data ?? {}) as { sessionId?: unknown };
+  if (typeof sessionId !== 'string') throw new HttpsError('invalid-argument', '시험 프로젝트를 확인해 주세요.');
+  const L = await loadSession(sessionId, req, true);
+  const stats = loadStats(L);
+  if (!L.current.length) throw new HttpsError('failed-precondition', '배정이 아직 없습니다. 자동 배정을 먼저 적용하세요.');
+  const name = new Map(stats.map((s) => [s.id, s.name]));
+  const total = new Map(stats.map((s) => [s.id, s.total]));
+  const mean = stats.reduce((s, x) => s + x.total, 0) / (stats.length || 1);
+  const sd = Math.sqrt(stats.reduce((s, x) => s + (x.total - mean) ** 2, 0) / (stats.length || 1));
+
+  // 제안: 누적이 많은 교사의 감독을, 조건을 지키며 누적이 적은 교사에게 넘기기 (최대 5건, 같은 교사 두 번 받지 않게)
+  const plain = L.current.map((a) => ({ seatId: a.id, teacherId: a.teacherId }));
+  const heavy = [...stats].sort((a, b) => b.total - a.total).slice(0, 4);
+  const moves: { seatId: string; from: string; to: string; label: string; effect: string }[] = [];
+  const used = new Set<string>();
+  for (const h of heavy) {
+    for (const a of L.current.filter((x) => x.teacherId === h.id)) {
+      if (moves.length >= 5) break;
+      const best = seatCandidates(L.input, plain, a.id)
+        .filter((c) => !c.blockedBy && c.teacherId !== h.id && !used.has(c.teacherId) && (total.get(c.teacherId) ?? 0) + a.weight < h.total - 0.5)
+        .sort((x, y) => (total.get(x.teacherId) ?? 0) - (total.get(y.teacherId) ?? 0))[0];
+      if (!best) continue;
+      used.add(best.teacherId);
+      moves.push({
+        seatId: a.id,
+        from: h.id,
+        to: best.teacherId,
+        label: `${L.seats.get(a.id) ? seatLabel(L.seats.get(a.id)!) : a.id}: ${h.name} → ${best.name}`,
+        effect: `${h.name} ${h.total}→${round(h.total - a.weight)}, ${best.name} ${total.get(best.teacherId) ?? 0}→${round((total.get(best.teacherId) ?? 0) + a.weight)}`,
+      });
+      break; // 한 교사에서 하나씩
+    }
+  }
+
+  const table = [...stats]
+    .sort((a, b) => b.total - a.total)
+    .map((s) => `${s.name}: 감독 ${s.count}회, 이번 ${s.load}점, 학년도 누적 ${s.total}점, 연속 ${s.consecutive}쌍, 하루 최다 ${s.maxDay}회`)
+    .join('\n');
+  const facts = `교사 ${stats.length}명, 학년도 누적 평균 ${round(mean)}점, 표준편차 ${round(sd)}점
+${table}
+조건을 지키는 옮기기 제안:
+${moves.map((m, i) => `${i + 1}. ${m.label} (${m.effect})`).join('\n') || '없음'}`;
+
+  const text = fakeMode()
+    ? `(에뮬레이터 가짜 응답) 학년도 누적 평균 ${round(mean)}점, 편차 ${round(sd)}점입니다. 옮기기 제안 ${moves.length}건을 확인하세요.`
+    : ((await claude({
+        system:
+          '당신은 학교 시험 감독 배정의 공정성을 점검하는 교무 도우미입니다. 주어진 수치만 근거로, 관리자(교감·교무부장)가 바로 이해하도록 한국어로 씁니다. 마크다운 제목·굵은 글씨 없이 짧은 문단과 "- " 목록만 쓰고 10~15줄 안으로 씁니다.',
+        content: [
+          {
+            type: 'text',
+            text: `${facts}\n\n공정성 점검 리포트를 써 주세요: 1) 전체 평가(편차가 큰지), 2) 부담이 몰린 교사와 적은 교사, 3) 연속·하루 3회 이상 같은 피로 위험, 4) 위 옮기기 제안을 적용하면 좋아지는 점. 제안에 없는 교체를 지어내지 마세요.`,
+          },
+        ],
+        maxTokens: 1500,
+      })) as string);
+  return { text, moves, mean: round(mean), sd: round(sd), names: Object.fromEntries(name) };
+});

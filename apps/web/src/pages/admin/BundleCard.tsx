@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import {
   BUNDLE_SHEETS,
+  SLOT_FIELDS,
+  TEACHER_FIELDS,
   analyzeBundle,
   buildSampleSchool,
   isSetupEditable,
@@ -21,7 +23,7 @@ import { RosterImportDialog, rememberTerm, type RosterKind } from '@/components/
 import { useCollection } from '@/lib/data';
 import { Readiness } from './Readiness';
 import { bundleSheets, replacePreview, saveBundle, type SaveMode } from '@/lib/bundle';
-import { errorMessage } from '@/lib/firebase';
+import { callAiExtract, errorMessage, type AiSlotRow, type AiTeacherRow } from '@/lib/firebase';
 import { termWhere, type ExamSession } from '@/lib/sessions';
 import { downloadWorkbook, readWorkbook, type SheetData } from '@/lib/xlsx';
 
@@ -42,8 +44,18 @@ const SHEET_OF: Record<BundleKey, string> = {
   timetable: '교사별 시간표',
 };
 
-function BundleImportDialog({ session, editable, teachers, rooms, slots, timetable, onClose }: Props & { onClose: () => void }) {
-  const [sheets, setSheets] = useState<SheetData[] | null>(null);
+function BundleImportDialog({
+  session,
+  editable,
+  teachers,
+  rooms,
+  slots,
+  timetable,
+  onClose,
+  initialSheets,
+  notes,
+}: Props & { onClose: () => void; /** AI가 문서에서 읽은 자료 (파일 선택 없이 바로 검증) */ initialSheets?: SheetData[]; notes?: string[] }) {
+  const [sheets, setSheets] = useState<SheetData[] | null>(initialSheets ?? null);
   const [autoPlace, setAutoPlace] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,7 +113,7 @@ function BundleImportDialog({ session, editable, teachers, rooms, slots, timetab
   };
 
   return (
-    <Modal title="기초 자료 통합 양식 업로드" onClose={onClose} wide>
+    <Modal title={initialSheets ? 'AI가 읽은 자료 확인·저장' : '기초 자료 통합 양식 업로드'} onClose={onClose} wide>
       {done ? (
         <div className="grid gap-4">
           <Alert tone="info">
@@ -116,6 +128,19 @@ function BundleImportDialog({ session, editable, teachers, rooms, slots, timetab
         </div>
       ) : (
         <div className="grid gap-5">
+          {initialSheets ? (
+            <Alert tone="info">
+              <p className="font-semibold">AI가 문서에서 읽은 내용입니다. 아래 검증 결과를 확인하고 저장하세요.</p>
+              {notes && notes.length > 0 && (
+                <ul className="mt-1 list-disc pl-5 text-sm">
+                  {notes.map((n) => (
+                    <li key={n}>{n}</li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-1 text-sm">잘못 읽은 부분은 저장한 뒤 기본 설정·교사 관리에서 고치거나, 되돌리기로 취소할 수 있습니다.</p>
+            </Alert>
+          ) : (
           <label className="flex flex-col gap-1.5">
             <span className="font-semibold">통합 양식 파일 선택 (.xlsx)</span>
             <input
@@ -125,6 +150,7 @@ function BundleImportDialog({ session, editable, teachers, rooms, slots, timetab
               onChange={(e) => void onFile(e.target.files?.[0])}
             />
           </label>
+          )}
 
           {analysis && (
             <section className="grid gap-3">
@@ -267,6 +293,140 @@ function RosterLoadCard({ session, teachers, rooms }: { session: ExamSession; te
   );
 }
 
+const MAX_BYTES = 7 * 1024 * 1024;
+const TYPE_OF: Record<string, string> = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', txt: 'text/plain', csv: 'text/csv' };
+
+const toBase64 = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1] ?? '');
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+
+/** AI가 읽은 표 → 통합 양식 시트 (기존 검증·저장 과정을 그대로 쓴다) */
+function toSheets(slots: AiSlotRow[], teachers: AiTeacherRow[]): SheetData[] {
+  const sheets: SheetData[] = [];
+  if (slots.length) {
+    sheets.push({
+      name: BUNDLE_SHEETS.slots,
+      rows: [SLOT_FIELDS.map((f) => f.label), ...slots.map((s) => [s.date, s.period, s.startTime ?? null, s.endTime ?? null, s.grade, s.subject, s.type])],
+    });
+  }
+  if (teachers.length) {
+    const labels = TEACHER_FIELDS.map((f) => f.label);
+    const at = (key: string) => TEACHER_FIELDS.findIndex((f) => f.key === key);
+    sheets.push({
+      name: BUNDLE_SHEETS.teachers,
+      rows: [
+        labels,
+        ...teachers.map((t) => {
+          const row: (string | number | null)[] = labels.map(() => null);
+          row[at('name')] = t.name;
+          row[at('email')] = t.email ?? null;
+          row[at('subject')] = t.subject ?? null;
+          row[at('homeroomGrade')] = t.homeroomGrade ?? null;
+          row[at('homeroomClass')] = t.homeroomClass ?? null;
+          return row;
+        }),
+      ],
+    });
+  }
+  return sheets;
+}
+
+/** 학교 문서(PDF·사진·글)를 AI로 읽어 시험 일정·교사 명단 자료로 만든다 */
+function AiExtractDialog({ year, onClose, onRead }: { year: number; onClose: () => void; onRead: (r: { sheets: SheetData[]; notes: string[] }) => void }) {
+  const [kind, setKind] = useState<'both' | 'schedule' | 'teachers'>('both');
+  const [files, setFiles] = useState<File[]>([]);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const total = files.reduce((s, f) => s + f.size, 0);
+
+  const read = async () => {
+    setError(null);
+    const bad = files.find((f) => !TYPE_OF[f.name.split('.').pop()?.toLowerCase() ?? '']);
+    if (bad) return setError(`"${bad.name}"은(는) 읽을 수 없는 형식입니다. PDF·사진(PNG·JPG)·글(TXT·CSV)로 올려 주세요. 한글(HWP)은 PDF로 저장해서 올리세요.`);
+    if (total > MAX_BYTES) return setError('파일이 너무 큽니다 (모두 합쳐 7MB까지). 필요한 쪽만 PDF로 저장하거나 사진 크기를 줄여 주세요.');
+    if (!files.length && !text.trim()) return setError('파일을 고르거나 내용을 붙여 넣어 주세요.');
+    setBusy(true);
+    try {
+      const payload = await Promise.all(
+        files.map(async (f) => ({ name: f.name, mediaType: TYPE_OF[f.name.split('.').pop()!.toLowerCase()]!, data: await toBase64(f) })),
+      );
+      const { data } = await callAiExtract({ kind, files: payload, text: text.trim() || undefined, year });
+      if (!data.slots.length && !data.teachers.length) {
+        setError(`읽어 낸 자료가 없습니다.${data.notes.length ? ` (${data.notes.join(' / ')})` : ''}`);
+        setBusy(false);
+        return;
+      }
+      onRead({ sheets: toSheets(data.slots, data.teachers), notes: [`시험 ${data.slots.length}건 · 교사 ${data.teachers.length}명을 읽었습니다.`, ...data.notes] });
+    } catch (e) {
+      setError(errorMessage(e));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title="학교 문서에서 AI로 읽기" onClose={() => !busy && onClose()} wide>
+      <div className="grid gap-4">
+        <p className="text-muted">
+          교육계획서의 시험 시간표, 업무 분장표·담임 배정표 같은 문서를 올리면 AI가 시험 일정과 교사 명단(담당 교과·담임반)을 읽어 통합 양식처럼 채워 줍니다. 저장 전에
+          검증 결과를 확인할 수 있습니다.
+        </p>
+        <fieldset>
+          <legend className="mb-2 font-semibold">무엇을 읽을까요?</legend>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ['both', '시험 일정 + 교사 명단'],
+                ['schedule', '시험 일정만'],
+                ['teachers', '교사 명단만'],
+              ] as const
+            ).map(([k, l]) => (
+              <Button key={k} variant={kind === k ? 'primary' : 'secondary'} aria-pressed={kind === k} onClick={() => setKind(k)}>
+                {l}
+              </Button>
+            ))}
+          </div>
+        </fieldset>
+        <label className="flex flex-col gap-1.5">
+          <span className="font-semibold">문서 파일 (PDF·사진, 여러 개 가능)</span>
+          <input
+            type="file"
+            multiple
+            accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.csv"
+            className="min-h-12 rounded-xl border border-dashed border-line bg-bg p-3 file:mr-3 file:min-h-10 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:font-semibold file:text-white"
+            onChange={(e) => setFiles([...(e.target.files ?? [])].slice(0, 4))}
+          />
+          <span className="text-sm text-muted">한글(HWP) 파일은 "PDF로 저장"한 뒤 올리세요. 최대 4개, 합쳐서 7MB까지{files.length ? ` · 지금 ${(total / 1024 / 1024).toFixed(1)}MB` : ''}.</span>
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="font-semibold">또는 내용 붙여 넣기</span>
+          <textarea
+            aria-label="문서 내용 붙여 넣기"
+            rows={4}
+            className="rounded-xl border border-line p-3"
+            placeholder="예: 10월 12일(월) 1교시 1학년 국어 2학년 수학 …  /  김민준 국어 1-1 담임 …"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        </label>
+        {error && <Alert>{error}</Alert>}
+        <div className="flex gap-2">
+          <Button onClick={() => void read()} disabled={busy}>
+            {busy ? 'AI가 읽는 중… (30초~2분)' : 'AI로 읽기'}
+          </Button>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
+            취소
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 /** 필요한 자료를 직접 불러오는 통합 양식 카드 (개요 탭용) */
 export function BundleSection({ session }: { session: ExamSession }) {
   const teachers = useCollection<TeacherDoc>('teachers', termWhere(session));
@@ -295,6 +455,8 @@ export function BundleSection({ session }: { session: ExamSession }) {
 
 export function BundleCard(props: Props) {
   const [importing, setImporting] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiResult, setAiResult] = useState<{ sheets: SheetData[]; notes: string[] } | null>(null);
   const { session, teachers, rooms, slots, timetable } = props;
 
   const download = () =>
@@ -331,6 +493,9 @@ export function BundleCard(props: Props) {
         <Button variant="secondary" onClick={() => setImporting(true)}>
           통합 양식 업로드
         </Button>
+        <Button variant="secondary" onClick={() => setAiOpen(true)} disabled={!props.editable}>
+          📄 학교 문서에서 AI로 읽기
+        </Button>
         <DownloadButton onDownload={downloadSample}>샘플 양식 (교사 25명)</DownloadButton>
       </div>
       <p className="mt-2 text-sm text-muted">
@@ -338,6 +503,17 @@ export function BundleCard(props: Props) {
         쓰세요. 그대로 올리면 가상 교사 25명이 실제로 등록됩니다.
       </p>
       {importing && <BundleImportDialog {...props} onClose={() => setImporting(false)} />}
+      {aiOpen && (
+        <AiExtractDialog
+          year={session.year}
+          onClose={() => setAiOpen(false)}
+          onRead={(r) => {
+            setAiOpen(false);
+            setAiResult(r);
+          }}
+        />
+      )}
+      {aiResult && <BundleImportDialog {...props} initialSheets={aiResult.sheets} notes={aiResult.notes} onClose={() => setAiResult(null)} />}
     </Card>
   );
 }

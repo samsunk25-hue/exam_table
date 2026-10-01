@@ -23,3 +23,5 @@ hero-source.png
 
 # 원본 영상 (웹에는 apps/web/public/login.mp4만 올린다)
 /*.mp4
+# AI 키 (로컬 에뮬레이터용, 커밋 금지)
+.secret.local

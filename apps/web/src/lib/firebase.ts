@@ -75,6 +75,32 @@ export const callActSwapRequest = httpsCallable<
   { sessionId: string; requestId: string; action: 'accept' | 'decline' | 'cancel' | 'approve' | 'reject'; note?: string },
   { status: string }
 >(functions, 'actSwapRequest');
+// AI 기능 (Claude)
+export interface AiSlotRow {
+  date: string;
+  period: number;
+  startTime?: string | null;
+  endTime?: string | null;
+  grade: number;
+  subject: string;
+  type: '시험' | '자습';
+}
+export interface AiTeacherRow {
+  name: string;
+  subject?: string | null;
+  homeroomGrade?: number | null;
+  homeroomClass?: number | null;
+  email?: string | null;
+}
+export const callAiExtract = httpsCallable<
+  { kind: 'both' | 'schedule' | 'teachers'; files: { name: string; mediaType: string; data: string }[]; text?: string; year: number },
+  { slots: AiSlotRow[]; teachers: AiTeacherRow[]; notes: string[] }
+>(functions, 'aiExtract', { timeout: 300_000 });
+export const callAiExplainDuties = httpsCallable<{ sessionId: string; teacherId?: string }, { text: string }>(functions, 'aiExplainDuties', { timeout: 300_000 });
+export const callAiFairnessReport = httpsCallable<
+  { sessionId: string },
+  { text: string; moves: { seatId: string; from: string; to: string; label: string; effect: string }[]; mean: number; sd: number }
+>(functions, 'aiFairnessReport', { timeout: 300_000 });
 export const callAddAdmin = httpsCallable<{ email: string }, { email: string; applied: boolean }>(functions, 'addAdmin');
 export const callRemoveAdmin = httpsCallable<{ email: string }, { email: string }>(functions, 'removeAdmin');
 export const callReviewAccessRequest = httpsCallable<{ uid: string; approve: boolean; note?: string }, { status: string }>(

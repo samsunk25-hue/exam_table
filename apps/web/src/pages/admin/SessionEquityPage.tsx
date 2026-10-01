@@ -4,6 +4,7 @@ import { Alert, Button, Card, DownloadButton, Spinner, Table, Td } from '@/compo
 import { useCollection } from '@/lib/data';
 import { sessionTitle, termWhere } from '@/lib/sessions';
 import { downloadWorkbook } from '@/lib/xlsx';
+import { FairnessReportCard } from '@/components/AiCards';
 import { useCurrentSession } from './SessionPage';
 import { YearTrend } from './YearTrend';
 
@@ -178,6 +179,7 @@ export function SessionEquityPage() {
       </Card>
 
       <YearTrend session={session} teachers={teachers.data} assignments={assignments.data} />
+      <FairnessReportCard sessionId={session.id} canApply={!confirmed && session.status !== 'LOCKED'} />
     </div>
   );
 }

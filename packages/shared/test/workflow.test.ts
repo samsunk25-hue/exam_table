@@ -11,7 +11,7 @@ describe('워크플로', () => {
   it('확정 이후에는 공개 이전 단계로 돌아갈 수 없다', () => {
     expect(findTransition('CONFIRMED', 'PUBLISHED')).toBeUndefined();
     expect(findTransition('LOCKED', 'DRAFT')).toBeUndefined();
-    expect(findTransition('LOCKED', 'CONFIRMED')?.requiresReason).toBe(true);
+    expect(findTransition('LOCKED', 'CONFIRMED')?.requiresReason).toBe(false); // 사유는 모두 선택
   });
 
   it('교사 공개와 기본 데이터 편집 가능 단계', () => {

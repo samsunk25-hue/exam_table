@@ -1,7 +1,7 @@
 // AI 기능 (Claude API): 학교 문서에서 시험 일정·교사 명단 읽기, 배정 이유 설명, 글로 쓴 고려사항 → 배정 규칙.
 // API 키는 관리자마다 자기 것을 넣는다 → aiKeys/{uid} (보안 규칙상 함수만 읽고 쓴다. 코드·저장소·배포 파일에 없음).
-// 교사용 설명은 그 시험 프로젝트를 만든 관리자의 키를 쓴다. 에뮬레이터에서 키가 없으면 가짜 응답으로 흐름만 점검한다.
-import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
+// AI 기능은 모두 관리자만 쓴다. 에뮬레이터에서 키가 없으면 가짜 응답으로 흐름만 점검한다.
+import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { DEFAULT_ROLE_WEIGHTS, buildEngineInput, buildSeats, type Seat } from '@sim/engine';
 import { SEAT_ROLE_LABEL, type SessionStatus } from '@sim/shared';
 import { db, requireAdmin, serverTimestamp } from './common';
@@ -53,14 +53,14 @@ interface Tool {
 }
 
 /** 키가 없을 때: 에뮬레이터면 가짜 응답(null), 아니면 안내 오류 */
-function needKey(key: string | null, forTeacher = false): string | null {
+function needKey(key: string | null): string | null {
   // 에뮬레이터 점검용 가짜 키는 실제로 부르지 않는다
   if (key && isEmulator() && key.startsWith('sk-ant-test-')) return null;
   if (key) return key;
   if (isEmulator()) return null;
   throw new HttpsError(
     'failed-precondition',
-    forTeacher ? '관리자가 AI 키를 등록하지 않아 설명을 볼 수 없습니다. 관리자에게 문의하세요.' : '내 AI 키가 없습니다. 관리자 관리 > 내 AI 키에서 Claude API 키를 등록하세요.',
+    '내 AI 키가 없습니다. 관리자 관리 > 내 AI 키에서 Claude API 키를 등록하세요.',
   );
 }
 
@@ -256,15 +256,10 @@ function fakeExtract(y: number): ExtractResult {
 const round = (n: number) => Math.round(n * 10) / 10;
 const seatLabel = (s: Seat) => `${Number(s.date.slice(5, 7))}/${Number(s.date.slice(8, 10))} ${s.period}교시 ${s.roomName} ${SEAT_ROLE_LABEL[s.role]}`;
 
-async function loadSession(sessionId: string, req: CallableRequest, admin: boolean) {
+/** 관리자용: 세션·배정·감독 자리 */
+async function loadSession(sessionId: string) {
   const snap = await db().doc(`sessions/${sessionId}`).get();
   if (!snap.exists) throw new HttpsError('not-found', '시험 프로젝트를 찾을 수 없습니다.');
-  if (!admin) {
-    const t = req.auth!.token;
-    if (snap.get('schoolName') !== t.school || snap.get('year') !== t.year || snap.get('semester') !== t.semester) {
-      throw new HttpsError('permission-denied', '다른 학교·학기 시험입니다.');
-    }
-  }
   const { data, current } = await loadData(sessionId, true);
   const input = buildEngineInput(data);
   const seats = new Map(buildSeats(input, DEFAULT_ROLE_WEIGHTS).map((s) => [s.id, s]));
@@ -288,18 +283,14 @@ function loadStats(L: Awaited<ReturnType<typeof loadSession>>) {
     });
 }
 
-/** 교사: "왜 이렇게 배정됐나요?" — 본인 감독과 점수 이유를 쉬운 말로 (다른 교사 정보는 이름 없이 통계만) */
+/** 관리자: 교사 한 명의 "왜 이렇게 배정됐나요?" — 감독과 점수 이유를 쉬운 말로 (다른 교사 정보는 이름 없이 통계만). 교사 화면에서는 쓰지 않는다 */
 export const aiExplainDuties = onCall(AI_OPTIONS, async (req) => {
-  if (!req.auth) throw new HttpsError('unauthenticated', '로그인이 필요합니다.');
-  const admin = req.auth.token.role === 'ADMIN';
-  const { sessionId, teacherId: asked } = (req.data ?? {}) as { sessionId?: unknown; teacherId?: unknown };
-  const teacherId = admin && typeof asked === 'string' ? asked : (req.auth.token.teacherId as string | undefined);
-  if (typeof sessionId !== 'string' || !teacherId) throw new HttpsError('invalid-argument', '시험과 교사를 확인해 주세요.');
-  const L = await loadSession(sessionId, req, admin);
-  if (!admin && !['PUBLISHED', 'SWAP', 'CONFIRMED', 'LOCKED'].includes(L.status)) {
-    throw new HttpsError('failed-precondition', '시간표가 공개된 뒤에 설명을 볼 수 있습니다.');
-  }
-  const key = needKey((await keyOf(L.snap.get('createdBy') as string | undefined)) ?? (await keyOf(L.snap.get('updatedBy') as string | undefined)), !admin);
+  const uid = requireAdmin(req);
+  const { sessionId, teacherId } = (req.data ?? {}) as { sessionId?: unknown; teacherId?: unknown };
+  if (typeof sessionId !== 'string' || typeof teacherId !== 'string' || !teacherId) throw new HttpsError('invalid-argument', '시험과 교사를 확인해 주세요.');
+  const L = await loadSession(sessionId);
+  // 내 키가 없으면 시험을 만든 관리자의 키
+  const key = needKey((await keyOf(uid)) ?? (await keyOf(L.snap.get('createdBy') as string | undefined)) ?? (await keyOf(L.snap.get('updatedBy') as string | undefined)));
   const me = L.data.teachers.find((t) => t.id === teacherId);
   if (!me) throw new HttpsError('not-found', '교사 명단에 없습니다.');
   const stats = loadStats(L);
@@ -391,7 +382,7 @@ export const aiRules = onCall(AI_OPTIONS, async (req) => {
   const { sessionId, text } = (req.data ?? {}) as { sessionId?: unknown; text?: unknown };
   if (typeof sessionId !== 'string' || typeof text !== 'string' || !text.trim()) throw new HttpsError('invalid-argument', '고려사항을 적어 주세요.');
   if (text.length > 4000) throw new HttpsError('invalid-argument', '4000자 이내로 적어 주세요.');
-  const L = await loadSession(sessionId, req, true);
+  const L = await loadSession(sessionId);
   const teachers = L.data.teachers.filter((t) => t.active);
   const dates = [...new Set(L.data.slots.map((s) => s.date))].sort();
   const subjects = [...new Set(L.data.slots.map((s) => s.subject))];

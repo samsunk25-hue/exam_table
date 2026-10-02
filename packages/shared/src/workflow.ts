@@ -48,11 +48,11 @@ export const TRANSITIONS: Record<SessionStatus, Transition[]> = {
   PUBLISHED: [
     { to: 'SWAP', label: '교환 기간 시작', requiresReason: false },
     { to: 'CONFIRMED', label: '최종 확정', requiresReason: false },
-    { to: 'REVIEW', label: '공개 취소', requiresReason: true },
+    { to: 'REVIEW', label: '공개 취소', requiresReason: false },
   ],
   SWAP: [{ to: 'CONFIRMED', label: '최종 확정', requiresReason: false }],
   CONFIRMED: [{ to: 'LOCKED', label: '변경 잠금', requiresReason: false }],
-  LOCKED: [{ to: 'CONFIRMED', label: '잠금 해제', requiresReason: true }],
+  LOCKED: [{ to: 'CONFIRMED', label: '잠금 해제', requiresReason: false }],
 };
 
 export function findTransition(from: SessionStatus, to: SessionStatus): Transition | undefined {

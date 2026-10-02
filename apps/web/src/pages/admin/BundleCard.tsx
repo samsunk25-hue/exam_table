@@ -146,7 +146,7 @@ function BundleImportDialog({
             <input
               type="file"
               accept=".xlsx,.xls"
-              className="min-h-12 rounded-xl border border-dashed border-line bg-bg p-3 file:mr-3 file:min-h-10 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:font-semibold file:text-white"
+              className="min-h-12 rounded-xl border border-dashed border-line bg-bg p-3 file:mr-3 file:min-h-10 file:cursor-pointer file:rounded-lg file:border-0 file:bg-primary file:px-4 file:font-semibold file:text-white file:transition-colors hover:border-primary hover:bg-primary-soft hover:file:bg-primary-strong active:file:scale-[0.98] cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-primary"
               onChange={(e) => void onFile(e.target.files?.[0])}
             />
           </label>
@@ -427,7 +427,7 @@ function AiExtractDialog({ year, onClose, onRead }: { year: number; onClose: () 
             type="file"
             multiple
             accept=".xlsx,.xls,.pdf,.png,.jpg,.jpeg,.webp,.txt,.csv"
-            className="min-h-12 rounded-xl border border-dashed border-line bg-bg p-3 file:mr-3 file:min-h-10 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:font-semibold file:text-white"
+            className="min-h-12 rounded-xl border border-dashed border-line bg-bg p-3 file:mr-3 file:min-h-10 file:cursor-pointer file:rounded-lg file:border-0 file:bg-primary file:px-4 file:font-semibold file:text-white file:transition-colors hover:border-primary hover:bg-primary-soft hover:file:bg-primary-strong active:file:scale-[0.98] cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-primary"
             onChange={(e) => setFiles([...(e.target.files ?? [])].slice(0, 4))}
           />
           <span className="text-sm text-muted">한글(HWP) 파일은 "PDF로 저장"한 뒤 올리세요. 최대 4개, 합쳐서 7MB까지{files.length ? ` · 지금 ${(total / 1024 / 1024).toFixed(1)}MB` : ''}.</span>

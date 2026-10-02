@@ -15,7 +15,7 @@ interface Change {
 /**
  * 수동 배정 변경·연쇄 교환 적용. 이 변경으로 새 하드 조건 위반이 생기지 않을 때만 저장한다
  * (바꾸기 전부터 있던 위반, 예: 배정 뒤에 승인된 불가시간은 막지 않는다 — 기초 자료 점검·편집 화면에서 따로 보인다).
- * 변경 잠금(LOCKED) 중에는 막고, 최종 확정(CONFIRMED) 이후에는 사유가 필요하다.
+ * 변경 잠금(LOCKED) 중에는 막는다. 사유는 선택(적으면 변경 이력에 남는다).
  * 지금 감독 자리에 없는 배정(예: 자습 교시를 1명으로 바꾸기 전의 두 번째 자습감독)은 검사에서 빼고 이번 저장 때 함께 지운다.
  */
 export const applyAssignmentChanges = onCall({ timeoutSeconds: 60 }, async (req) => {
@@ -36,7 +36,6 @@ export const applyAssignmentChanges = onCall({ timeoutSeconds: 60 }, async (req)
   if (!sessionSnap.exists) throw new HttpsError('not-found', '시험 프로젝트를 찾을 수 없습니다.');
   const status = sessionSnap.get('status') as SessionStatus;
   if (status === 'LOCKED') throw new HttpsError('failed-precondition', '변경 잠금 상태입니다. 개요에서 잠금을 해제한 뒤 수정하세요.');
-  if (status === 'CONFIRMED' && !reasonText) throw new HttpsError('invalid-argument', '최종 확정 이후 변경에는 사유가 필요합니다.');
 
   const { data, current } = await loadData(sessionId, true);
   const input = buildEngineInput(data);

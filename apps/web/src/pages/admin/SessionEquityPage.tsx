@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { DEFAULT_CLASS_WEIGHT, classLoadOf, classTimes } from '@sim/engine';
 import { SEAT_ROLE_LABEL, type AssignmentDoc, type BaseTimetableDoc, type SeatRole, type SlotDoc } from '@sim/shared';
 import { Alert, Button, Card, DownloadButton, Spinner, Table, Td, CardTitle } from '@/components/ui';
+import { ExplainDutiesCard } from '@/components/AiCards';
 import { useCollection } from '@/lib/data';
 import { sessionTitle, useSessionTeachers } from '@/lib/sessions';
 import { downloadWorkbook } from '@/lib/xlsx';
@@ -193,6 +194,12 @@ export function SessionEquityPage() {
       </Card>
 
       <YearTrend session={session} teachers={teachers.data} assignments={assignments.data} />
+      {assignments.data.length > 0 && (
+        <ExplainDutiesCard
+          sessionId={session.id}
+          teachers={[...teachers.data].filter((t) => assignments.data.some((a) => a.teacherId === t.id)).sort((a, b) => a.name.localeCompare(b.name, 'ko'))}
+        />
+      )}
     </div>
   );
 }

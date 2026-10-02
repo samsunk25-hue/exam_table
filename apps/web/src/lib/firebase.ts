@@ -102,7 +102,7 @@ export const callAiExtract = httpsCallable<
   { parts: AiPart[]; files: { name: string; mediaType: string; data: string }[]; text?: string; year: number },
   { slots: AiSlotRow[]; teachers: AiTeacherRow[]; timetable: AiTimetableRow[]; notes: string[] }
 >(functions, 'aiExtract', { timeout: 300_000 });
-export const callAiExplainDuties = httpsCallable<{ sessionId: string; teacherId?: string }, { text: string }>(functions, 'aiExplainDuties', { timeout: 300_000 });
+export const callAiExplainDuties = httpsCallable<{ sessionId: string; teacherId: string }, { text: string }>(functions, 'aiExplainDuties', { timeout: 300_000 });
 export const callAiRules = httpsCallable<{ sessionId: string; text: string }, { rules: import('@sim/shared').ConstraintDoc[]; notes: string[] }>(functions, 'aiRules', {
   timeout: 300_000,
 });

@@ -4,7 +4,6 @@ import { isPublished, isSetupEditable, type AssignmentDoc, type RoomDoc, type Sl
 import { useAuth } from '@/auth/AuthProvider';
 import { FullTimetable, PersonalTimetable } from '@/components/TimetableViews';
 import { Alert, Button, Card, DownloadButton, PageTitle, Spinner } from '@/components/ui';
-import { ExplainDutiesCard } from '@/components/AiCards';
 import { TeacherSwapPanel } from '@/components/SwapRequests';
 import { useCollection } from '@/lib/data';
 import { sessionTitle, useMySessions, type ExamSession, termWhere, useSessionTeachers } from '@/lib/sessions';
@@ -98,8 +97,6 @@ function PublishedSchedule({ session, teacherId }: { session: ExamSession; teach
           </>
         )}
       </Card>
-
-      <ExplainDutiesCard sessionId={sid} />
 
       <TeacherSwapPanel
         sid={sid}

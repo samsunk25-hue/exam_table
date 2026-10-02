@@ -85,7 +85,6 @@ function SeatDialog({
 
   /** 이 자리는 감독을 두지 않는다: 배정이 있으면 비우고, 감독 없음 목록에 넣는다 */
   const markNone = async () => {
-    if (needReason && !reason.trim()) return toast('최종 확정 이후 변경에는 사유를 입력해야 합니다.', 'alert');
     setBusy(true);
     try {
       if (current) await callApplyChanges({ sessionId: session.id, changes: [{ seatId: seat.id, teacherId: null }], reason: reason.trim() || undefined, label: '감독 없음' });
@@ -99,7 +98,6 @@ function SeatDialog({
   };
 
   const save = async (changes: { seatId: string; teacherId: string | null }[], label: string, done: string) => {
-    if (needReason && !reason.trim()) return toast('최종 확정 이후 변경에는 사유를 입력해야 합니다.', 'alert');
     setBusy(true);
     try {
       await callApplyChanges({ sessionId: session.id, changes, reason: reason.trim() || undefined, label });
@@ -161,7 +159,7 @@ function SeatDialog({
 
         {needReason && (
           <label className="flex flex-col gap-1.5">
-            <span className="font-semibold">변경 사유 (최종 확정 이후 필수, 변경 이력에 남습니다)</span>
+            <span className="font-semibold">변경 사유 (선택, 변경 이력에 남습니다)</span>
             <input className="min-h-12 rounded-xl border border-line px-4" value={reason} onChange={(e) => setReason(e.target.value)} />
           </label>
         )}

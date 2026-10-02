@@ -96,9 +96,10 @@ async function step(label, reason) {
   if (reason) await page.locator('textarea').fill(reason);
   await page.getByRole('button', { name: '확인', exact: true }).click();
 }
+// 단계 되돌리기 버튼(예: 공개 취소)이 있는 단계에서는 "이전 단계로"를 숨기므로 작업 기록에서 마지막 단계 변경을 되돌린다
 async function prevStep() {
-  await go(page, `/admin/sessions/${SID}`);
-  await page.getByRole('button', { name: '↶ 이전 단계로 되돌리기' }).click();
+  await go(page, `/admin/sessions/${SID}/history`);
+  await page.getByRole('button', { name: /^단계 변경: 교사에게 공개.* 전으로 되돌리기$/ }).first().click();
   const c = page.getByRole('dialog', { name: '작업 되돌리기' });
   await c.getByRole('button', { name: '되돌리기', exact: true }).click();
   await c.waitFor({ state: 'detached', timeout: 30000 });
@@ -107,6 +108,8 @@ async function prevStep() {
 await db.doc(`sessions/${SID}`).set({ status: 'REVIEW' }, { merge: true });
 await step('교사에게 공개');
 await until(async () => (await status()) === 'PUBLISHED');
+await go(page, `/admin/sessions/${SID}`);
+check('공개 단계: 되돌리기 버튼은 "공개 취소" 하나 (이전 단계로 숨김)', (await page.getByRole('button', { name: /이전 단계로 되돌리기/ }).count()) === 0 && (await page.getByRole('button', { name: '공개 취소' }).count()) === 1);
 await prevStep();
 check('이전 단계로: 공개 → 검토', await until(async () => (await status()) === 'REVIEW'), await status());
 

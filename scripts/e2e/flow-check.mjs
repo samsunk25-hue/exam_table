@@ -99,16 +99,14 @@ const ledger = await db.collection('loadLedger').where('sessionId', '==', sid).g
 const teacherLoad = (await db.doc(`teachers/${t01}`).get()).get('cumulativeLoad');
 check('6. 최종 확정 → 누적 업무점수 적립', ledger.size > 20 && teacherLoad > 0, `적립 ${ledger.size}명, 김민준 ${teacherLoad}점`);
 
-// 7. 확정 후 변경은 사유 필수 → 사유 입력 후 변경
+// 7. 확정 후 변경: 사유는 선택 (적으면 변경 이력에 남는다)
 await go(A.page, `/admin/sessions/${sid}/editor`);
 await A.page.locator('tr', { hasText: '1-1' }).first().locator('button').first().click();
 const ed = A.page.getByRole('dialog', { name: '감독 배정 편집' });
-await ed.getByRole('button', { name: '배정', exact: true }).first().click();
-await A.page.getByRole('status').filter({ hasText: '사유를 입력해야' }).waitFor();
 await ed.locator('input').first().fill('출장 변경');
 await ed.getByRole('button', { name: '배정', exact: true }).first().click();
 await A.page.getByRole('status').filter({ hasText: '바꿨습니다' }).waitFor({ timeout: 30000 });
-check('7. 확정 후 변경: 사유 없으면 막고, 사유 입력 후 저장', true);
+check('7. 확정 후 변경: 사유 입력 후 저장', true);
 
 // 8. 변경 잠금 → 편집 불가 → 잠금 해제(사유)
 await step(A.page, '변경 잠금', 'LOCKED');

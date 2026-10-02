@@ -284,9 +284,10 @@ export function SessionOverview() {
             // 앞으로 가는 단계(공개·확정)는 위 "다음 할 일" 버튼 한 곳에서만. 여기는 되돌리기·잠금만
             <TransitionButton key={t.to} session={session} t={t} />
           ))}
-          <PrevStepButton sessionId={session.id} />
+          {/* 단계 되돌리기 버튼이 없을 때(예: 최종 확정)만 마지막 단계 변경 취소를 보인다 */}
+          {!TRANSITIONS[session.status].some((t) => !isForward(session.status, t.to) && t.to !== 'LOCKED') && <PrevStepButton sessionId={session.id} />}
           <Link to="history" className="inline-flex min-h-12 items-center px-3 font-semibold text-primary-strong underline-offset-4 hover:underline">
-            작업 기록·되돌리기 →
+            작업 기록 (하나씩 되돌리기) →
           </Link>
         </div>
       </Card>

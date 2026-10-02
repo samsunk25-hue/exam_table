@@ -1,6 +1,6 @@
 // AI 기능 점검 (에뮬레이터: 키가 없으면 가짜 응답) — swap-check 이후 실행 (E2E_SWAP 공개 상태 필요)
 // 1) 문서에서 AI로 읽기 → 통합 양식 검증 창 → 저장 → 시험 일정·교사(담임)·기초시간표 저장
-// 2) 교사 화면 "왜 이렇게 배정됐나요?"
+// 2) 관리자 업무 점수 화면 "교사별 배정 이유", 교사 화면에는 없음
 import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { go, openApp } from './session.mjs';
@@ -65,14 +65,20 @@ await review.getByRole('button', { name: '닫기' }).first().click();
 check('관리자 화면 콘솔 오류 없음', A.errors.length === 0, A.errors.join(' / '));
 await A.browser.close();
 
-// 2. 교사 설명
+// 2. 배정 이유 설명: 관리자만 (업무 점수 화면에서 교사를 골라), 교사 화면에는 없음
+const B = await openApp();
+await go(B.page, '/admin/sessions/E2E_SWAP/equity');
+await B.page.getByLabel('설명할 교사').selectOption({ label: '김국어' });
+await B.page.getByRole('button', { name: 'AI에게 설명 듣기' }).click();
+const ok3 = await B.page.getByText(/김국어 선생님은 이번 시험에서 감독/).waitFor({ timeout: 60000 }).then(() => true).catch(() => false);
+check('관리자: 교사를 골라 배정 이유 설명', ok3);
+await B.page.screenshot({ path: 'scripts/e2e/out/ai-explain.png', fullPage: true });
+check('관리자 화면 콘솔 오류 없음 (설명)', B.errors.length === 0, B.errors.join(' / '));
+await B.browser.close();
 const K = await openApp({ email: 'kim@test.kr' });
 await go(K.page, '/me');
-await K.page.getByRole('button', { name: /교환 점검/ }).click({ timeout: 3000 }).catch(() => {});
-await K.page.getByRole('button', { name: 'AI에게 설명 듣기' }).click();
-const ok3 = await K.page.getByText(/김국어 선생님은 이번 시험에서 감독/).waitFor({ timeout: 60000 }).then(() => true).catch(() => false);
-check('교사: 왜 이렇게 배정됐나요? 설명', ok3);
-await K.page.screenshot({ path: 'scripts/e2e/out/ai-explain.png', fullPage: true });
+await K.page.getByText(/내 감독|감독 시간표/).first().waitFor({ timeout: 20000 }).catch(() => {});
+check('교사 화면에는 AI 설명 없음', (await K.page.getByRole('button', { name: 'AI에게 설명 듣기' }).count()) === 0);
 check('교사 화면 콘솔 오류 없음', K.errors.length === 0, K.errors.join(' / '));
 await K.browser.close();
 await db.recursiveDelete(db.doc(`sessions/${SID}`));

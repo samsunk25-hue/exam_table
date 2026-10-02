@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   autoPlacements,
   isSetupEditable,
+  placementExam,
   slotIdOf,
   type RoomDoc,
   type SlotDoc,
@@ -521,6 +522,15 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
                               .map((p) => `${roomName.get(p.roomId) ?? '?'}${p.startTime && p.endTime ? ` ${p.startTime}~${p.endTime}` : ''}`)
                               .join(', ')}${s.rooms.length > 3 ? ' …' : ''})`}
                         </div>
+                        {/* 별도시험장에서 다른 학년·과목 시험 */}
+                        {s.rooms
+                          .filter((p) => p.grade != null || p.subject)
+                          .map((p) => (
+                            <div key={p.roomId} className="text-sm font-semibold text-primary-strong">
+                              {roomName.get(p.roomId) ?? '?'}: {placementExam(s, p).grade}학년 {placementExam(s, p).subject}
+                              {p.startTime && p.endTime ? ` · ${p.startTime}~${p.endTime}` : ''}
+                            </div>
+                          ))}
                       </div>
                       {editable &&
                         (confirmDelete === s.id ? (

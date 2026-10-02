@@ -60,6 +60,8 @@ export interface Group {
   roomType: GroupRoomType;
   /** 별도 시간으로 운영해 함께 차지하는 같은 날 다른 교시 (예: 연장 시간이 다음 교시와 겹침) */
   alsoPeriods?: number[];
+  /** 별도시험장에서 따로 정한 과목 (없으면 그 시험 과목) */
+  subject?: string;
 }
 
 export interface Availability {

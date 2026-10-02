@@ -2,6 +2,7 @@
 import {
   SEAT_ROLE_LABEL,
   examTimes,
+  placementExam,
   type AssignmentDoc,
   type RoomDoc,
   type SlotDoc,
@@ -12,6 +13,24 @@ import { overlappingPeriods, seatTimeRange } from '@sim/engine';
 import { dateLabel } from '@/components/AvailabilityGrid';
 import { toast } from '@/components/Toast';
 import { downloadWorkbook, type OutCell, type OutSheet } from './xlsx';
+
+/**
+ * 표 한 칸(날짜·교시·시험실)의 시험: 과목 (자습은 "자습"). 별도시험장은 학년도 붙이고, 따로 정한 학년·과목이면 그것으로.
+ * 여러 학년이 같이 쓰는 칸은 "·"로 잇는다.
+ */
+export function examAt(slots: TimetableData['slots'], rooms: TimetableData['rooms'], date: string, period: number, roomId: string): string {
+  const separate = rooms.find((r) => r.id === roomId)?.spaceType === 'SEPARATE';
+  return [
+    ...new Set(
+      slots.flatMap((s) => {
+        const p = s.date === date && s.period === period ? s.rooms.find((x) => x.roomId === roomId) : undefined;
+        if (!p) return [];
+        const e = placementExam(s, p);
+        return [separate && s.type !== 'STUDY' ? `${e.grade}학년 ${e.subject}` : e.subject];
+      }),
+    ),
+  ].join('·');
+}
 
 /** 한 칸 안의 감독 순서: 정감독 → 부감독 → 연장 → 복도 → 자습 */
 const ROLE_ORDER = ['CHIEF', 'ASSISTANT', 'EXTENDED', 'HALLWAY', 'STUDY'];
@@ -80,8 +99,9 @@ export function dutiesOf(teacherId: string, d: TimetableData): Duty[] {
         endTime: own?.end ?? s?.endTime ?? null,
         roomName: roomById.get(a.roomId)?.name ?? '',
         role: SEAT_ROLE_LABEL[a.role],
-        grade: s?.grade ?? 0,
-        subject: s?.subject ?? '',
+        // 별도시험장에서 따로 정한 학년·과목
+        grade: s ? placementExam(s, p).grade : 0,
+        subject: s ? placementExam(s, p).subject : '',
       };
     })
     .sort((a, b) => a.date.localeCompare(b.date) || a.period - b.period);
@@ -105,7 +125,7 @@ export function fullTimetableSheets(d: TimetableData): OutSheet[] {
         r.name,
         ...periods.map((p) => {
           // 칸 맨 앞에 그 시험실의 과목
-          const subject = [...new Set(d.slots.filter((s) => s.date === date && s.period === p.period && s.rooms.some((x) => x.roomId === r.id)).map((s) => (s.type === 'STUDY' ? '자습' : s.subject)))].join('·');
+          const subject = examAt(d.slots, d.rooms, date, p.period, r.id);
           const names = d.assignments
             .filter((a) => a.date === date && a.roomId === r.id && shownPeriods(d.slots, a).includes(p.period))
             .sort((a, b) => roleRank(a.role) - roleRank(b.role))

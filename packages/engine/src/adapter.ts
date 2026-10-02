@@ -101,7 +101,9 @@ export function buildEngineInput(d: SessionData): EngineInput {
           id: groupIdOf(s.id, p.roomId),
           slotId: s.id,
           roomId: p.roomId,
-          grade: s.grade,
+          // 별도시험장에서 따로 정한 학년·과목
+          grade: p.grade ?? s.grade,
+          subject: p.subject?.trim() || undefined,
           classNo: p.classNo,
           roomType: p.roomType,
           alsoPeriods: overlappingPeriods(d.slots, s, p),

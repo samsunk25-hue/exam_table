@@ -57,6 +57,10 @@ export function PlacementEditor({ sid, slot, slots, rooms, onClose }: {
     setDraft(next);
   };
 
+  /** 별도시험장 다른 학년·과목 켜기/끄기: 켜면 이 시험의 학년·과목으로 시작 */
+  const setOwnExam = (roomId: string, on: boolean) => patch(roomId, on ? { grade: slot.grade, subject: slot.subject } : { grade: null, subject: null });
+  const gradeOptions = [...new Set([1, 2, 3, ...slots.map((x) => x.grade)])].sort((a, b) => a - b);
+
   /** 특별실 별도 시간 켜기/끄기: 켜면 시험 시간으로 시작 */
   const setOwnTime = (roomId: string, on: boolean) =>
     patch(roomId, on ? { startTime: slot.startTime ?? '', endTime: slot.endTime ?? '' } : { startTime: null, endTime: null });
@@ -65,8 +69,9 @@ export function PlacementEditor({ sid, slot, slots, rooms, onClose }: {
     const conflict = [...draft.keys()].find((id) => usedElsewhere.has(id));
     if (conflict) return setError(`${rooms.find((r) => r.id === conflict)?.name}은(는) 같은 시간 ${usedElsewhere.get(conflict)}에 쓰이고 있습니다.`);
     for (const p of draft.values()) {
-      if (!p.startTime && !p.endTime) continue;
       const name = rooms.find((r) => r.id === p.roomId)?.name;
+      if ((p.grade != null || p.subject != null) && !p.subject?.trim()) return setError(`${name}: 따로 정한 시험 과목을 적으세요.`);
+      if (!p.startTime && !p.endTime) continue;
       if (!p.startTime || !p.endTime) return setError(`${name}: 별도 시간의 시작·종료 시각을 모두 정하세요.`);
       if (p.startTime >= p.endTime) return setError(`${name}: 종료 시각이 시작보다 빠릅니다.`);
       // 별도 시간이 겹치는 다른 교시에 같은 시험실이 쓰이면 안 된다
@@ -100,8 +105,11 @@ export function PlacementEditor({ sid, slot, slots, rooms, onClose }: {
             모두 해제
           </Button>
         </div>
-        <p className="text-sm text-muted">특별실은 "별도 시간"을 켜서 시험 시간과 다르게 정할 수 있습니다 (예: 시간 연장). 다음 교시와 겹치면 그 감독 교사는 다음 교시에 배정되지 않습니다.</p>
-        <Table head={['사용', '시험실', '반', '시험실유형', '응시인원', '운영 시간']}>
+        <p className="text-sm text-muted">
+          별도시험장은 "별도 시간"을 켜서 시험 시간과 다르게 정할 수 있습니다 (예: 시간 연장). 다른 학년·과목 시험을 본다면 "다른 학년·과목"을 켜서 정하세요. 시간표와 감독
+          알림에 그대로 표시됩니다.
+        </p>
+        <Table head={['사용', '시험실', '반', '시험실유형', '응시인원', '운영 시간·시험']}>
           {sortRooms(rooms).map((r) => {
             const p = draft.get(r.id);
             const busyElsewhere = usedElsewhere.get(r.id);
@@ -175,6 +183,41 @@ export function PlacementEditor({ sid, slot, slots, rooms, onClose }: {
                         <div className="grid min-w-64 grid-cols-2 gap-2">
                           <ClockTimePicker label={`${r.name} 시작`} value={p.startTime ?? ''} onChange={(v) => patch(r.id, { startTime: v })} />
                           <ClockTimePicker label={`${r.name} 종료`} value={p.endTime ?? ''} onChange={(v) => patch(r.id, { endTime: v })} />
+                        </div>
+                      )}
+                      {slot.type === 'EXAM' && (
+                        <label className="flex min-h-12 cursor-pointer items-center gap-2">
+                          <input
+                            type="checkbox"
+                            className="size-5 accent-primary"
+                            aria-label={`${r.name} 다른 학년·과목`}
+                            checked={p.grade != null || p.subject != null}
+                            onChange={(e) => setOwnExam(r.id, e.target.checked)}
+                          />
+                          다른 학년·과목
+                        </label>
+                      )}
+                      {slot.type === 'EXAM' && (p.grade != null || p.subject != null) && (
+                        <div className="grid min-w-64 grid-cols-2 gap-2">
+                          <select
+                            aria-label={`${r.name} 학년`}
+                            className="min-h-12 rounded-xl border border-line px-3"
+                            value={p.grade ?? slot.grade}
+                            onChange={(e) => patch(r.id, { grade: Number(e.target.value) })}
+                          >
+                            {gradeOptions.map((g) => (
+                              <option key={g} value={g}>
+                                {g}학년
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            aria-label={`${r.name} 과목`}
+                            placeholder="과목"
+                            className="min-h-12 rounded-xl border border-line px-3"
+                            value={p.subject ?? ''}
+                            onChange={(e) => patch(r.id, { subject: e.target.value })}
+                          />
                         </div>
                       )}
                     </div>

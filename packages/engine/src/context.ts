@@ -159,7 +159,7 @@ export function buildSeats(input: EngineInput, roleWeights: RoleWeights): Seat[]
           periods: period !== undefined ? [period] : [...new Set([slot.period, ...(group.alsoPeriods ?? [])])].sort((a, b) => a - b),
           grade: group.grade,
           classNo: group.classNo,
-          subject: slot.subject,
+          subject: group.subject ?? slot.subject,
           extended: group.roomType === 'EXTENDED',
         });
       }

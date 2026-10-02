@@ -64,6 +64,22 @@ for (let i = 0; i < 30 && !p?.endTime; i++) {
 check('별도 시간 저장 (09:00~10:10)', p?.startTime === '09:00' && p?.endTime === '10:10', JSON.stringify(p));
 check('목록에 별도 시간 표시', await page.getByText(/특별실X 09:00~10:10/).isVisible());
 
+// 같은 특별실을 2학년 과학 시험장으로 (다른 학년·과목)
+dlg = await openPlacement(0);
+await dlg.getByRole('checkbox', { name: '특별실X 다른 학년·과목' }).check();
+await dlg.getByRole('combobox', { name: '특별실X 학년' }).selectOption({ label: '2학년' });
+await dlg.getByRole('textbox', { name: '특별실X 과목' }).fill('과학');
+await page.screenshot({ path: `${OUT}/special-exam.png` });
+await dlg.getByRole('button', { name: /^저장/ }).click();
+await dlg.waitFor({ state: 'detached' });
+p = null;
+for (let i = 0; i < 30 && !p?.subject; i++) {
+  p = ((await db.doc(`sessions/${SID}/slots/2026-10-12_1_1`).get()).get('rooms') ?? []).find((r) => r.roomId === 'SPX');
+  if (!p?.subject) await new Promise((r) => setTimeout(r, 300));
+}
+check('다른 학년·과목 저장 (2학년 과학, 별도 시간 유지)', p?.grade === 2 && p?.subject === '과학' && p?.endTime === '10:10', JSON.stringify(p));
+check('목록에 별도시험장 학년·과목·시간 표시', await page.getByText('특별실X: 2학년 과학 · 09:00~10:10').isVisible());
+
 // 2교시 2학년에 같은 특별실 → 1교시 쪽 별도 시간이 겹치므로 1교시 배치를 다시 저장하면 막힌다
 {
   const r2 = (await db.doc(`sessions/${SID}/slots/2026-10-12_2_2`).get()).get('rooms') ?? [];

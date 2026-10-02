@@ -68,6 +68,12 @@ describe('감독 10분 전 알림', () => {
     expect(r.map((x) => [x.title, x.body])).toEqual([['8분 뒤 감독: 2교시 별도시험장 정감독', '10/12 10:00~10:10 · 1학년 국어 · 별도시험장 정감독']]);
   });
 
+  it('별도시험장에서 다른 학년·과목을 정했으면 알림에 그 학년·과목', () => {
+    const s1 = slot('S1', 1, '09:00', { rooms: [{ roomId: 'SEP', classNo: null, headcount: 1, roomType: 'NORMAL', grade: 2, subject: '과학' }] });
+    const r = planReminders({ sessionId: 'X', now: { date: '2026-10-12', minute: 8 * 60 + 55 }, slots: [s1], assignments: [duty('s', 'S1', 1, 'CHIEF', 'SEP')], rooms });
+    expect(r[0]!.body).toBe('10/12 09:00~09:45 · 2학년 과학 · 별도시험장 정감독');
+  });
+
   it('별도시험장은 그 시험실의 별도 시작 시각으로', () => {
     const s = slot('S1', 1, '09:00', {
       rooms: [{ roomId: 'SEP', classNo: null, headcount: 2, roomType: 'EXTENDED', startTime: '08:40', endTime: '10:10' }],

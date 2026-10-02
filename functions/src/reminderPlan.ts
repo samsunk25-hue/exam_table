@@ -1,6 +1,6 @@
 // 감독 10분 전 알림: 어떤 감독에게 무엇을 보낼지 정한다 (Firestore에 의존하지 않는 순수 함수)
 import { seatTimeRange } from '@sim/engine';
-import { SEAT_ROLE_LABEL, type AssignmentDoc, type RoomDoc, type SlotDoc, type WithId } from '@sim/shared';
+import { SEAT_ROLE_LABEL, placementExam, type AssignmentDoc, type RoomDoc, type SlotDoc, type WithId } from '@sim/shared';
 
 /** 시작 몇 분 전부터 보내는지 */
 export const REMIND_BEFORE_MIN = 10;
@@ -56,7 +56,7 @@ export function planReminders(opts: {
       teacherId: a.teacherId,
       title: `${left}분 뒤 감독: ${a.period}교시 ${room} ${role}`,
       body: [
-        `${md} ${start}${end ? `~${end}` : ''} · ${slot.grade}학년 ${slot.type === 'STUDY' ? '자습' : slot.subject} · ${room} ${role}`,
+        `${md} ${start}${end ? `~${end}` : ''} · ${placementExam(slot, place).grade}학년 ${placementExam(slot, place).subject} · ${room} ${role}`,
         ...(notice ? [`학생 안내: ${notice}`] : []),
       ].join('\n'),
     });

@@ -94,6 +94,14 @@ export interface Placement {
   /** 특별실 등에서 시험 시간과 다르게 운영할 때 (없으면 시험 시간과 같음) */
   startTime?: string | null;
   endTime?: string | null;
+  /** 별도시험장에서 다른 학년·과목 시험을 볼 때 (없으면 그 시험의 학년·과목과 같음) */
+  grade?: number | null;
+  subject?: string | null;
+}
+
+/** 이 배치에서 보는 시험의 학년·과목: 별도시험장은 따로 정할 수 있다 (자습은 "자습") */
+export function placementExam(slot: Pick<SlotDoc, 'grade' | 'subject' | 'type'>, p?: Pick<Placement, 'grade' | 'subject'> | null): { grade: number; subject: string } {
+  return { grade: p?.grade ?? slot.grade, subject: slot.type === 'STUDY' ? '자습' : p?.subject?.trim() || slot.subject };
 }
 
 /** sessions/{sid}/slots/{slotId} — slotId = `${date}_${period}_${grade}` */

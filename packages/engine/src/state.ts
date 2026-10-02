@@ -14,6 +14,13 @@ const EPS = 1e-9;
 /** 별도시험장 우선 교사 가점: 연속·부담·횟수 감점을 다 합쳐도 이기도록 크게 (하드 조건은 그대로 지킨다) */
 export const EXTENDED_PREFERRED = 300;
 
+/** 감독 종류: 별도시험장 자리는 정·부와 따로 센다 */
+export type SeatKind = 'CHIEF' | 'ASSISTANT' | 'HALLWAY' | 'STUDY' | 'SPECIAL';
+export function seatKind(seat: Seat): SeatKind {
+  if (seat.extended || seat.role === 'EXTENDED') return 'SPECIAL';
+  return seat.role as Exclude<SeatKind, 'SPECIAL'>;
+}
+
 export interface LoadBands {
   low: number;
   high: number;
@@ -33,6 +40,8 @@ export class State {
   private readonly sessionLoad = new Map<string, number>();
   /** 교사별 이번 시험 감독 횟수 (자주 쓰므로 따로 센다) */
   private readonly sessionCount = new Map<string, number>();
+  /** 교사별·감독 종류별 이번 시험 횟수 (`${teacherId}|${종류}`) */
+  private readonly kindCount = new Map<string, number>();
 
   constructor(private readonly ctx: Context) {}
 
@@ -56,6 +65,8 @@ export class State {
     }
     this.sessionLoad.set(a.teacherId, (this.sessionLoad.get(a.teacherId) ?? 0) + a.weight);
     this.sessionCount.set(a.teacherId, (this.sessionCount.get(a.teacherId) ?? 0) + 1);
+    const k = `${a.teacherId}|${seatKind(seat)}`;
+    this.kindCount.set(k, (this.kindCount.get(k) ?? 0) + 1);
   }
 
   remove(seatId: string): Assignment | undefined {
@@ -66,6 +77,8 @@ export class State {
     for (const p of seat.periods) this.teacherTimes.get(a.teacherId)?.get(timeKey(seat.date, p))?.delete(seatId);
     this.sessionLoad.set(a.teacherId, (this.sessionLoad.get(a.teacherId) ?? 0) - a.weight);
     this.sessionCount.set(a.teacherId, (this.sessionCount.get(a.teacherId) ?? 0) - 1);
+    const k = `${a.teacherId}|${seatKind(seat)}`;
+    this.kindCount.set(k, (this.kindCount.get(k) ?? 0) - 1);
     return a;
   }
 
@@ -95,6 +108,11 @@ export class State {
   /** 이번 시험 감독 횟수 */
   countOf(teacherId: string): number {
     return this.sessionCount.get(teacherId) ?? 0;
+  }
+
+  /** 이번 시험에서 이 종류(정감독·부감독·복도·자습·특별실) 감독 횟수 */
+  kindCountOf(teacherId: string, kind: SeatKind): number {
+    return this.kindCount.get(`${teacherId}|${kind}`) ?? 0;
   }
 
   assignmentsOf(teacherId: string): Assignment[] {

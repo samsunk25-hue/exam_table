@@ -69,10 +69,17 @@ describe('형평성: 매 시험 감독 수는 비슷하게, 누적 차이는 줄
     expect(result.metrics.countGap).toBeLessThanOrEqual(1);
   });
 
-  it('정감독·부감독 횟수도 교사마다 비슷하게 (차이 2회 이하)', () => {
-    for (const role of ['CHIEF', 'ASSISTANT']) {
-      const v = eligible.map((t) => result.assignments.filter((a) => a.teacherId === t.id && a.role === role).length);
-      expect(Math.max(...v) - Math.min(...v)).toBeLessThanOrEqual(2);
+  it('정감독·부감독·자습·별도시험장 횟수도 교사마다 차이 1회 이하', () => {
+    const sep = (a: { seatId: string }) => a.seatId.includes('SSEP');
+    const kinds: ((a: { role: string; seatId: string }) => boolean)[] = [
+      (a) => a.role === 'CHIEF' && !sep(a),
+      (a) => a.role === 'ASSISTANT' && !sep(a),
+      (a) => a.role === 'STUDY',
+      sep,
+    ];
+    for (const f of kinds) {
+      const v = eligible.map((t) => result.assignments.filter((a) => a.teacherId === t.id && f(a)).length);
+      expect(Math.max(...v) - Math.min(...v)).toBeLessThanOrEqual(1);
     }
   });
 

@@ -13,6 +13,8 @@ const EPS = 1e-9;
 export interface LoadBands {
   low: number;
   high: number;
+  /** 이번 시험 감독 횟수 최솟값 (임시 감독자 제외) */
+  minCount: number;
 }
 
 export interface Scored {
@@ -82,6 +84,11 @@ export class State {
     return teacher.priorLoad + this.sessionLoadOf(teacher.id) + (this.ctx.classLoad.get(teacher.id) ?? 0);
   }
 
+  /** 이번 시험 감독 횟수 */
+  countOf(teacherId: string): number {
+    return this.assignmentsOf(teacherId).length;
+  }
+
   assignmentsOf(teacherId: string): Assignment[] {
     const ids = new Set<string>();
     for (const set of this.teacherTimes.get(teacherId)?.values() ?? []) for (const id of set) ids.add(id);
@@ -129,11 +136,12 @@ export class State {
       .map((t) => this.totalLoadOf(t))
       .sort((a, b) => a - b);
     const n = loads.length;
-    if (n === 0) return { low: 0, high: Infinity };
+    if (n === 0) return { low: 0, high: Infinity, minCount: 0 };
+    const minCount = Math.min(...this.ctx.teachers.filter((t) => isEligibleTeacher(t) && !t.temporary).map((t) => this.countOf(t.id)));
     const { lowLoadRatio, highLoadRatio } = this.ctx.weights;
     const low = loads[Math.max(0, Math.ceil(n * lowLoadRatio) - 1)]!;
     const high = loads[Math.min(n - 1, n - Math.ceil(n * highLoadRatio))]!;
-    return { low, high };
+    return { low, high, minCount };
   }
 
   score(teacher: Teacher, seat: Seat, bands: LoadBands, ignoreSeatId?: string): Scored {
@@ -157,6 +165,11 @@ export class State {
     if (teacher.temporary) add(-80, '임시 감독자');
     else if (load <= bands.low + EPS) add(w.lowLoad, '부담하위');
     else if (load >= bands.high - EPS) add(w.highLoad, '부담상위');
+    // 이번 시험에서 이미 많이 맡은 교사일수록 감점 (지금 맡은 좌석은 빼고 센다)
+    if (!teacher.temporary) {
+      const mine = this.countOf(teacher.id) - (ignoreSeatId && this.bySeat.get(ignoreSeatId)?.teacherId === teacher.id ? 1 : 0);
+      add(w.countBalance * Math.max(0, mine - bands.minCount), '이번 감독 많음');
+    }
 
     if (teacher.homeroom === null || teacher.homeroom.grade !== seat.grade) {
       add(w.notHomeroomGrade, '비담임');

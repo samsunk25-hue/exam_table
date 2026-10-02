@@ -182,7 +182,47 @@ function ejectionChain(ctx: Context, state: State, pinnedIds: Set<string>): void
   }
 }
 
-/** [4단계-2] 형평성 재배치: 부담 최고 교사의 좌석을 부담 낮은 교사에게 이전 (분산이 엄격히 감소할 때만) */
+/**
+ * [4단계-2] 감독 횟수 맞추기: 이번 시험 감독이 가장 적은 교사보다 2회 이상 많은 교사의 좌석을 적은 교사에게 넘긴다.
+ * 받는 교사는 횟수가 적고 학년도 누적이 낮은 교사부터. 하드 조건을 지킬 때만 옮긴다 (임시 감독자는 제외).
+ */
+function countRebalance(ctx: Context, state: State, pinnedIds: Set<string>): void {
+  const eligible = ctx.teachers.filter((t) => isEligibleTeacher(t) && !t.temporary);
+  for (let moves = 0; moves < 2000; moves++) {
+    const counts = eligible.map((t) => ({ t, c: state.countOf(t.id) }));
+    if (!counts.length) return;
+    const min = Math.min(...counts.map((x) => x.c));
+    const givers = counts.filter((x) => x.c >= min + 2).sort((a, b) => b.c - a.c || state.totalLoadOf(b.t) - state.totalLoadOf(a.t));
+    let moved = false;
+    outer: for (const g of givers) {
+      const own = state.assignmentsOf(g.t.id).filter((a) => !pinnedIds.has(a.seatId));
+      const receivers = counts.filter((x) => x.c <= g.c - 2).sort((a, b) => a.c - b.c || state.totalLoadOf(a.t) - state.totalLoadOf(b.t));
+      for (const r of receivers) {
+        const bands = state.loadBands();
+        let best: { seat: Seat; c: Candidate } | undefined;
+        for (const a of own) {
+          const seat = ctx.seatById.get(a.seatId)!;
+          if (state.hardReason(r.t, seat) !== null) continue;
+          const s = state.score(r.t, seat, bands);
+          if (!best || s.score > best.c.score) best = { seat, c: { teacher: r.t, score: s.score, reason: s.reason, load: state.totalLoadOf(r.t) } };
+        }
+        if (best) {
+          state.remove(best.seat.id);
+          state.add(makeAssignment(best.seat, best.c, 'AUTO'));
+          moved = true;
+          break outer;
+        }
+      }
+    }
+    if (!moved) return;
+  }
+}
+
+/**
+ * [4단계-3] 형평성 재배치: 부담 최고 교사의 좌석을 부담 낮은 교사에게 이전 (분산이 엄격히 감소할 때만).
+ * 받는 교사의 이번 감독 횟수가 주는 교사보다 적을 때만 옮겨 횟수 차이는 벌리지 않는다
+ * → 1회 더 맡는 몫이 학년도 누적이 낮은 교사에게 가서 시험을 거듭할수록 누적 차이가 줄어든다.
+ */
 function equityRebalance(ctx: Context, state: State, pinnedIds: Set<string>): void {
   const tolerance = ctx.input.settings.equityScoreTolerance ?? 10;
   const maxMoves = ctx.input.settings.maxEquityMoves ?? 2000;
@@ -211,6 +251,7 @@ function equityRebalance(ctx: Context, state: State, pinnedIds: Set<string>): vo
           if (low.id === high.id) continue;
           const lowLoad = state.totalLoadOf(low);
           if (lowLoad + a.weight >= highLoad - EPS) continue;
+          if (state.countOf(low.id) >= state.countOf(high.id)) continue;
           if (state.hardReason(low, seat) !== null) continue;
           const s = state.score(low, seat, bands);
           if (s.score < current - tolerance) continue;
@@ -266,6 +307,7 @@ function computeMetrics(ctx: Context, state: State): Metrics {
   const seatCount = ctx.seats.length;
   const assignedCount = state.bySeat.size;
 
+  const counts = ctx.teachers.filter((t) => isEligibleTeacher(t) && !t.temporary).map((t) => state.countOf(t.id));
   let consecutiveCount = 0;
   let subjectInRoom = 0;
   for (const a of state.bySeat.values()) {
@@ -284,6 +326,7 @@ function computeMetrics(ctx: Context, state: State): Metrics {
     sessionLoads,
     stdDev: round(Math.sqrt(variance)),
     maxMinGap: n ? round(Math.max(...values) - Math.min(...values)) : 0,
+    countGap: counts.length ? Math.max(...counts) - Math.min(...counts) : 0,
     consecutiveCount,
     subjectInRoom,
   };
@@ -302,6 +345,7 @@ export function runAssignment(input: EngineInput): EngineResult {
   const rejectedPinned = applyPinned(ctx, state, pinnedIds);
   greedyMatch(ctx, state);
   ejectionChain(ctx, state, pinnedIds);
+  countRebalance(ctx, state, pinnedIds);
   equityRebalance(ctx, state, pinnedIds);
 
   const seats = [...ctx.seats].sort(compareSeats);

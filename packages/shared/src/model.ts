@@ -200,6 +200,8 @@ export interface RunMetrics {
   consecutiveCount: number;
   /** 과목 담당(출제) 교사가 자기 과목 시험 교실 감독을 맡은 수 */
   subjectInRoom: number;
+  /** 이번 시험 감독 횟수 최다-최소 차 (예전 실행 기록에는 없음) */
+  countGap?: number;
 }
 
 export interface RunAssignment extends Omit<AssignmentDoc, 'runId'> {

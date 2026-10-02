@@ -22,6 +22,7 @@ export const DEFAULT_WEIGHTS: Weights = {
   examSubjectRoom: 0,
   lowLoadRatio: 0.2,
   highLoadRatio: 0.1,
+  countBalance: -50,
 };
 
 export const DEFAULT_ROLE_WEIGHTS: RoleWeights = {

@@ -44,3 +44,36 @@ describe('통합 양식 샘플 (교사 25명)', () => {
     expect(result.assignments.filter((a) => a.role === 'ASSISTANT').length).toBeGreaterThan(0);
   });
 });
+
+describe('형평성: 매 시험 감독 수는 비슷하게, 누적 차이는 줄인다', () => {
+  const sample = buildSampleSchool('2026-10-16');
+  // 학년도 누적을 교사마다 다르게 (0 ~ 12점)
+  const teachers = sample.teachers.map((t, i) => ({ ...t, cumulativeLoad: (i % 5) * 3 }));
+  const input = buildEngineInput({
+    teachers,
+    rooms: sample.rooms,
+    slots: sample.slots,
+    availability: [],
+    constraints: [],
+    baseTimetable: sample.timetable,
+    useBaseTimetable: true,
+  });
+  const result = runAssignment(input);
+  const count = new Map<string, number>();
+  for (const a of result.assignments) count.set(a.teacherId, (count.get(a.teacherId) ?? 0) + 1);
+  const eligible = input.teachers.filter((t) => t.active && t.defaultRole !== 'EXCLUDED');
+
+  it('이번 시험 감독 횟수 차이는 1회 이하', () => {
+    expect(result.metrics.successRate).toBe(1);
+    expect(validateAssignments(input, result.assignments)).toEqual([]);
+    expect(result.metrics.countGap).toBeLessThanOrEqual(1);
+  });
+
+  it('1회 더 맡는 교사는 학년도 누적이 낮은 쪽', () => {
+    const max = Math.max(...eligible.map((t) => count.get(t.id) ?? 0));
+    const avgPrior = (ids: string[]) => ids.reduce((s, id) => s + input.teachers.find((t) => t.id === id)!.priorLoad, 0) / ids.length;
+    const more = eligible.filter((t) => (count.get(t.id) ?? 0) === max).map((t) => t.id);
+    const less = eligible.filter((t) => (count.get(t.id) ?? 0) < max).map((t) => t.id);
+    if (less.length && more.length) expect(avgPrior(more)).toBeLessThan(avgPrior(less));
+  });
+});

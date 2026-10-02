@@ -19,6 +19,7 @@ interface Knob {
 }
 
 const KNOBS: Knob[] = [
+  { key: 'countBalance', label: '감독 횟수 맞추기', hint: '이번 시험에 이미 많이 맡은 교사일수록 감점 (1회마다)', max: 200, negative: true },
   { key: 'lowLoad', label: '부담 적은 교사 우선', hint: '누적 업무점수가 낮은 교사에게 가점', max: 200 },
   { key: 'highLoad', label: '부담 많은 교사 피하기', hint: '누적 업무점수가 높은 교사에게 감점', max: 200, negative: true },
   { key: 'consecutive', label: '연속 감독 피하기', hint: '같은 날 이어지는 교시 감독에 감점', max: 300, negative: true },
@@ -44,6 +45,7 @@ const toWeights = (v: Values): Partial<Weights> => {
 const ROWS: { key: keyof Metrics; label: string; fmt: (m: Metrics) => string; better: 'up' | 'down' }[] = [
   { key: 'successRate', label: '배정 성공률', fmt: (m) => `${Math.round(m.successRate * 1000) / 10}%`, better: 'up' },
   { key: 'assignedCount', label: '미배정', fmt: (m) => `${m.seatCount - m.assignedCount}석`, better: 'down' },
+  { key: 'countGap', label: '감독 횟수 차 (최다-최소)', fmt: (m) => `${m.countGap}회`, better: 'down' },
   { key: 'stdDev', label: '업무점수 편차', fmt: (m) => `±${m.stdDev.toFixed(2)}`, better: 'down' },
   { key: 'maxMinGap', label: '최고-최저 차', fmt: (m) => m.maxMinGap.toFixed(1), better: 'down' },
   { key: 'consecutiveCount', label: '연속 감독', fmt: (m) => `${m.consecutiveCount}쌍`, better: 'down' },

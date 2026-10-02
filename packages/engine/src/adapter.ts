@@ -128,6 +128,7 @@ export function toRunDoc(
       maxMinGap: result.metrics.maxMinGap,
       consecutiveCount: result.metrics.consecutiveCount,
       subjectInRoom: result.metrics.subjectInRoom,
+      countGap: result.metrics.countGap,
     },
     loads,
     assignments: result.assignments.map((a) => {

@@ -116,6 +116,8 @@ export interface Weights {
   examSubjectRoom: number;
   lowLoadRatio: number;
   highLoadRatio: number;
+  /** 이번 시험 감독 횟수가 가장 적은 교사보다 1회 많을 때마다 (음수 = 감점). 매 시험 감독 수를 비슷하게 */
+  countBalance: number;
 }
 
 export type RoleWeights = Record<Role, number>;
@@ -216,6 +218,8 @@ export interface Metrics {
   sessionLoads: Record<string, number>;
   stdDev: number;
   maxMinGap: number;
+  /** 이번 시험 감독 횟수 최대-최소 차 (임시 감독자 제외) */
+  countGap: number;
   /** 같은 날 연속 교시 배정 쌍의 수 */
   consecutiveCount: number;
   /** 과목 담당(출제) 교사가 자기 과목 시험 교실 감독을 맡은 수 */

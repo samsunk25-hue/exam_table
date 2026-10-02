@@ -52,6 +52,7 @@ function ScenarioCompare({
   const rows: { label: string; value: (r: Run) => number; format: (v: number) => string; better: 'high' | 'low'; hint: string }[] = [
     { label: '성공률', value: (r) => r.metrics.successRate, format: pct, better: 'high', hint: '배정된 자리 비율' },
     { label: '미배정', value: (r) => r.unassigned.length, format: (v) => `${v}석`, better: 'low', hint: '직접 채워야 할 자리' },
+    { label: '감독 횟수 차', value: (r) => r.metrics.countGap ?? NaN, format: (v) => (Number.isNaN(v) ? '-' : `${v}회`), better: 'low', hint: '이번 시험 가장 많이·적게 맡은 교사의 감독 횟수 차이' },
     { label: '누적 부담 편차', value: (r) => r.metrics.stdDev, format: (v) => `${v}`, better: 'low', hint: '낮을수록 공평' },
     { label: '최대-최소 차', value: (r) => r.metrics.maxMinGap, format: (v) => `${v}`, better: 'low', hint: '가장 많이·적게 맡은 교사 차이' },
     { label: '연속 배정', value: (r) => r.metrics.consecutiveCount ?? 0, format: (v) => `${v}회`, better: 'low', hint: '같은 날 연달아 감독' },
@@ -347,6 +348,7 @@ export function SessionAssignPage() {
               value={pct(run.metrics.successRate)}
               tone={run.metrics.successRate >= 0.95 ? 'ok' : 'alert'}
             />
+            <Metric label="감독 횟수 차" value={run.metrics.countGap === undefined ? '-' : `${run.metrics.countGap}회`} />
             <Metric label="누적 부담 편차" value={`${run.metrics.stdDev}`} />
             <Metric label="최대-최소 차" value={`${run.metrics.maxMinGap}`} />
           </div>

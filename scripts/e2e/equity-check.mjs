@@ -18,6 +18,8 @@ await A.page.getByText(/이번 시험 교사별 명단/).click();
 check('교사별 표 (김국어·이수학 1회씩)', (await A.page.locator('tr', { hasText: '김국어' }).first().innerText()).includes('1회') && (await A.page.locator('tr', { hasText: '이수학' }).first().innerText()).includes('1회'));
 const head = (await A.page.locator('thead').first().innerText()).replace(/\s+/g, ' ');
 check('종류별 칸·제외 조건 칸', ['정감독', '부감독', '복도', '특별실', '자습', '제외 조건'].every((h) => head.includes(h)), head);
+const kimRow = await A.page.locator('tr', { hasText: '김국어' }).first().innerText();
+check('제외 조건: 시험 과목 교사 (김국어 국어 1학년)', kimRow.includes('시험 과목 교사 (국어: 1학년'), kimRow.split('	').pop());
 await A.page.screenshot({ path: 'scripts/e2e/out/equity.png', fullPage: true });
 check('콘솔 오류 없음', A.errors.length === 0, A.errors.join(' / '));
 await A.browser.close();

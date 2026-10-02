@@ -61,6 +61,7 @@ export function SessionEquityPage() {
   // 확정 이후에는 교사 누적 점수에 이번 시험이 이미 들어 있다
   const confirmed = session.status === 'CONFIRMED' || session.status === 'LOCKED';
 
+  const writerRule = session.settings.examWriter ?? 'NONE';
   const special = useMemo(() => new Set(rooms.data.filter((r) => r.spaceType === 'SEPARATE').map((r) => r.id)), [rooms.data]);
   const rows = useMemo<Row[]>(() => {
     const byTeacher = new Map<string, AssignmentDoc[]>();
@@ -91,6 +92,13 @@ export function SessionEquityPage() {
           excluded.push(`배정 금지 규칙 ${forbid.length}개${labels.length ? ` (${labels.join(', ')})` : ''}`);
         }
         if (hours) excluded.push(`시험 중 수업 ${hours}시간`);
+        // 이번 시험 과목의 담당 교과 교사 (출제 교사 규칙이 켜져 있으면 그 시간 처리도)
+        const myExams = t.subject ? slots.data.filter((x) => x.type === 'EXAM' && x.subject === t.subject) : [];
+        if (myExams.length) {
+          const grades = [...new Set(myExams.map((x) => x.grade))].sort((a, b) => a - b).join('·');
+          const rule = writerRule === 'NO_ROOM' ? ', 그 시간 교실 감독 제외' : writerRule === 'PREFER_HALLWAY' ? ', 그 시간 복도 대기 우선' : '';
+          excluded.push(`시험 과목 교사 (${t.subject}: ${grades}학년${rule})`);
+        }
         const load = round(mine.reduce((s, a) => s + a.weight, 0) + hours * DEFAULT_CLASS_WEIGHT);
         const times = new Set(mine.map((a) => `${a.date}|${a.period}`));
         const consecutive = [...times].filter((k) => {
@@ -101,7 +109,7 @@ export function SessionEquityPage() {
         const prior = round(confirmed ? cumulative - load : cumulative);
         return { id: t.id, name: t.name, subject: t.subject, count: mine.length, kinds, excluded, load, consecutive, classHours: hours, prior, total: round(prior + load) };
       });
-  }, [teachers.data, assignments.data, confirmed, classHours, special, availability.data, constraints.data]);
+  }, [teachers.data, assignments.data, confirmed, classHours, special, availability.data, constraints.data, slots.data, writerRule]);
 
   if (teachers.loading || assignments.loading || slots.loading || timetable.loading || rooms.loading) return <Spinner />;
   const error = teachers.error ?? assignments.error;

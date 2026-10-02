@@ -8,6 +8,7 @@ import {
   type TeacherDoc,
   type WithId,
 } from '@sim/shared';
+import { overlappingPeriods } from '@sim/engine';
 import { dateLabel } from '@/components/AvailabilityGrid';
 import { toast } from '@/components/Toast';
 import { downloadWorkbook, type OutCell, type OutSheet } from './xlsx';
@@ -36,6 +37,16 @@ export interface Duty {
 export function ownTimeOf(slots: TimetableData['slots'], slotId: string, roomId: string): string | null {
   const p = slots.find((s) => s.id === slotId)?.rooms.find((x) => x.roomId === roomId);
   return p?.startTime && p.endTime ? `${p.startTime}~${p.endTime}` : null;
+}
+
+/**
+ * 표에서 이 감독이 보일 교시들: 자기 교시 + 별도 시간(연장)으로 겹치는 교시.
+ * 예) 별도시험장 09:00~10:10이면 1교시와 2교시 칸 모두에 보인다 (2교시 칸은 "이어서").
+ */
+export function shownPeriods(slots: TimetableData['slots'], a: { slotId: string; roomId: string; period: number }): number[] {
+  const slot = slots.find((s) => s.id === a.slotId);
+  const p = slot?.rooms.find((x) => x.roomId === a.roomId);
+  return slot && p ? [a.period, ...overlappingPeriods(slots, slot, p).filter((x) => x !== a.period)] : [a.period];
 }
 
 export function dutiesOf(teacherId: string, d: TimetableData): Duty[] {
@@ -80,10 +91,11 @@ export function fullTimetableSheets(d: TimetableData): OutSheet[] {
         r.name,
         ...periods.map((p) =>
           d.assignments
-            .filter((a) => a.date === date && a.period === p.period && a.roomId === r.id)
+            .filter((a) => a.date === date && a.roomId === r.id && shownPeriods(d.slots, a).includes(p.period))
             .map((a) => {
               const own = ownTimeOf(d.slots, a.slotId, a.roomId);
-              return `${name.get(a.teacherId) ?? '?'}${a.role === 'CHIEF' ? '' : `(${SEAT_ROLE_LABEL[a.role]})`}${own ? ` [${own}]` : ''}`;
+              const cont = a.period !== p.period ? ' (이어서)' : '';
+              return `${name.get(a.teacherId) ?? '?'}${a.role === 'CHIEF' ? '' : `(${SEAT_ROLE_LABEL[a.role]})`}${own ? ` [${own}]` : ''}${cont}`;
             })
             .join(', '),
         ),

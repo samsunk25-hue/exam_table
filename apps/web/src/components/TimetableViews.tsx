@@ -1,6 +1,6 @@
 import { SEAT_ROLE_LABEL, examTimes, groupByDate } from '@sim/shared';
 import { dateLabel } from '@/components/AvailabilityGrid';
-import { ownTimeOf, timeText, type Duty, type TimetableData } from '@/lib/timetable';
+import { ownTimeOf, shownPeriods, timeText, type Duty, type TimetableData } from '@/lib/timetable';
 
 /**
  * 최종(전체) 시간표. 컴퓨터: 날짜별 표(행 = 시험실, 열 = 교시) / 휴대폰: 교시별 카드.
@@ -16,7 +16,8 @@ export function FullTimetable({ data, highlight }: { data: TimetableData; highli
       {groupByDate(examTimes(data.slots)).map(([date, times]) => {
         const dayAssign = data.assignments.filter((a) => a.date === date);
         const used = rooms.filter((r) => dayAssign.some((a) => a.roomId === r.id));
-        const cell = (period: number, roomId: string) => dayAssign.filter((a) => a.period === period && a.roomId === roomId);
+        // 별도 시간(연장)으로 다음 교시까지 걸치는 감독은 그 교시 칸에도 보인다
+        const cell = (period: number, roomId: string) => dayAssign.filter((a) => a.roomId === roomId && shownPeriods(data.slots, a).includes(period));
         const label = (teacherId: string, role: string) => `${name.get(teacherId) ?? '?'}${role === 'CHIEF' ? '' : `(${SEAT_ROLE_LABEL[role as keyof typeof SEAT_ROLE_LABEL]})`}`;
         return (
           <section key={date} className="print-break-inside-avoid">
@@ -45,6 +46,7 @@ export function FullTimetable({ data, highlight }: { data: TimetableData; highli
                             <div key={a.id} className={`font-semibold ${a.teacherId === highlight ? 'rounded-md bg-primary px-1.5 text-white' : ''}`}>
                               {label(a.teacherId, a.role)}
                               {ownTimeOf(data.slots, a.slotId, a.roomId) && <span className="ml-1 text-xs font-normal">({ownTimeOf(data.slots, a.slotId, a.roomId)})</span>}
+                              {a.period !== t.period && <span className="ml-1 text-xs font-normal text-muted">이어서</span>}
                             </div>
                           ))}
                         </td>
@@ -73,6 +75,7 @@ export function FullTimetable({ data, highlight }: { data: TimetableData; highli
                               <span key={a.id} className={`block ${a.teacherId === highlight ? 'rounded bg-primary px-1 text-white' : ''}`}>
                                 {label(a.teacherId, a.role)}
                                 {ownTimeOf(data.slots, a.slotId, a.roomId) && <span className="ml-1 text-xs font-normal">({ownTimeOf(data.slots, a.slotId, a.roomId)})</span>}
+                                {a.period !== t.period && <span className="ml-1 text-xs font-normal opacity-70">이어서</span>}
                               </span>
                             ))}
                           </span>

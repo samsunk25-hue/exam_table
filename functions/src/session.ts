@@ -160,6 +160,11 @@ export const deleteSession = onCall({ timeoutSeconds: 300 }, async (req) => {
   const uid = requireAdmin(req);
   const { sessionId } = (req.data ?? {}) as { sessionId?: unknown };
   if (typeof sessionId !== 'string' || !sessionId) throw new HttpsError('invalid-argument', '세션 ID를 확인해 주세요.');
+  return { revertedTeachers: await deleteSessionData(sessionId, uid) };
+});
+
+/** 시험 프로젝트와 하위 자료를 지우고 누적 점수를 되돌린다 (학기 삭제에서도 쓴다). 되돌린 교사 수 */
+export async function deleteSessionData(sessionId: string, uid: string): Promise<number> {
   const firestore = db();
   const ref = firestore.doc(`sessions/${sessionId}`);
   const snap = await ref.get();
@@ -182,5 +187,5 @@ export const deleteSession = onCall({ timeoutSeconds: 300 }, async (req) => {
   // 이 프로젝트의 되돌리기 기록도 지운다
   const ops = await firestore.collection('undoOps').where('sessionId', '==', sessionId).get();
   for (const d of ops.docs) await firestore.recursiveDelete(d.ref);
-  return { revertedTeachers: ledger.size };
-});
+  return ledger.size;
+}

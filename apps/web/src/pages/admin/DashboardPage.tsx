@@ -4,13 +4,100 @@ import { Modal } from '@/components/Modal';
 import { StatusBadge } from '@/components/StatusStepper';
 import { toast } from '@/components/Toast';
 import { Alert, Button, Card, Field, PageTitle, Spinner, Toggle, Empty } from '@/components/ui';
-import { callDeleteSession, errorMessage } from '@/lib/firebase';
+import { callDeleteSession, callDeleteTerm, callRenameTerm, errorMessage } from '@/lib/firebase';
 import { createSession, sessionTitle, useSessions, type ExamSession } from '@/lib/sessions';
 import { commitOps, ref, useCollection } from '@/lib/data';
 import { latestRoster, rememberTerm, rosterCopyOps, useTerm } from '@/components/TermRoster';
-import { sessionTerm, termKey, termLabel, type RoomDoc, type TeacherDoc } from '@sim/shared';
+import { sessionTerm, termKey, termLabel, type RoomDoc, type TeacherDoc, type TermRef } from '@sim/shared';
 
 type SessionItem = ExamSession;
+
+/** 학기 이름 바꾸기: 그 학기의 시험 프로젝트·교사 명단·시험실이 모두 새 이름으로 옮겨진다 */
+function RenameTermDialog({ term, onClose }: { term: TermRef; onClose: () => void }) {
+  const [school, setSchool] = useState(term.school);
+  const [year, setYear] = useState(String(term.year));
+  const [semester, setSemester] = useState(String(term.semester));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const { data } = await callRenameTerm({ from: term, to: { school: school.trim(), year: Number(year), semester: Number(semester) } });
+      toast(`학기 이름을 바꿨습니다 (시험 프로젝트 ${data.sessions}개 · 교사 ${data.teachers}명 · 시험실 ${data.rooms}개).`);
+      onClose();
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title="학기 이름 바꾸기" onClose={() => !busy && onClose()}>
+      <form onSubmit={(e) => void save(e)} className="grid gap-3">
+        <p className="text-muted">{termLabel(term)}의 시험 프로젝트·교사 명단·시험실이 모두 새 이름으로 옮겨집니다. 교사 화면도 새 이름으로 바뀝니다.</p>
+        <Field label="학교명" value={school} onChange={(e) => setSchool(e.target.value)} required />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="학년도" type="number" value={year} onChange={(e) => setYear(e.target.value)} required />
+          <label className="flex flex-col gap-1.5">
+            <span className="font-semibold">학기</span>
+            <select className="min-h-12 rounded-xl border border-line bg-surface px-3" value={semester} onChange={(e) => setSemester(e.target.value)}>
+              <option value="1">1학기</option>
+              <option value="2">2학기</option>
+            </select>
+          </label>
+        </div>
+        {error && <Alert>{error}</Alert>}
+        <div className="flex gap-2">
+          <Button type="submit" disabled={busy || !school.trim()}>
+            {busy ? '바꾸는 중…' : '바꾸기'}
+          </Button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
+            취소
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** 학기 삭제: 그 학기의 시험 프로젝트(배정·누적 점수 포함)·교사 명단·시험실을 모두 지운다. 학교명을 다시 적어야 지운다 */
+function DeleteTermDialog({ term, onClose }: { term: TermRef; onClose: () => void }) {
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const { data } = await callDeleteTerm({ term, confirm: confirm.trim() });
+      toast(`${termLabel(term)}을(를) 지웠습니다 (시험 프로젝트 ${data.sessions}개 · 교사 ${data.teachers}명 · 시험실 ${data.rooms}개).`);
+      onClose();
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title="학기 삭제" onClose={() => !busy && onClose()}>
+      <div className="grid gap-3">
+        <Alert>
+          {termLabel(term)}의 <b>시험 프로젝트(배정·변경 이력·누적 업무 점수 포함), 교사 명단, 시험실</b>을 모두 지웁니다. 되돌릴 수 없습니다.
+        </Alert>
+        <Field label={`확인을 위해 학교명 "${term.school}"을(를) 적어 주세요`} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+        {error && <Alert>{error}</Alert>}
+        <div className="flex gap-2">
+          <Button variant="danger" onClick={() => void run()} disabled={busy || confirm.trim() !== term.school}>
+            {busy ? '지우는 중… (1~2분)' : '학기 삭제'}
+          </Button>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
+            취소
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 /** 프로젝트 삭제 확인: 이름을 직접 입력해야 지운다. */
 function DeleteSessionDialog({ session, onClose }: { session: SessionItem; onClose: () => void }) {
@@ -170,6 +257,7 @@ export function DashboardPage() {
   const { data: all, loading, error } = useSessions();
   const [showHidden, setShowHidden] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [termAction, setTermAction] = useState<{ kind: 'rename' | 'delete'; term: TermRef } | null>(null);
   const [deleting, setDeleting] = useState<SessionItem | null>(null);
   // 학교·학기 묶음 접기/펼치기 (이 브라우저에 기억)
   const [folded, setFolded] = useState<string[]>(() => {
@@ -231,7 +319,7 @@ export function DashboardPage() {
         const open = !folded.includes(g.key);
         return (
         <section key={g.key} className="mb-6" aria-label={g.label}>
-          <h2 className="mb-2">
+          <h2 className="mb-2 flex flex-wrap items-center gap-1">
             <button
               type="button"
               aria-expanded={open}
@@ -243,6 +331,24 @@ export function DashboardPage() {
               <span className="text-sm font-normal">({g.list.length}개)</span>
               <span aria-hidden className={`text-sm transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
             </button>
+            <span className="inline-flex gap-1">
+              <button
+                type="button"
+                aria-label={`${g.label} 이름 바꾸기`}
+                onClick={() => setTermAction({ kind: 'rename', term: sessionTerm(g.list[0]!) })}
+                className="cursor-pointer rounded-lg px-2 py-1 text-sm font-normal text-muted hover:bg-bg hover:text-ink"
+              >
+                이름 바꾸기
+              </button>
+              <button
+                type="button"
+                aria-label={`${g.label} 삭제`}
+                onClick={() => setTermAction({ kind: 'delete', term: sessionTerm(g.list[0]!) })}
+                className="cursor-pointer rounded-lg px-2 py-1 text-sm font-normal text-muted hover:bg-alert-soft hover:text-alert"
+              >
+                삭제
+              </button>
+            </span>
           </h2>
           {open && (
           <ul className="grid gap-3 md:grid-cols-2">
@@ -290,6 +396,8 @@ export function DashboardPage() {
         <Toggle label={`숨긴 프로젝트 보기 (${hiddenCount}개)`} checked={showHidden} onChange={setShowHidden} />
       )}
       {deleting && <DeleteSessionDialog session={deleting} onClose={() => setDeleting(null)} />}
+      {termAction?.kind === 'rename' && <RenameTermDialog term={termAction.term} onClose={() => setTermAction(null)} />}
+      {termAction?.kind === 'delete' && <DeleteTermDialog term={termAction.term} onClose={() => setTermAction(null)} />}
     </>
   );
 }

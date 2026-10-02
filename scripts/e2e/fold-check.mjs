@@ -20,7 +20,8 @@ await db.doc(`sessions/${SID}`).set({ schoolName: '접기중학교', year: 2026,
 
 const { browser, page, errors } = await openApp();
 await go(page, '/admin');
-const head = page.getByRole('button', { name: new RegExp(LABEL) });
+// 접기 버튼만 (같은 이름이 들어간 '이름 바꾸기'·'삭제' 버튼은 빼고)
+const head = page.locator('button[aria-expanded]', { hasText: LABEL });
 await head.waitFor();
 const section = page.getByRole('region', { name: LABEL });
 check('처음엔 펼쳐짐', (await head.getAttribute('aria-expanded')) === 'true' && (await section.getByText('접기 점검').count()) > 0);

@@ -38,6 +38,10 @@ export const callTransitionSession = httpsCallable<
 >(functions, 'transitionSession');
 
 export const callDeleteSession = httpsCallable<{ sessionId: string }, { revertedTeachers: number }>(functions, 'deleteSession');
+type TermArg = { school: string; year: number; semester: number };
+type TermCounts = { sessions: number; teachers: number; rooms: number };
+export const callRenameTerm = httpsCallable<{ from: TermArg; to: TermArg }, TermCounts>(functions, 'renameTerm', { timeout: 300_000 });
+export const callDeleteTerm = httpsCallable<{ term: TermArg; confirm: string }, TermCounts>(functions, 'deleteTerm', { timeout: 540_000 });
 
 export const callRunAssignment = httpsCallable<
   { sessionId: string; keepManual: boolean; scenarios: boolean; weights?: Record<string, number> },

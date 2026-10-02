@@ -3,6 +3,7 @@ import './options';
 export { syncProfile } from './auth';
 export { addAdmin, removeAdmin } from './admins';
 export { deleteSession, transitionSession } from './session';
+export { deleteTerm, renameTerm } from './terms';
 export { runAssignment, applyRun } from './runs';
 export { auditSession, auditSessionChild, auditTeacher, auditRoom, auditAdmin } from './audit';
 export { applyAssignmentChanges } from './edits';

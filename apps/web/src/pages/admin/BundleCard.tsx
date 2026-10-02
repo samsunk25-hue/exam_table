@@ -392,6 +392,9 @@ function AiExtractDialog({ year, onClose, onRead }: { year: number; onClose: () 
           교육계획서의 시험 시간표, 업무 분장표·담임 배정표, 교사별·학급별 시간표 같은 문서를 올리면 AI가 시험 일정, 교사 명단(담당 교과·담임반), 기초시간표를 읽어
           통합 양식처럼 채워 줍니다. 저장 전에 검증 결과를 확인할 수 있습니다.
         </p>
+        <Alert tone="info">
+          문서 내용은 AI 회사(Anthropic) 서버로 보내집니다 (AI 학습에는 쓰이지 않음). 교사 이름 등 개인정보가 들어간 문서는 AI 대신 통합 양식으로 올리세요.
+        </Alert>
         <fieldset>
           <legend className="mb-2 font-semibold">
             무엇을 읽을까요? <span className="font-normal text-muted">(여러 개 고를 수 있고, 문서에 없는 자료는 비워 둡니다)</span>

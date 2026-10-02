@@ -132,6 +132,8 @@ export interface Settings {
   classWeight?: number;
   /** 감독 없음으로 정한 자리 (배정하지 않고 미배정으로 세지 않음) */
   skipSeats?: string[];
+  /** 별도시험장(연장) 감독 우선 교사: 그 시험장의 정·부감독 자리에 먼저 배정 */
+  extendedPreferred?: string[];
   weights?: Partial<Weights>;
   roleWeights?: Partial<RoleWeights>;
   /** 형평성 재배치 시 허용하는 소프트 점수 하락폭 */
@@ -175,6 +177,8 @@ export interface Seat {
   grade: number;
   classNo: number | null;
   subject: string;
+  /** 별도시험장(연장 시간) 그룹의 자리 (정감독 = EXTENDED, 부감독 = ASSISTANT) */
+  extended: boolean;
 }
 
 export interface Assignment {

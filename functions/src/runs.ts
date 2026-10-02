@@ -64,6 +64,7 @@ export async function loadData(sessionId: string, useBaseTimetable: boolean) {
     // 기본 켜짐 (기초시간표가 없으면 아무 영향 없음)
     classDuringExam: (session as { settings?: { classDuringExam?: boolean } }).settings?.classDuringExam !== false,
     skipSeats: (session as { settings?: { noSupervisor?: string[] } }).settings?.noSupervisor ?? [],
+    extendedPreferred: (session as { settings?: { extendedPreferred?: string[] } }).settings?.extendedPreferred ?? [],
   };
   return { data, current: withIds<AssignmentDoc>(assignments) };
 }

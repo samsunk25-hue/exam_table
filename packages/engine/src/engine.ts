@@ -123,13 +123,19 @@ function greedyMatch(ctx: Context, state: State): void {
     counts.set(s.id, countCandidates(s));
   }
 
+  // 별도시험장 우선 교사가 있으면 별도시험장 자리를 먼저 채운다
+  // (안 그러면 우선 교사가 같은 시간 일반 교실 감독을 먼저 받아 별도시험장을 못 맡는다)
+  const tier = (s: Seat) => (ctx.extendedPreferred.size > 0 && s.extended ? 0 : 1);
   while (open.size > 0) {
     let pick: Seat | undefined;
     let min = Infinity;
+    let pickTier = Infinity;
     for (const s of open.values()) {
       const c = counts.get(s.id)!;
-      if (c < min) {
+      const k = tier(s);
+      if (k < pickTier || (k === pickTier && c < min)) {
         min = c;
+        pickTier = k;
         pick = s;
       }
     }
@@ -182,6 +188,11 @@ function ejectionChain(ctx: Context, state: State, pinnedIds: Set<string>): void
   }
 }
 
+/** 별도시험장 우선 교사가 맡은 별도시험장 자리는 횟수·누적 맞추기에서 옮기지 않는다 */
+function keepsPreferred(ctx: Context, a: Assignment): boolean {
+  return ctx.seatById.get(a.seatId)!.extended && ctx.extendedPreferred.has(a.teacherId);
+}
+
 /**
  * [4단계-2] 감독 횟수 맞추기: 이번 시험 감독이 가장 적은 교사보다 2회 이상 많은 교사의 좌석을 적은 교사에게 넘긴다.
  * 받는 교사는 횟수가 적고 학년도 누적이 낮은 교사부터. 하드 조건을 지킬 때만 옮긴다 (임시 감독자는 제외).
@@ -195,7 +206,7 @@ function countRebalance(ctx: Context, state: State, pinnedIds: Set<string>): voi
     const givers = counts.filter((x) => x.c >= min + 2).sort((a, b) => b.c - a.c || state.totalLoadOf(b.t) - state.totalLoadOf(a.t));
     let moved = false;
     outer: for (const g of givers) {
-      const own = state.assignmentsOf(g.t.id).filter((a) => !pinnedIds.has(a.seatId));
+      const own = state.assignmentsOf(g.t.id).filter((a) => !pinnedIds.has(a.seatId) && !keepsPreferred(ctx, a));
       const receivers = counts.filter((x) => x.c <= g.c - 2).sort((a, b) => a.c - b.c || state.totalLoadOf(a.t) - state.totalLoadOf(b.t));
       for (const r of receivers) {
         const bands = state.loadBands();
@@ -238,7 +249,7 @@ function equityRebalance(ctx: Context, state: State, pinnedIds: Set<string>): vo
       const highLoad = state.totalLoadOf(high);
       const own = state
         .assignmentsOf(high.id)
-        .filter((a) => !pinnedIds.has(a.seatId))
+        .filter((a) => !pinnedIds.has(a.seatId) && !keepsPreferred(ctx, a))
         .sort((a, b) => b.weight - a.weight || a.seatId.localeCompare(b.seatId));
 
       for (const a of own) {

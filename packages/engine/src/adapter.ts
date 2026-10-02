@@ -24,6 +24,7 @@ export interface SessionData {
   examWriterRule?: 'NONE' | 'PREFER_HALLWAY' | 'NO_ROOM';
   classDuringExam?: boolean;
   skipSeats?: string[];
+  extendedPreferred?: string[];
   pinned?: PinnedAssignment[];
 }
 
@@ -91,6 +92,7 @@ export function buildEngineInput(d: SessionData): EngineInput {
       examWriterRule: d.examWriterRule ?? 'NONE',
       classDuringExam: d.classDuringExam ?? false,
       skipSeats: d.skipSeats ?? [],
+      extendedPreferred: d.extendedPreferred ?? [],
     },
     pinned: d.pinned,
   };

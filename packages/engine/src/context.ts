@@ -80,6 +80,8 @@ export interface Context {
   inClass: Set<string>;
   /** 교사별 이번 시험 기간 수업 업무 점수 (수업 시간 × classWeight) */
   classLoad: Map<string, number>;
+  /** 별도시험장 감독 우선 교사 */
+  extendedPreferred: Set<string>;
 }
 
 export const DEFAULT_CLASS_WEIGHT = 0.8;
@@ -147,6 +149,7 @@ export function buildSeats(input: EngineInput, roleWeights: RoleWeights): Seat[]
           grade: group.grade,
           classNo: group.classNo,
           subject: slot.subject,
+          extended: group.roomType === 'EXTENDED',
         });
       }
     };
@@ -213,6 +216,7 @@ export function buildContext(input: EngineInput): Context {
     baseMatch,
     inClass,
     classLoad,
+    extendedPreferred: new Set(input.settings.extendedPreferred ?? []),
   };
 }
 

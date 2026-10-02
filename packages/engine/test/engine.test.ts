@@ -448,3 +448,25 @@ describe('임시 감독자', () => {
     expect(runAssignment(short).assignments.map((a) => a.teacherId).sort()).toEqual(['A', 'X']);
   });
 });
+
+describe('별도시험장 우선 교사', () => {
+  it('고른 교사가 별도시험장 정감독(연장)·부감독 자리를 먼저 맡는다', () => {
+    const input = emptyInput({
+      teachers: ['A', 'B', 'C', 'D', 'E', 'F'].map((id) => teacher(id)),
+      rooms: [
+        { id: 'R11', name: '1-1', chiefCount: 1, assistantCount: 1, spaceType: 'CLASSROOM' },
+        { id: 'SEP', name: '별도시험장', chiefCount: 1, assistantCount: 1, spaceType: 'SPECIAL' },
+      ],
+      slots: [{ id: 'S1', date: '2026-10-12', period: 1, grade: 1, subject: '수학', type: 'EXAM' }],
+      groups: [
+        { id: 'G1', slotId: 'S1', roomId: 'R11', grade: 1, classNo: 1, roomType: 'NORMAL' },
+        { id: 'G2', slotId: 'S1', roomId: 'SEP', grade: 1, classNo: null, roomType: 'EXTENDED' },
+      ],
+      settings: { useBaseTimetable: false, extendedPreferred: ['E', 'F'] },
+    });
+    const r = runAssignment(input);
+    const at = (seatId: string) => r.assignments.find((a) => a.seatId === seatId)?.teacherId;
+    expect([at('G2_EXTENDED_1'), at('G2_ASSISTANT_1')].sort()).toEqual(['E', 'F']);
+    expect(r.assignments.find((a) => a.seatId === 'G2_EXTENDED_1')!.reason).toContain('별도시험장 우선');
+  });
+});

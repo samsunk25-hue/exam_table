@@ -15,6 +15,7 @@ interface Change {
 /**
  * 수동 배정 변경·연쇄 교환 적용. 변경 후 전체 배정이 하드 조건을 지킬 때만 저장한다.
  * 변경 잠금(LOCKED) 중에는 막고, 최종 확정(CONFIRMED) 이후에는 사유가 필요하다.
+ * 지금 감독 자리에 없는 배정(예: 자습 교시를 1명으로 바꾸기 전의 두 번째 자습감독)은 검사에서 빼고 이번 저장 때 함께 지운다.
  */
 export const applyAssignmentChanges = onCall({ timeoutSeconds: 60 }, async (req) => {
   const uid = requireAdmin(req);
@@ -39,10 +40,15 @@ export const applyAssignmentChanges = onCall({ timeoutSeconds: 60 }, async (req)
   const { data, current } = await loadData(sessionId, true);
   const input = buildEngineInput(data);
   const seatById = new Map(buildSeats(input, DEFAULT_ROLE_WEIGHTS).map((s) => [s.id, s]));
-  for (const c of list) if (!seatById.has(c.seatId)) throw new HttpsError('invalid-argument', `존재하지 않는 좌석입니다: ${c.seatId}`);
-
-  const next = new Map(current.map((a) => [a.id, a.teacherId]));
+  const orphans = current.filter((a) => !seatById.has(a.id));
+  const orphanIds = new Set(orphans.map((a) => a.id));
   for (const c of list) {
+    if (!seatById.has(c.seatId) && !(c.teacherId === null && orphanIds.has(c.seatId))) throw new HttpsError('invalid-argument', `존재하지 않는 좌석입니다: ${c.seatId}`);
+  }
+
+  const next = new Map(current.filter((a) => !orphanIds.has(a.id)).map((a) => [a.id, a.teacherId]));
+  for (const c of list) {
+    if (orphanIds.has(c.seatId)) continue;
     if (c.teacherId) next.set(c.seatId, c.teacherId);
     else next.delete(c.seatId);
   }
@@ -57,10 +63,12 @@ export const applyAssignmentChanges = onCall({ timeoutSeconds: 60 }, async (req)
     sessionId,
     uid,
     email: (req.auth?.token.email as string | undefined) ?? null,
-    refs: list.map((c) => col.doc(c.seatId)),
+    refs: [...new Set([...list.map((c) => c.seatId), ...orphanIds])].map((id) => col.doc(id)),
   });
   const batch = db().batch();
+  for (const id of orphanIds) batch.delete(col.doc(id));
   for (const c of list) {
+    if (orphanIds.has(c.seatId)) continue;
     if (!c.teacherId) {
       batch.delete(col.doc(c.seatId));
       continue;
@@ -88,7 +96,10 @@ export const applyAssignmentChanges = onCall({ timeoutSeconds: 60 }, async (req)
     const before = new Map(current.map((a) => [a.id, a.teacherId]));
     const affected = new Map<string, string[]>();
     const add = (t: string | undefined | null, line: string) => t && affected.set(t, [...(affected.get(t) ?? []), line]);
+    const roomName = new Map(data.rooms.map((r) => [r.id, r.name]));
+    for (const o of orphans) add(o.teacherId, `${Number(o.date.slice(5, 7))}/${Number(o.date.slice(8, 10))} ${o.period}교시 ${roomName.get(o.roomId) ?? ''} 감독에서 빠짐`);
     for (const c of list) {
+      if (orphanIds.has(c.seatId)) continue;
       const seat = seatById.get(c.seatId)!;
       const where = `${Number(seat.date.slice(5, 7))}/${Number(seat.date.slice(8, 10))} ${seat.period}교시 ${seat.roomName}`;
       const prev = before.get(c.seatId);

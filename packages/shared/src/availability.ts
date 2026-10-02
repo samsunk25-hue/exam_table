@@ -61,10 +61,13 @@ export function capacityByTime(
   return examTimes(slots).map((time) => {
     const need = slots
       .filter((s) => s.date === time.date && s.period === time.period)
-      .flatMap((s) => s.rooms)
-      .reduce((n, p) => {
+      .flatMap((s) => s.rooms.map((p) => ({ p, study: s.type === 'STUDY' })))
+      .reduce((n, { p, study }) => {
         const r = roomById.get(p.roomId);
-        return n + (r ? r.chiefCount + r.assistantCount : 0);
+        if (!r) return n;
+        const all = r.chiefCount + r.assistantCount;
+        // 자습 교시는 시험실마다 1명 (엔진 buildSeats와 같은 규칙, 복도는 그대로)
+        return n + (study && r.spaceType !== 'HALLWAY' ? Math.min(1, all) : all);
       }, 0);
     const off = availability.filter(
       (a) => a.date === time.date && a.period === time.period && eligible.has(a.teacherId) && a.status !== 'REJECTED',

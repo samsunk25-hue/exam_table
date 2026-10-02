@@ -39,7 +39,7 @@ describe('통합 양식 샘플 (교사 25명)', () => {
     expect(result.metrics.successRate).toBe(1);
     expect(validateAssignments(input, result.assignments)).toEqual([]);
     expect(result.assignments.some((a) => a.reason.includes('기초일치'))).toBe(true);
-    expect(result.assignments.filter((a) => a.role === 'STUDY').length).toBe(3 * 3 * 3 * 2); // 3일 × 3학년 × 3반 × 정·부
+    expect(result.assignments.filter((a) => a.role === 'STUDY').length).toBe(3 * 3 * 3); // 3일 × 3학년 × 3반, 자습은 반마다 1명
     expect(result.assignments.some((a) => a.role === 'HALLWAY')).toBe(false); // 복도 감독 없음
     expect(result.assignments.filter((a) => a.role === 'ASSISTANT').length).toBeGreaterThan(0);
   });

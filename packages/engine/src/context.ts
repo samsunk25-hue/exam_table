@@ -153,7 +153,8 @@ export function buildSeats(input: EngineInput, roleWeights: RoleWeights): Seat[]
     if (room.spaceType === 'HALLWAY') {
       push('HALLWAY', room.chiefCount + room.assistantCount);
     } else if (slot.type === 'STUDY') {
-      push('STUDY', room.chiefCount + room.assistantCount);
+      // 자습 교시는 시험실마다 감독 1명이면 된다 (시험실의 정·부감독 수와 상관없이)
+      push('STUDY', Math.min(1, room.chiefCount + room.assistantCount));
     } else {
       push(group.roomType === 'EXTENDED' ? 'EXTENDED' : 'CHIEF', room.chiefCount);
       push('ASSISTANT', room.assistantCount);

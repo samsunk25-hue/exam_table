@@ -27,6 +27,12 @@ describe('좌석 생성', () => {
     expect(runAssignment(input).seats[0]).toMatchObject({ role: 'EXTENDED', weight: 1.5 });
   });
 
+  it('자습 교시는 정·부감독 수와 상관없이 자습감독 1자리', () => {
+    const input = oneRoom({ teachers: [teacher('A'), teacher('B')] });
+    input.slots[0]!.type = 'STUDY';
+    expect(runAssignment(input).seats.map((s) => [s.id, s.role])).toEqual([['G1_STUDY_1', 'STUDY']]);
+  });
+
   it('날짜를 요일로 변환한다', () => {
     expect(weekdayOf('2026-10-12')).toBe(1);
     expect(weekdayOf('2026-10-18')).toBe(7);

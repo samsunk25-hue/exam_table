@@ -53,7 +53,8 @@ async function load(sessionId: string, who: Caller, req: CallableRequest) {
   const input = buildEngineInput(data);
   const seats = new Map(buildSeats(input, DEFAULT_ROLE_WEIGHTS).map((s) => [s.id, s]));
   const names = new Map(data.teachers.map((t) => [t.id, t.name]));
-  const plain = current.map((a) => ({ seatId: a.id, teacherId: a.teacherId }));
+  // 지금 감독 자리에 없는 옛 배정은 교환 검사에서 뺀다 (시간표 편집에서 정리)
+  const plain = current.filter((a) => seats.has(a.id)).map((a) => ({ seatId: a.id, teacherId: a.teacherId }));
   return { ref, status, input, seats, names, current, plain };
 }
 type Loaded = Awaited<ReturnType<typeof load>>;

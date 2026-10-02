@@ -77,4 +77,10 @@ describe('불가시간', () => {
       [2, 2, 3, 0, 0],
     ]);
   });
+
+  it('자습 교시는 시험실마다 1명만 필요하다 (정·부감독 수와 상관없이)', () => {
+    const study = { ...slot('2026-10-12', 3, 1, ['A', 'B']), type: 'STUDY' as const };
+    const cap = capacityByTime([study], [room('A', 1, 1), room('B', 2, 1)], [teacher('T1')], []);
+    expect(cap[0]!.need).toBe(2);
+  });
 });

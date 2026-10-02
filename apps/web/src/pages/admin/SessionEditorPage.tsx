@@ -353,10 +353,13 @@ export function SessionEditorPage() {
       skipSeats: session.settings.noSupervisor ?? [],
     });
     const names = new Map(teachers.data.map((t) => [t.id, t.name]));
+    const seats = buildSeats(input, DEFAULT_ROLE_WEIGHTS);
+    const seatIds = new Set(seats.map((x) => x.id));
     return {
       input,
-      seats: buildSeats(input, DEFAULT_ROLE_WEIGHTS),
-      assignments: assignments.data,
+      seats,
+      // 지금 자리에 없는 옛 배정은 편집에서 빼고, 아래 안내에서 정리한다
+      assignments: assignments.data.filter((a) => seatIds.has(a.id)),
       nameOf: (id) => names.get(id) ?? id,
       teachers: [...teachers.data].sort((a, b) => a.name.localeCompare(b.name, 'ko')),
     };
@@ -367,7 +370,17 @@ export function SessionEditorPage() {
   if (!data) return null;
 
   const byId = new Map(data.assignments.map((a) => [a.id, a]));
+  const orphans = assignments.data.filter((a) => !byId.has(a.id));
   const roomName = new Map(rooms.data.map((r) => [r.id, r.name]));
+  const cleanOrphans = () =>
+    callApplyChanges({
+      sessionId: session.id,
+      changes: orphans.map((a) => ({ seatId: a.id, teacherId: null })),
+      reason: '자습 교시 감독은 시험실마다 1명',
+      label: '없는 자리 배정 정리',
+    })
+      .then(() => toast(`남아 있던 배정 ${orphans.length}건을 정리했습니다.`))
+      .catch((e: unknown) => toast(errorMessage(e), 'alert'));
   const usedRooms = new Set(data.seats.map((s) => s.roomId));
   const roomList = sortRooms(rooms.data.filter((r) => usedRooms.has(r.id)));
   const none = new Set(session.settings.noSupervisor ?? []);
@@ -436,6 +449,23 @@ export function SessionEditorPage() {
         {locked && (
           <div className="mt-3">
             <Alert>변경 잠금 상태입니다. 개요에서 잠금을 해제해야 수정할 수 있습니다.</Alert>
+          </div>
+        )}
+        {orphans.length > 0 && !locked && (
+          <div className="mt-3">
+            <Alert tone="info">
+              <p>
+                감독 자리 규칙이 바뀌어(자습 교시는 시험실마다 1명) 지금은 없는 자리에 배정 {orphans.length}건이 남아 있습니다:{' '}
+                {orphans
+                  .slice(0, 5)
+                  .map((a) => `${data.nameOf(a.teacherId)} ${Number(a.date.slice(5, 7))}/${Number(a.date.slice(8, 10))} ${a.period}교시 ${roomName.get(a.roomId) ?? ''}`)
+                  .join(', ')}
+                {orphans.length > 5 ? ' …' : ''}. 정리하면 교사 시간표에서도 빠집니다.
+              </p>
+              <Button className="mt-2" onClick={() => void cleanOrphans()}>
+                정리하기
+              </Button>
+            </Alert>
           </div>
         )}
         {data.seats.length === 0 && (

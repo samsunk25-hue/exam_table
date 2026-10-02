@@ -11,3 +11,4 @@ export { undoOperation } from './undo';
 export { notifyAccessRequest, notifyAvailability } from './notify';
 export { actSwapRequest, createSwapRequest, suggestSwaps } from './swaps';
 export { aiExplainDuties, aiExtract, aiRules, clearMyAiKey, setMyAiKey } from './ai';
+export { remindDuties } from './reminders';

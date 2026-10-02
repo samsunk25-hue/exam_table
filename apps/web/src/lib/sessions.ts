@@ -46,6 +46,8 @@ export interface ExamSession {
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
   lastChangeReason?: string | null;
+  /** 감독 10분 전 알림에 붙이는 학생 안내사항 (관리자가 적었을 때만) */
+  studentNotice?: string | null;
   /** 대시보드에서 숨긴 지난 프로젝트 */
   hidden?: boolean;
 }
@@ -68,6 +70,10 @@ export function createSession(data: NewSession) {
 }
 
 /** 설정 변경도 되돌리기 목록에 남긴다 */
+export function updateStudentNotice(id: string, text: string) {
+  return commitOps([{ type: 'set', ref: doc(db, 'sessions', id), data: { studentNotice: text.trim() || null }, merge: true }], '학생 안내사항 변경');
+}
+
 export function updateSessionSettings(id: string, settings: SessionSettings) {
   return commitOps([{ type: 'set', ref: doc(db, 'sessions', id), data: { settings }, merge: true }], '시험 설정 변경');
 }

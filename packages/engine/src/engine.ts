@@ -6,7 +6,7 @@ import {
   type Context,
   prefersSeat,
 } from './context';
-import { State, seatKind, type SeatKind } from './state';
+import { State, prefersChief, seatKind, type SeatKind } from './state';
 import type {
   Assignment,
   EngineInput,
@@ -55,11 +55,13 @@ function rankCandidates(ctx: Context, state: State, seat: Seat, exclude?: string
   const regular = out.filter((c) => !c.teacher.temporary && !prefersSeat(ctx, c.teacher.id, seat));
   const fewest = regular.length ? Math.min(...regular.map((c) => state.countOf(c.teacher.id))) : 0;
   const capped = out.filter((c) => c.teacher.temporary || prefersSeat(ctx, c.teacher.id, seat) || state.countOf(c.teacher.id) <= fewest);
-  // 역할 맞추기: 그중에서도 이 종류(정감독·부감독·복도·자습·특별실)를 가장 적게 맡은 교사들만 → 역할별로도 2회 이상 벌어지지 않게
+  // 역할 맞추기: 그중에서도 이 종류(정감독·부감독·복도·자습·특별실)를 가장 적게 맡은 교사들만 → 역할별로도 2회 이상 벌어지지 않게.
+  // 일부 시간만 배정 금지인 교사는 역할 맞추기에서 빠진다 (남은 시간은 정감독 우선)
   const kind = seatKind(seat);
-  const regular2 = capped.filter((c) => !c.teacher.temporary && !prefersSeat(ctx, c.teacher.id, seat));
+  const free = (c: Candidate) => c.teacher.temporary || prefersSeat(ctx, c.teacher.id, seat) || ctx.partlyBlocked.has(c.teacher.id);
+  const regular2 = capped.filter((c) => !free(c));
   const fewestKind = regular2.length ? Math.min(...regular2.map((c) => state.kindCountOf(c.teacher.id, kind))) : 0;
-  const byKind = capped.filter((c) => c.teacher.temporary || prefersSeat(ctx, c.teacher.id, seat) || state.kindCountOf(c.teacher.id, kind) <= fewestKind);
+  const byKind = capped.filter((c) => free(c) || state.kindCountOf(c.teacher.id, kind) <= fewestKind);
   const pool = byKind.length ? byKind : capped;
   // 점수 내림차순 → 누적 부담 오름차순 → 교사 ID (ctx.teachers가 ID순이므로 안정 정렬로 보장)
   return (pool.length ? pool : out).sort((a, b) => b.score - a.score || a.load - b.load);
@@ -270,8 +272,9 @@ function equityRebalance(ctx: Context, state: State, pinnedIds: Set<string>, kee
         const seat = ctx.seatById.get(a.seatId)!;
         const kind = seatKind(seat);
         // 역할 맞추기 뒤에는 그 종류의 교사 간 폭(최다·최소)을 넓히는 이동은 하지 않는다
-        const kinds = keepKinds ? eligible.filter((t) => !t.temporary).map((t) => state.kindCountOf(t.id, kind)) : [];
-        if (keepKinds && !high.temporary && state.kindCountOf(high.id, kind) - 1 < Math.min(...kinds)) continue;
+        const balanced = (t: Teacher) => !t.temporary && !ctx.partlyBlocked.has(t.id);
+        const kinds = keepKinds ? eligible.filter(balanced).map((t) => state.kindCountOf(t.id, kind)) : [];
+        if (keepKinds && kinds.length && balanced(high) && state.kindCountOf(high.id, kind) - 1 < Math.min(...kinds)) continue;
         const bands = state.loadBands();
         const current = state.score(high, seat, bands, seat.id).score;
 
@@ -282,7 +285,9 @@ function equityRebalance(ctx: Context, state: State, pinnedIds: Set<string>, kee
           if (lowLoad + a.weight >= highLoad - EPS) continue;
           if (state.countOf(low.id) >= state.countOf(high.id)) continue;
           if (state.hardReason(low, seat) !== null) continue;
-          if (keepKinds && !low.temporary && state.kindCountOf(low.id, kind) + 1 > Math.max(...kinds)) continue;
+          if (keepKinds && kinds.length && balanced(low) && state.kindCountOf(low.id, kind) + 1 > Math.max(...kinds)) continue;
+          // 일부 시간만 배정 금지인 교사에게는 정감독만 넘긴다
+          if (keepKinds && ctx.partlyBlocked.has(low.id) && kind !== 'CHIEF') continue;
           const s = state.score(low, seat, bands);
           if (s.score < current - tolerance) continue;
           if (!best || s.score > best.score || (s.score === best.score && lowLoad < best.load)) {
@@ -366,6 +371,61 @@ function round(v: number): number {
   return Math.round(v * 1000) / 1000;
 }
 
+/** a(교사 X)와 b(교사 Y)의 자리를 맞바꾼다 (시간이 달라도). 하드 조건에 걸리면 되돌리고 false */
+function swapTeachers(ctx: Context, state: State, a: Assignment, b: Assignment): boolean {
+  const ta = ctx.teacherById.get(a.teacherId)!;
+  const tb = ctx.teacherById.get(b.teacherId)!;
+  const sa = ctx.seatById.get(a.seatId)!;
+  const sb = ctx.seatById.get(b.seatId)!;
+  state.remove(sa.id);
+  state.remove(sb.id);
+  if (state.hardReason(ta, sb) === null && state.hardReason(tb, sa) === null) {
+    const bands = state.loadBands();
+    const scA = state.score(ta, sb, bands);
+    state.add(makeAssignment(sb, { teacher: ta, score: scA.score, reason: scA.reason, load: state.totalLoadOf(ta) }, 'AUTO'));
+    const scB = state.score(tb, sa, bands);
+    state.add(makeAssignment(sa, { teacher: tb, score: scB.score, reason: scB.reason, load: state.totalLoadOf(tb) }, 'AUTO'));
+    return true;
+  }
+  state.add(a);
+  state.add(b);
+  return false;
+}
+
+/**
+ * [4단계-3b] 정감독 우선: 일부 시간만 배정 금지인 교사가 맡은 자습·부감독·복도 감독을 다른 교사의 정감독과 맞바꾼다
+ * (시간이 달라도). 맞바꿀 정감독이 없으면 감독이 더 적은 교사에게 넘긴다. 총 감독 횟수 차이는 그대로이고, 나머지 교사의 역할 균형은 다음 단계(역할 맞추기)가 다시 맞춘다.
+ */
+function chiefPriority(ctx: Context, state: State, pinnedIds: Set<string>): void {
+  const movable = (a: Assignment) => !pinnedIds.has(a.seatId) && !keepsPreferred(ctx, a);
+  const kindOf = (a: Assignment) => seatKind(ctx.seatById.get(a.seatId)!);
+  const others = ctx.teachers.filter((t) => isEligibleTeacher(t) && !t.temporary && !ctx.partlyBlocked.has(t.id));
+  for (const x of ctx.teachers) {
+    if (!ctx.partlyBlocked.has(x.id) || x.temporary || !isEligibleTeacher(x)) continue;
+    for (const a of state.assignmentsOf(x.id).filter((a) => movable(a) && ['ASSISTANT', 'HALLWAY', 'STUDY'].includes(kindOf(a)))) {
+      // 정감독을 많이 맡은 교사의 정감독부터
+      const chiefs = others
+        .sort((p, q) => state.kindCountOf(q.id, 'CHIEF') - state.kindCountOf(p.id, 'CHIEF') || p.id.localeCompare(q.id))
+        .flatMap((y) => state.assignmentsOf(y.id).filter((b) => movable(b) && kindOf(b) === 'CHIEF'));
+      if (chiefs.some((b) => swapTeachers(ctx, state, a, b))) continue;
+      // 맞바꿀 정감독이 없으면 감독이 더 적은 다른 교사에게 넘긴다 (총 횟수 차이는 그대로)
+      const seat = ctx.seatById.get(a.seatId)!;
+      const kind = kindOf(a);
+      const takers = others
+        .filter((y) => state.countOf(y.id) < state.countOf(x.id))
+        .sort((p, q) => state.kindCountOf(p.id, kind) - state.kindCountOf(q.id, kind) || state.totalLoadOf(p) - state.totalLoadOf(q) || p.id.localeCompare(q.id));
+      state.remove(seat.id);
+      const y = takers.find((y) => state.hardReason(y, seat) === null);
+      if (!y) {
+        state.add(a);
+        continue;
+      }
+      const sc = state.score(y, seat, state.loadBands());
+      state.add(makeAssignment(seat, { teacher: y, score: sc.score, reason: sc.reason, load: state.totalLoadOf(y) }, 'AUTO'));
+    }
+  }
+}
+
 /**
  * [4단계-4] 역할 맞추기: 두 교사의 감독을 서로 맞바꾸거나(시간이 달라도) 총 감독이 적은 교사에게 넘겨 교사마다 정감독·부감독·복도·자습·특별실 횟수가
  * 비슷해지게 한다. 한 종류에서 2회 이상 차이 나는 교사 사이만 보며, 총 감독 횟수는 그대로이고 하드 조건을 지킬 때만 바꾼다.
@@ -373,29 +433,11 @@ function round(v: number): number {
  */
 const KINDS: SeatKind[] = ['CHIEF', 'ASSISTANT', 'HALLWAY', 'STUDY', 'SPECIAL'];
 function roleRebalance(ctx: Context, state: State, pinnedIds: Set<string>): void {
-  const eligible = ctx.teachers.filter((t) => isEligibleTeacher(t) && !t.temporary);
+  // 일부 시간만 배정 금지인 교사는 역할 맞추기에서 빠진다 (남은 시간은 정감독 우선)
+  const eligible = ctx.teachers.filter((t) => isEligibleTeacher(t) && !t.temporary && !ctx.partlyBlocked.has(t.id));
   const seatOf = (a: Assignment) => ctx.seatById.get(a.seatId)!;
   const movable = (a: Assignment) => !pinnedIds.has(a.seatId) && !keepsPreferred(ctx, a);
-  /** a(교사 X)와 b(교사 Y)를 맞바꾼다. 하드 조건에 걸리면 되돌리고 false */
-  const trySwap = (a: Assignment, b: Assignment): boolean => {
-    const ta = ctx.teacherById.get(a.teacherId)!;
-    const tb = ctx.teacherById.get(b.teacherId)!;
-    const sa = seatOf(a);
-    const sb = seatOf(b);
-    state.remove(sa.id);
-    state.remove(sb.id);
-    if (state.hardReason(ta, sb) === null && state.hardReason(tb, sa) === null) {
-      const bands = state.loadBands();
-      const scA = state.score(ta, sb, bands);
-      state.add(makeAssignment(sb, { teacher: ta, score: scA.score, reason: scA.reason, load: state.totalLoadOf(ta) }, 'AUTO'));
-      const scB = state.score(tb, sa, bands);
-      state.add(makeAssignment(sa, { teacher: tb, score: scB.score, reason: scB.reason, load: state.totalLoadOf(tb) }, 'AUTO'));
-      return true;
-    }
-    state.add(a);
-    state.add(b);
-    return false;
-  };
+  const trySwap = (a: Assignment, b: Assignment) => swapTeachers(ctx, state, a, b);
   for (let moves = 0; moves < 2000; moves++) {
     let swapped = false;
     outer: for (const k of KINDS) {
@@ -460,6 +502,7 @@ export function runAssignment(input: EngineInput): EngineResult {
   ejectionChain(ctx, state, pinnedIds);
   countRebalance(ctx, state, pinnedIds);
   equityRebalance(ctx, state, pinnedIds);
+  chiefPriority(ctx, state, pinnedIds);
   roleRebalance(ctx, state, pinnedIds);
   equityRebalance(ctx, state, pinnedIds, true);
 

@@ -91,3 +91,41 @@ describe('형평성: 매 시험 감독 수는 비슷하게, 누적 차이는 줄
     if (less.length && more.length) expect(avgPrior(more)).toBeLessThan(avgPrior(less));
   });
 });
+
+describe('일부 시간만 배정 금지인 교사는 남은 시간에 정감독 우선', () => {
+  const sample = buildSampleSchool('2026-10-16');
+  const blocked = sample.teachers.slice(0, 3).map((t) => t.id);
+  // 첫날 1·2교시 출장
+  const availability = blocked.flatMap((teacherId) =>
+    [1, 2].map((period) => ({ teacherId, date: '2026-10-16', period, available: false, reason: '출장', source: 'ADMIN', status: 'APPROVED' })),
+  ) as Parameters<typeof buildEngineInput>[0]['availability'];
+  const input = buildEngineInput({
+    teachers: sample.teachers.map((t, i) => ({ ...t, cumulativeLoad: (i % 5) * 3 })),
+    rooms: sample.rooms,
+    slots: sample.slots,
+    availability,
+    constraints: [],
+    baseTimetable: sample.timetable,
+    useBaseTimetable: true,
+  });
+  const result = runAssignment(input);
+
+  it('남은 시험 교시는 모두 정감독, 연속도 허용, 총 감독 차이는 1회 이하', () => {
+    expect(result.metrics.successRate).toBe(1);
+    expect(validateAssignments(input, result.assignments)).toEqual([]);
+    expect(result.metrics.countGap).toBeLessThanOrEqual(1);
+    for (const id of blocked) {
+      const mine = result.assignments.filter((a) => a.teacherId === id);
+      expect(mine.filter((a) => a.role === 'ASSISTANT')).toEqual([]);
+      expect(mine.filter((a) => a.role === 'CHIEF').length).toBeGreaterThan(mine.filter((a) => a.role === 'STUDY').length);
+    }
+  });
+
+  it('나머지 교사는 역할별 차이 1회 이하', () => {
+    const others = input.teachers.filter((t) => t.active && t.defaultRole !== 'EXCLUDED' && !blocked.includes(t.id));
+    for (const role of ['CHIEF', 'ASSISTANT', 'STUDY']) {
+      const v = others.map((t) => result.assignments.filter((a) => a.teacherId === t.id && a.role === role && !a.seatId.includes('SSEP')).length);
+      expect(Math.max(...v) - Math.min(...v)).toBeLessThanOrEqual(1);
+    }
+  });
+});

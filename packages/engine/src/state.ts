@@ -13,9 +13,16 @@ const EPS = 1e-9;
 
 /** 별도시험장 우선 교사 가점: 연속·부담·횟수 감점을 다 합쳐도 이기도록 크게 (하드 조건은 그대로 지킨다) */
 export const EXTENDED_PREFERRED = 300;
+/** 일부 시간만 배정 금지인 교사가 남은 시간의 정감독 자리를 먼저 맡도록 더하는 점수 */
+export const PARTLY_BLOCKED_CHIEF = 60;
 
 /** 감독 종류: 별도시험장 자리는 정·부와 따로 센다 */
 export type SeatKind = 'CHIEF' | 'ASSISTANT' | 'HALLWAY' | 'STUDY' | 'SPECIAL';
+/** 일부 시간만 배정 금지인 교사: 남은 시간에는 자습·부감독보다 정감독을 먼저 맡는다 (역할 맞추기에서는 빠진다) */
+export function prefersChief(ctx: Context, teacherId: string, seat: Seat): boolean {
+  return ctx.partlyBlocked.has(teacherId) && seatKind(seat) === 'CHIEF';
+}
+
 export function seatKind(seat: Seat): SeatKind {
   if (seat.extended || seat.role === 'EXTENDED') return 'SPECIAL';
   return seat.role as Exclude<SeatKind, 'SPECIAL'>;
@@ -214,6 +221,7 @@ export class State {
 
     add(softConstraintPenalty(this.ctx, teacher, seat), '예외 규칙');
     if (preferredHere) add(EXTENDED_PREFERRED, '별도시험장 우선 교사');
+    if (!teacher.temporary && prefersChief(this.ctx, teacher.id, seat)) add(PARTLY_BLOCKED_CHIEF, '일부 시간 배정 금지라 남은 시간은 정감독 우선');
 
     const reason = [good.length ? `좋은 점: ${good.join(' · ')}` : '', bad.length ? `아쉬운 점: ${bad.join(' · ')}` : ''].filter(Boolean).join(' / ');
     return { score, reason: reason || '특별히 더하거나 뺄 점 없음' };

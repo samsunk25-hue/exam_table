@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { useMemo, useState } from 'react';
 import {
   BUNDLE_SHEETS,
@@ -23,7 +24,7 @@ import { Alert, Button, Card, DownloadButton, Spinner, CardTitle } from '@/compo
 import { RosterImportDialog, rememberTerm, type RosterKind } from '@/components/TermRoster';
 import { useCollection } from '@/lib/data';
 import { Readiness } from './Readiness';
-import { bundleSheets, replacePreview, saveBundle, timetableSheets, type SaveMode } from '@/lib/bundle';
+import { bundleSheets, replacePreview, saveBundle, type SaveMode } from '@/lib/bundle';
 import { callAiExtract, errorMessage, type AiPart, type AiSlotRow, type AiTeacherRow, type AiTimetableRow } from '@/lib/firebase';
 import { termWhere, type ExamSession } from '@/lib/sessions';
 import { downloadWorkbook, readWorkbook, type SheetData } from '@/lib/xlsx';
@@ -584,41 +585,18 @@ export function BundleCard(props: Props) {
   );
 }
 
-/** 배정 설정 > 기초시간표: 현재 상태와 양식 받기·올리기 (교사마다 시간표 시트 하나) */
+/** 배정 설정 > 기초시간표: 현재 상태만. 올리기·양식 받기는 준비 화면(기초 자료 한 번에 입력) 한 곳에서 */
 export function TimetableUpload({ session }: { session: ExamSession }) {
-  const termTeachers = useCollection<TeacherDoc>('teachers', termWhere(session));
-  const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
-  const slots = useCollection<SlotDoc>(`sessions/${session.id}/slots`);
   const timetable = useCollection<BaseTimetableDoc>(`sessions/${session.id}/baseTimetable`);
-  const [open, setOpen] = useState(false);
-  const teachers = termTeachers.data.filter((t) => !t.temporary);
   const total = timetable.data.reduce((s, d) => s + d.entries.length, 0);
-  const editable = isSetupEditable(session.status);
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-bg p-3">
       <span className="text-sm">
         기초시간표: {timetable.data.length ? <b>교사 {timetable.data.length}명 · 수업 {total}건</b> : <b className="text-alert">아직 없음</b>}
       </span>
-      {/* 양식은 교사 이름이 행이라 교사 명단이 있을 때만 보인다 */}
-      {teachers.length > 0 && (
-        <DownloadButton onDownload={() => downloadWorkbook(`기초시간표_${session.examName.replace(/\s+/g, '')}.xlsx`, timetableSheets(teachers, timetable.data))}>
-          양식 받기 (전체 시간표)
-        </DownloadButton>
-      )}
-      <Button variant="secondary" onClick={() => setOpen(true)} disabled={!editable}>
-        기초시간표 올리기
-      </Button>
-      {open && (
-        <BundleImportDialog
-          session={session}
-          editable={editable}
-          teachers={teachers}
-          rooms={rooms.data}
-          slots={slots.data}
-          timetable={timetable.data}
-          onClose={() => setOpen(false)}
-        />
-      )}
+      <Link to={`/admin/sessions/${session.id}`} className="inline-flex min-h-12 items-center px-2 font-semibold text-primary-strong underline-offset-4 hover:underline">
+        준비 › 기초 자료 한 번에 입력에서 올리기 →
+      </Link>
     </div>
   );
 }

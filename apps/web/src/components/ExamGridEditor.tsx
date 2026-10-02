@@ -14,8 +14,9 @@ import { guessBreak, withAddedPeriod } from '@/lib/periodTimes';
 import { updateSessionSettings, type ExamSession, type PeriodTime } from '@/lib/sessions';
 
 type Slot = WithId<SlotDoc>;
-const STUDY = '자습';
-const SUBJECTS = ['국어', '수학', '영어', '과학', '사회', '역사', '도덕', '기술가정', '정보', '음악', '미술', '체육', STUDY];
+export const STUDY = '자습';
+/** 과목 고르기 목록 (시험 표 입력·시험 추가/수정 공통) */
+export const SUBJECTS = ['국어', '수학', '영어', '과학', '사회', '역사', '도덕', '기술가정', '정보', '음악', '미술', '체육', STUDY];
 
 const cellKey = (date: string, period: number, grade: number) => `${date}|${period}|${grade}`;
 

@@ -12,7 +12,8 @@ import { dateLabel } from '@/components/AvailabilityGrid';
 import { Calendar, parseYmd, ymd } from '@/components/Calendar';
 import { BreakTimeBar } from '@/components/BreakTimeBar';
 import { ClockTimePicker } from '@/components/ClockTimePicker';
-import { ExamGridEditor } from '@/components/ExamGridEditor';
+import { ExamGridEditor, STUDY, SUBJECTS } from '@/components/ExamGridEditor';
+import { SubjectCombo } from '@/components/SubjectCombo';
 import { ScheduleImportDialog } from '@/components/ScheduleImportDialog';
 import { Modal } from '@/components/Modal';
 import { PlacementEditor } from './SessionSetupPage';
@@ -88,6 +89,12 @@ function ExamForm({
   const timeOf = (p: number) => times[p] ?? { start: '', end: '' };
   const setTime = (p: number, t: Partial<{ start: string; end: string }>) => setTimes({ ...times, [p]: { ...timeOf(p), ...t } });
   const subjectOf = (g: number, p: number) => rows[g]!.subjects[p] ?? '';
+  // 같은 학년에서 이미 쓴 과목 (다른 날 시험 + 이 창의 다른 교시). 고치는 시험 자신은 뺀다
+  const usedSubjects = (g: number, p: number) =>
+    new Set([
+      ...slots.filter((s) => s.grade === g && s.id !== editing?.id && s.type === 'EXAM').map((s) => s.subject),
+      ...periods.filter((x) => x !== p).map((x) => subjectOf(g, x).trim()),
+    ]);
   const setRow = (g: number, patch: Partial<GradeRow>) => setRows({ ...rows, [g]: { ...rows[g]!, ...patch } });
 
   const save = async () => {
@@ -203,15 +210,20 @@ function ExamForm({
                       </th>
                       {periods.map((p) => (
                         <td key={p}>
-                          <input
-                            list="exam-subjects"
-                            aria-label={periods.length > 1 ? `${g}학년 ${p}교시 과목` : `${g}학년 과목`}
-                            placeholder={row.on ? '과목 또는 자습' : '시험 없음'}
-                            disabled={!row.on}
-                            className={`min-h-12 w-full rounded-xl border px-3 text-center font-semibold disabled:bg-bg ${subjectOf(g, p).trim() === '자습' ? 'border-line bg-bg text-muted' : 'border-line'}`}
-                            value={subjectOf(g, p)}
-                            onChange={(e) => setRow(g, { subjects: { ...row.subjects, [p]: e.target.value } })}
-                          />
+                          {row.on ? (
+                            // 누를 때마다 전체 목록이 열린다 (이미 고른 칸도 다른 과목으로 바꿀 수 있음)
+                            <SubjectCombo
+                              label={periods.length > 1 ? `${g}학년 ${p}교시 과목` : `${g}학년 과목`}
+                              options={SUBJECTS}
+                              repeatable={[STUDY]}
+                              used={usedSubjects(g, p)}
+                              className={`min-h-12 w-full rounded-xl border px-3 text-center font-semibold ${subjectOf(g, p).trim() === STUDY ? 'border-line bg-bg text-muted' : 'border-line'}`}
+                              value={subjectOf(g, p)}
+                              onChange={(v) => setRow(g, { subjects: { ...row.subjects, [p]: v } })}
+                            />
+                          ) : (
+                            <div className="flex min-h-12 items-center justify-center rounded-xl border border-line bg-bg text-muted">시험 없음</div>
+                          )}
                         </td>
                       ))}
                     </tr>
@@ -220,11 +232,6 @@ function ExamForm({
               </tbody>
             </table>
           </div>
-          <datalist id="exam-subjects">
-            {['국어', '수학', '영어', '과학', '사회', '역사', '도덕', '기술가정', '정보', '자습'].map((s) => (
-              <option key={s} value={s} />
-            ))}
-          </datalist>
         </fieldset>
 
         {error && <Alert>{error}</Alert>}
@@ -502,8 +509,9 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
               ) : (
                 <ul className="mt-4 grid gap-2">
                   {dayExams.map((s) => (
-                    <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line p-3">
-                      <div>
+                    // 설명이 길면 글이 줄바꿈되고 버튼은 늘 같은 자리(오른쪽, 휴대폰은 아래)에 있다
+                    <li key={s.id} className="flex flex-col gap-2 rounded-xl border border-line p-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0 flex-1">
                         <div className="text-lg font-bold">
                           {s.period}교시 · {s.grade}학년 {s.subject}
                           {s.type === 'STUDY' && <span className="ml-1 text-sm font-normal text-muted">(자습)</span>}
@@ -521,7 +529,7 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
                       </div>
                       {editable &&
                         (confirmDelete === s.id ? (
-                          <div className="flex gap-1">
+                          <div className="flex shrink-0 gap-1">
                             <Button variant="danger" onClick={() => void remove(s)}>
                               삭제 확인
                             </Button>
@@ -530,7 +538,7 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
                             </Button>
                           </div>
                         ) : (
-                          <div className="flex gap-1">
+                          <div className="flex shrink-0 gap-1">
                             <Button variant="ghost" onClick={() => setPlacing(s)} title="교실·복도·특별실 배치, 특별실 별도 시간">
                               배치
                             </Button>

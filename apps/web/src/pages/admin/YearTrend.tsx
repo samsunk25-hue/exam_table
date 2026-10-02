@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { AssignmentDoc, TeacherDoc, WithId } from '@sim/shared';
+import { Fold } from '@/components/Fold';
 import { Card, Spinner, Table, Td, CardTitle } from '@/components/ui';
 import { useCollection } from '@/lib/data';
 import { useSessions, type ExamSession } from '@/lib/sessions';
@@ -98,6 +99,7 @@ export function YearTrend({ session, teachers, assignments }: { session: ExamSes
         </p>
       )}
       <div className="mt-3">
+        <Fold title={`교사별 피로도 명단 (${model.rows.length}명)`}>
         <Table head={['교사', ...model.past.map(short), '이번 시험', '학년도 합계', '피로도', '이유']}>
           {model.rows.map((r) => (
             <tr key={r.t.id}>
@@ -116,6 +118,7 @@ export function YearTrend({ session, teachers, assignments }: { session: ExamSes
             </tr>
           ))}
         </Table>
+        </Fold>
       </div>
     </Card>
   );

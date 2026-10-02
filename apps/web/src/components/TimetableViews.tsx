@@ -9,7 +9,6 @@ import { ownTimeOf, shownPeriods, timeText, type Duty, type TimetableData } from
 export function FullTimetable({ data, highlight }: { data: TimetableData; highlight?: string | null }) {
   const name = new Map(data.teachers.map((t) => [t.id, t.name]));
   const rooms = [...data.rooms].sort((a, b) => (a.grade ?? 99) - (b.grade ?? 99) || (a.classNo ?? 99) - (b.classNo ?? 99) || a.name.localeCompare(b.name, 'ko'));
-  const slotByKey = new Map(data.slots.map((s) => [`${s.date}|${s.period}|${s.grade}`, s]));
 
   return (
     <div className="grid gap-6">
@@ -17,6 +16,9 @@ export function FullTimetable({ data, highlight }: { data: TimetableData; highli
         const dayAssign = data.assignments.filter((a) => a.date === date);
         const used = rooms.filter((r) => dayAssign.some((a) => a.roomId === r.id));
         // 별도 시간(연장)으로 다음 교시까지 걸치는 감독은 그 교시 칸에도 보인다
+        // 칸마다 그 시험실의 과목 (자습은 "자습", 여러 학년이 쓰는 복도 등은 여러 과목)
+        const subjectAt = (period: number, roomId: string) =>
+          [...new Set(data.slots.filter((s) => s.date === date && s.period === period && s.rooms.some((p) => p.roomId === roomId)).map((s) => (s.type === 'STUDY' ? '자습' : s.subject)))].join('·');
         const cell = (period: number, roomId: string) => dayAssign.filter((a) => a.roomId === roomId && shownPeriods(data.slots, a).includes(period));
         const label = (teacherId: string, role: string) => `${name.get(teacherId) ?? '?'}${role === 'CHIEF' ? '' : `(${SEAT_ROLE_LABEL[role as keyof typeof SEAT_ROLE_LABEL]})`}`;
         return (
@@ -42,6 +44,7 @@ export function FullTimetable({ data, highlight }: { data: TimetableData; highli
                       <td className="px-3 py-2 font-bold whitespace-nowrap">{r.name}</td>
                       {times.map((t) => (
                         <td key={t.period} className="px-3 py-2">
+                          {subjectAt(t.period, r.id) && <div className="text-xs text-muted">{subjectAt(t.period, r.id)}</div>}
                           {cell(t.period, r.id).map((a) => (
                             <div key={a.id} className={`font-semibold ${a.teacherId === highlight ? 'rounded-md bg-primary px-1.5 text-white' : ''}`}>
                               {label(a.teacherId, a.role)}
@@ -69,7 +72,9 @@ export function FullTimetable({ data, highlight }: { data: TimetableData; highli
                       .filter((r) => cell(t.period, r.id).length)
                       .map((r) => (
                         <li key={r.id} className="flex justify-between gap-2 border-b border-line py-1">
-                          <span className="text-muted">{r.name}</span>
+                          <span className="text-muted">
+                            {r.name} <span className="text-xs">{subjectAt(t.period, r.id)}</span>
+                          </span>
                           <span className="text-right font-semibold">
                             {cell(t.period, r.id).map((a) => (
                               <span key={a.id} className={`block ${a.teacherId === highlight ? 'rounded bg-primary px-1 text-white' : ''}`}>
@@ -85,18 +90,6 @@ export function FullTimetable({ data, highlight }: { data: TimetableData; highli
                 </div>
               ))}
             </div>
-            {/* 과목 정보: 같은 교시에 학년마다 과목이 다르므로 아래에 요약 */}
-            <p className="mt-2 text-sm text-muted">
-              {times
-                .map((t) =>
-                  [1, 2, 3, 4, 5, 6]
-                    .map((g) => slotByKey.get(`${date}|${t.period}|${g}`))
-                    .filter(Boolean)
-                    .map((s) => `${t.period}교시 ${s!.grade}학년 ${s!.subject}`)
-                    .join(' · '),
-                )
-                .join(' / ')}
-            </p>
           </section>
         );
       })}

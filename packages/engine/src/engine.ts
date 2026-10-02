@@ -4,6 +4,7 @@ import {
   buildContext,
   isEligibleTeacher,
   type Context,
+  prefersSeat,
 } from './context';
 import { State } from './state';
 import type {
@@ -125,7 +126,8 @@ function greedyMatch(ctx: Context, state: State): void {
 
   // 별도시험장 우선 교사가 있으면 별도시험장 자리를 먼저 채운다
   // (안 그러면 우선 교사가 같은 시간 일반 교실 감독을 먼저 받아 별도시험장을 못 맡는다)
-  const tier = (s: Seat) => (ctx.extendedPreferred.size > 0 && s.extended ? 0 : 1);
+  const anyPreferred = ctx.extendedPrefer.chief.size + ctx.extendedPrefer.assistant.size > 0;
+  const tier = (s: Seat) => (anyPreferred && s.extended ? 0 : 1);
   while (open.size > 0) {
     let pick: Seat | undefined;
     let min = Infinity;
@@ -190,7 +192,7 @@ function ejectionChain(ctx: Context, state: State, pinnedIds: Set<string>): void
 
 /** 별도시험장 우선 교사가 맡은 별도시험장 자리는 횟수·누적 맞추기에서 옮기지 않는다 */
 function keepsPreferred(ctx: Context, a: Assignment): boolean {
-  return ctx.seatById.get(a.seatId)!.extended && ctx.extendedPreferred.has(a.teacherId);
+  return prefersSeat(ctx, a.teacherId, ctx.seatById.get(a.seatId)!);
 }
 
 /**

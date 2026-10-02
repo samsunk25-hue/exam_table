@@ -14,7 +14,6 @@ import {
 } from '@sim/shared';
 import { StatusBadge } from '@/components/StatusStepper';
 import { useTerm } from '@/components/TermRoster';
-import { UndoConfirm, useUndoOps } from '@/components/UndoHistory';
 import { BundleSection } from './BundleCard';
 import { AutoPlacer } from './AutoPlacer';
 import { Alert, Button, Card, PageTitle, Spinner } from '@/components/ui';
@@ -181,22 +180,6 @@ export function SessionLayout() {
   );
 }
 
-/** 가장 최근의 (되돌리지 않은) 단계 변경을 되돌린다 = 이전 단계로 */
-function PrevStepButton({ sessionId }: { sessionId: string }) {
-  const ops = useUndoOps(sessionId);
-  const [open, setOpen] = useState(false);
-  const last = ops.data.find((o) => o.kind === 'STATUS' && !o.undone);
-  if (!last) return null;
-  return (
-    <>
-      <Button variant="ghost" onClick={() => setOpen(true)}>
-        ↶ 이전 단계로 되돌리기
-      </Button>
-      {open && <UndoConfirm op={last} onClose={() => setOpen(false)} />}
-    </>
-  );
-}
-
 function TransitionButton({ session, t, label }: { session: ExamSession; t: Transition; /** 버튼 글자 (없으면 단계 이름) */ label?: string }) {
   const [asking, setAsking] = useState(false);
   const [reason, setReason] = useState('');
@@ -284,11 +267,6 @@ export function SessionOverview() {
             // 앞으로 가는 단계(공개·확정)는 위 "다음 할 일" 버튼 한 곳에서만. 여기는 되돌리기·잠금만
             <TransitionButton key={t.to} session={session} t={t} />
           ))}
-          {/* 단계 되돌리기 버튼이 없을 때(예: 최종 확정)만 마지막 단계 변경 취소를 보인다 */}
-          {!TRANSITIONS[session.status].some((t) => !isForward(session.status, t.to) && t.to !== 'LOCKED') && <PrevStepButton sessionId={session.id} />}
-          <Link to="history" className="inline-flex min-h-12 items-center px-3 font-semibold text-primary-strong underline-offset-4 hover:underline">
-            작업 기록 (하나씩 되돌리기) →
-          </Link>
         </div>
       </Card>
 

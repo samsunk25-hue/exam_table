@@ -25,6 +25,8 @@ export interface SessionData {
   classDuringExam?: boolean;
   skipSeats?: string[];
   extendedPreferred?: string[];
+  extendedChief?: string[];
+  extendedAssistant?: string[];
   pinned?: PinnedAssignment[];
 }
 
@@ -93,6 +95,8 @@ export function buildEngineInput(d: SessionData): EngineInput {
       classDuringExam: d.classDuringExam ?? false,
       skipSeats: d.skipSeats ?? [],
       extendedPreferred: d.extendedPreferred ?? [],
+      extendedChief: d.extendedChief ?? [],
+      extendedAssistant: d.extendedAssistant ?? [],
     },
     pinned: d.pinned,
   };

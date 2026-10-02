@@ -56,9 +56,10 @@ async function editSubject(v) {
   }
 }
 // 교사·시험실 작업 기록은 ④ 변경 이력(학교 공통)에서
+// (되돌리기는 변경 이력 화면 한 곳에만 있다 — 교사 명단 화면에는 링크 없음)
 async function openSchoolHistory() {
-  await page.getByRole('link', { name: '↶ 작업 기록·되돌리기' }).click();
-  await page.waitForFunction(() => location.search.includes('scope=school'));
+  check('교사 명단 화면에는 되돌리기 링크 없음', (await page.getByRole('link', { name: /작업 기록/ }).count()) === 0);
+  await go(page, `/admin/sessions/${SID}/history?scope=school`);
   await page.getByText('작업 기록·되돌리기 (학교 공통: 교사·시험실)').waitFor();
   return page.locator('main');
 }

@@ -359,6 +359,8 @@ export function SessionEditorPage() {
       classDuringExam: session.settings.classDuringExam !== false,
       skipSeats: session.settings.noSupervisor ?? [],
       extendedPreferred: session.settings.extendedPreferred ?? [],
+      extendedChief: session.settings.extendedChief ?? [],
+      extendedAssistant: session.settings.extendedAssistant ?? [],
     });
     const names = new Map(teachers.data.map((t) => [t.id, t.name]));
     const seats = buildSeats(input, DEFAULT_ROLE_WEIGHTS);

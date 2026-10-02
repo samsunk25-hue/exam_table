@@ -3,6 +3,7 @@ import { DEFAULT_CLASS_WEIGHT, classLoadOf, classTimes } from '@sim/engine';
 import { SEAT_ROLE_LABEL, type AssignmentDoc, type BaseTimetableDoc, type SeatRole, type SlotDoc } from '@sim/shared';
 import { Alert, Button, Card, DownloadButton, Spinner, Table, Td, CardTitle } from '@/components/ui';
 import { ExplainDutiesCard } from '@/components/AiCards';
+import { Fold } from '@/components/Fold';
 import { useCollection } from '@/lib/data';
 import { sessionTitle, useSessionTeachers } from '@/lib/sessions';
 import { downloadWorkbook } from '@/lib/xlsx';
@@ -158,6 +159,7 @@ export function SessionEquityPage() {
         {rows.length === 0 ? (
           <p className="text-muted">이 학교·학기 교사 명단이 없습니다.</p>
         ) : (
+          <Fold title={`이번 시험 교사별 명단 (${rows.length}명)`}>
           <Table head={['교사', '감독', '역할', '연속', '수업', '이번', '누적', '학년도 누적 (막대)']}>
             {sorted.map((r) => {
               const b = band(r.total);
@@ -190,6 +192,7 @@ export function SessionEquityPage() {
               );
             })}
           </Table>
+          </Fold>
         )}
       </Card>
 

@@ -89,16 +89,19 @@ export function fullTimetableSheets(d: TimetableData): OutSheet[] {
       .filter((r) => used.has(r.id))
       .map((r) => [
         r.name,
-        ...periods.map((p) =>
-          d.assignments
+        ...periods.map((p) => {
+          // 칸 맨 앞에 그 시험실의 과목
+          const subject = [...new Set(d.slots.filter((s) => s.date === date && s.period === p.period && s.rooms.some((x) => x.roomId === r.id)).map((s) => (s.type === 'STUDY' ? '자습' : s.subject)))].join('·');
+          const names = d.assignments
             .filter((a) => a.date === date && a.roomId === r.id && shownPeriods(d.slots, a).includes(p.period))
             .map((a) => {
               const own = ownTimeOf(d.slots, a.slotId, a.roomId);
               const cont = a.period !== p.period ? ' (이어서)' : '';
               return `${name.get(a.teacherId) ?? '?'}${a.role === 'CHIEF' ? '' : `(${SEAT_ROLE_LABEL[a.role]})`}${own ? ` [${own}]` : ''}${cont}`;
             })
-            .join(', '),
-        ),
+            .join(', ');
+          return subject && names ? `[${subject}] ${names}` : names;
+        }),
       ]);
     return { name: dateLabel(date).replace(/[[\]:*?/\\]/g, ''), rows: [header, ...rows], widths: [14, ...periods.map(() => 22)] };
   });

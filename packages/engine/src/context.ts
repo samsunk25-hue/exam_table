@@ -80,8 +80,14 @@ export interface Context {
   inClass: Set<string>;
   /** 교사별 이번 시험 기간 수업 업무 점수 (수업 시간 × classWeight) */
   classLoad: Map<string, number>;
-  /** 별도시험장 감독 우선 교사 */
-  extendedPreferred: Set<string>;
+  /** 별도시험장 감독 우선 교사 (정감독 자리 / 부감독 자리) */
+  extendedPrefer: { chief: Set<string>; assistant: Set<string> };
+}
+
+/** 이 교사가 이 별도시험장 자리(정감독=연장 / 부감독)의 우선 교사인지 */
+export function prefersSeat(ctx: Context, teacherId: string, seat: Seat): boolean {
+  if (!seat.extended) return false;
+  return (seat.role === 'ASSISTANT' ? ctx.extendedPrefer.assistant : ctx.extendedPrefer.chief).has(teacherId);
 }
 
 export const DEFAULT_CLASS_WEIGHT = 0.8;
@@ -216,7 +222,10 @@ export function buildContext(input: EngineInput): Context {
     baseMatch,
     inClass,
     classLoad,
-    extendedPreferred: new Set(input.settings.extendedPreferred ?? []),
+    extendedPrefer: {
+      chief: new Set([...(input.settings.extendedPreferred ?? []), ...(input.settings.extendedChief ?? [])]),
+      assistant: new Set([...(input.settings.extendedPreferred ?? []), ...(input.settings.extendedAssistant ?? [])]),
+    },
   };
 }
 

@@ -65,6 +65,8 @@ export async function loadData(sessionId: string, useBaseTimetable: boolean) {
     classDuringExam: (session as { settings?: { classDuringExam?: boolean } }).settings?.classDuringExam !== false,
     skipSeats: (session as { settings?: { noSupervisor?: string[] } }).settings?.noSupervisor ?? [],
     extendedPreferred: (session as { settings?: { extendedPreferred?: string[] } }).settings?.extendedPreferred ?? [],
+    extendedChief: (session as { settings?: { extendedChief?: string[] } }).settings?.extendedChief ?? [],
+    extendedAssistant: (session as { settings?: { extendedAssistant?: string[] } }).settings?.extendedAssistant ?? [],
   };
   return { data, current: withIds<AssignmentDoc>(assignments) };
 }

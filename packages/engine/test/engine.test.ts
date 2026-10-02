@@ -455,7 +455,7 @@ describe('별도시험장 우선 교사', () => {
       teachers: ['A', 'B', 'C', 'D', 'E', 'F'].map((id) => teacher(id)),
       rooms: [
         { id: 'R11', name: '1-1', chiefCount: 1, assistantCount: 1, spaceType: 'CLASSROOM' },
-        { id: 'SEP', name: '별도시험장', chiefCount: 1, assistantCount: 1, spaceType: 'SPECIAL' },
+        { id: 'SEP', name: '별도시험장', chiefCount: 1, assistantCount: 1, spaceType: 'SEPARATE' },
       ],
       slots: [{ id: 'S1', date: '2026-10-12', period: 1, grade: 1, subject: '수학', type: 'EXAM' }],
       groups: [
@@ -468,5 +468,25 @@ describe('별도시험장 우선 교사', () => {
     const at = (seatId: string) => r.assignments.find((a) => a.seatId === seatId)?.teacherId;
     expect([at('G2_EXTENDED_1'), at('G2_ASSISTANT_1')].sort()).toEqual(['E', 'F']);
     expect(r.assignments.find((a) => a.seatId === 'G2_EXTENDED_1')!.reason).toContain('별도시험장 우선');
+  });
+
+  it('정감독(연장)·부감독을 나눠 고르면 각 자리에 그 교사', () => {
+    const base = {
+      teachers: ['A', 'B', 'C', 'D', 'E', 'F'].map((id) => teacher(id)),
+      rooms: [
+        { id: 'R11', name: '1-1', chiefCount: 1, assistantCount: 1, spaceType: 'CLASSROOM' as const },
+        { id: 'SEP', name: '별도시험장', chiefCount: 1, assistantCount: 1, spaceType: 'SEPARATE' as const },
+      ],
+      slots: [{ id: 'S1', date: '2026-10-12', period: 1, grade: 1, subject: '수학', type: 'EXAM' as const }],
+      groups: [
+        { id: 'G1', slotId: 'S1', roomId: 'R11', grade: 1, classNo: 1, roomType: 'NORMAL' as const },
+        { id: 'G2', slotId: 'S1', roomId: 'SEP', grade: 1, classNo: null, roomType: 'EXTENDED' as const },
+      ],
+    };
+    for (const [chief, assistant] of [['E', 'F'], ['F', 'E']]) {
+      const r = runAssignment(emptyInput({ ...base, settings: { useBaseTimetable: false, extendedChief: [chief!], extendedAssistant: [assistant!] } }));
+      const at = (seatId: string) => r.assignments.find((a) => a.seatId === seatId)?.teacherId;
+      expect([at('G2_EXTENDED_1'), at('G2_ASSISTANT_1')]).toEqual([chief, assistant]);
+    }
   });
 });

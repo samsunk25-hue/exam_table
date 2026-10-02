@@ -5,6 +5,7 @@ import {
   staticHardReason,
   timeKey,
   type Context,
+  prefersSeat,
 } from './context';
 import type { Assignment, ExclusionReason, Seat, Teacher } from './types';
 
@@ -170,7 +171,7 @@ export class State {
     else if (load >= bands.high - EPS) add(w.highLoad, '부담상위');
     // 이번 시험에서 이미 많이 맡은 교사일수록 감점 (지금 맡은 좌석은 빼고 센다).
     // 별도시험장 우선 교사의 별도시험장 자리는 예외 — 횟수는 횟수 맞추기 단계가 그 교사의 일반 감독을 넘겨 맞춘다
-    const preferredHere = seat.extended && this.ctx.extendedPreferred.has(teacher.id);
+    const preferredHere = prefersSeat(this.ctx, teacher.id, seat);
     if (!teacher.temporary && !preferredHere) {
       const mine = this.countOf(teacher.id) - (ignoreSeatId && this.bySeat.get(ignoreSeatId)?.teacherId === teacher.id ? 1 : 0);
       add(w.countBalance * Math.max(0, mine - bands.minCount), '이번 감독 많음');
@@ -186,7 +187,7 @@ export class State {
     if (adjacent) add(w.consecutive, '연속');
 
     add(softConstraintPenalty(this.ctx, teacher, seat), '예외규칙');
-    if (seat.extended && this.ctx.extendedPreferred.has(teacher.id)) add(EXTENDED_PREFERRED, '별도시험장 우선');
+    if (preferredHere) add(EXTENDED_PREFERRED, '별도시험장 우선');
 
     return { score, reason: parts.length > 0 ? parts.join(', ') : '0(가감점 없음)' };
   }

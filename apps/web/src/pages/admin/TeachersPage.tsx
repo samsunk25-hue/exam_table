@@ -1,4 +1,3 @@
-import { Link } from 'react-router';
 import { useMemo, useState, type FormEvent } from 'react';
 import {
   DEFAULT_ROLE_LABEL,
@@ -303,10 +302,6 @@ export function TeachersPage() {
               다른 학기에서 불러오기
             </Button>
           )}
-          {/* 작업 기록은 ④ 변경 이력 한 곳에서 (학교 공통 보기로 연다) */}
-          <Link to="../history?scope=school" relative="path" className="inline-flex min-h-12 items-center rounded-xl px-4 font-semibold text-ink hover:bg-bg">
-            ↶ 작업 기록·되돌리기
-          </Link>
         </div>
       )}
 

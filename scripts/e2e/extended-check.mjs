@@ -23,7 +23,7 @@ const until = async (fn, ms = 20000) => {
 };
 
 const SID = 'E2E_SAMPLE';
-await db.doc(`sessions/${SID}`).set({ status: 'DRAFT', settings: { extendedPreferred: [] } }, { merge: true });
+await db.doc(`sessions/${SID}`).set({ status: 'DRAFT', settings: { extendedPreferred: [], extendedChief: [], extendedAssistant: [] } }, { merge: true });
 const teachers = (await db.collection('teachers').where('term', '==', '샘플중학교|2026|2').get()).docs
   .map((d) => ({ id: d.id, name: d.get('name') }))
   .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
@@ -31,17 +31,17 @@ const picks = teachers.slice(-2); // 이름순 마지막 두 명
 
 const { browser, page, errors } = await openApp();
 await go(page, `/admin/sessions/${SID}/assign`);
-const add = page.getByLabel('별도시험장 우선 교사 추가');
-await add.waitFor();
-for (const t of picks) {
-  await add.selectOption({ value: t.id });
-  await page.getByRole('button', { name: `${t.name} 빼기` }).waitFor();
+// 정감독(연장)은 picks[0], 부감독은 picks[1]
+const [chief, assistant] = picks;
+for (const [label, t] of [['정감독(연장)', chief], ['부감독', assistant]]) {
+  await page.getByLabel(`별도시험장 ${label} 우선 교사 추가`).selectOption({ value: t.id });
+  await page.getByRole('button', { name: `${label} ${t.name} 빼기` }).waitFor();
 }
 const saved = await until(async () => {
-  const ids = (await db.doc(`sessions/${SID}`).get()).get('settings.extendedPreferred') ?? [];
-  return picks.every((t) => ids.includes(t.id));
+  const st = (await db.doc(`sessions/${SID}`).get()).get('settings') ?? {};
+  return (st.extendedChief ?? []).join() === chief.id && (st.extendedAssistant ?? []).join() === assistant.id;
 });
-check('배정 설정: 우선 교사 2명 저장', saved, picks.map((t) => t.name).join(', '));
+check('배정 설정: 정감독·부감독 우선 교사 따로 저장', saved, `정 ${chief.name}, 부 ${assistant.name}`);
 
 await runCompare(page);
 await page.locator('section', { hasText: '다중 시나리오 비교' }).first().getByRole('button', { name: '자세히' }).first().click();
@@ -51,10 +51,11 @@ const applied = await until(async () => (await db.collection(`sessions/${SID}/as
 const docs = (await db.collection(`sessions/${SID}/assignments`).get()).docs;
 const sepRooms = new Set((await db.collection('rooms').where('name', '==', '별도시험장').get()).docs.map((d) => d.id));
 const sepSeats = docs.filter((d) => sepRooms.has(d.get('roomId')));
-const byPick = sepSeats.filter((d) => picks.some((t) => t.id === d.get('teacherId')));
-check('별도시험장 자리를 우선 교사가 맡음', applied && sepSeats.length > 0 && byPick.length === sepSeats.length, `${byPick.length} / ${sepSeats.length}자리`);
+const okSeat = (d) => d.get('teacherId') === (d.get('role') === 'ASSISTANT' ? assistant.id : chief.id);
+const good = sepSeats.filter(okSeat);
+check('별도시험장 정감독(연장)·부감독 자리를 각 우선 교사가 맡음', applied && sepSeats.length > 0 && good.length === sepSeats.length, `${good.length} / ${sepSeats.length}자리`);
 check('콘솔 오류 없음', errors.length === 0, errors.join(' / '));
 await browser.close();
-await db.doc(`sessions/${SID}`).set({ settings: { extendedPreferred: [] } }, { merge: true });
+await db.doc(`sessions/${SID}`).set({ settings: { extendedPreferred: [], extendedChief: [], extendedAssistant: [] } }, { merge: true });
 console.log(failures ? `\n실패 ${failures}건` : '\n모두 통과');
 process.exit(failures ? 1 : 0);

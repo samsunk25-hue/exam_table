@@ -102,6 +102,8 @@ export function WeightSimulator({
       classDuringExam: session.settings.classDuringExam !== false,
       skipSeats: session.settings.noSupervisor ?? [],
       extendedPreferred: session.settings.extendedPreferred ?? [],
+      extendedChief: session.settings.extendedChief ?? [],
+      extendedAssistant: session.settings.extendedAssistant ?? [],
       pinned: keepManual ? assignments.data.filter((a) => a.source === 'MANUAL').map((a) => ({ seatId: a.id, teacherId: a.teacherId })) : [],
     });
   }, [loading, slots.data, rooms.data, teachers.data, availability.data, constraints.data, timetable.data, assignments.data, keepManual, session.settings]);

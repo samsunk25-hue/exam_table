@@ -27,8 +27,12 @@ export interface SessionSettings {
   autoApproveAvailability?: boolean;
   /** 시험 없는 학년은 수업: 그 시간 기초시간표에 수업이 있는 교사는 감독에서 뺀다 */
   classDuringExam?: boolean;
-  /** 별도시험장 감독 우선 교사 (정·부감독 자리에 먼저 배정) */
+  /** 별도시험장 감독 우선 교사 — 예전 설정(정·부 모두). 새로 고르면 아래 둘로 옮긴다 */
   extendedPreferred?: string[];
+  /** 별도시험장 정감독(연장) 우선 교사 */
+  extendedChief?: string[];
+  /** 별도시험장 부감독 우선 교사 */
+  extendedAssistant?: string[];
   /** 감독 없음으로 정한 자리(좌석 ID) */
   noSupervisor?: string[];
   /** 출제 교사 배정 규칙 (없으면 상관없음) */

@@ -19,16 +19,18 @@ type Kind = (typeof KINDS)[number]['key'];
 const zero = (): Record<Kind, number> => ({ chief: 0, assistant: 0, hallway: 0, special: 0, study: 0 });
 
 /**
- * 학년도 감독 횟수: 같은 학교·학년도에 확정된 시험과 이번 시험을 합쳐 교사마다 감독 종류별 총 횟수.
+ * 학년도 감독 횟수: 같은 학교·학년도에서 이번 시험보다 먼저 만든 시험(확정 전이어도, 초안 제외)과 이번 시험을 합쳐 교사마다 감독 종류별 총 횟수.
+ * 자동 배정도 같은 기준으로 앞선 시험 횟수를 이어서 맞춘다 (functions/src/priorCounts.ts).
  * 학기마다 교사 문서가 따로 있으므로 같은 사람은 이메일(없으면 이름)로 잇는다.
  */
 export function YearTrend({ session, teachers, assignments }: { session: ExamSession; teachers: WithId<TeacherDoc>[]; assignments: WithId<AssignmentDoc>[] }) {
   const sessions = useSessions();
   const everyone = useCollection<TeacherDoc>('teachers');
   const rooms = useCollection<RoomDoc>('rooms');
-  // 같은 학교·학년도, 확정된 다른 시험
+  // 같은 학교·학년도, 이번 시험보다 먼저 만든 다른 시험 (초안 제외)
+  const mine = session.createdAt?.toMillis() ?? Infinity;
   const pastIds = sessions.data
-    .filter((s) => s.id !== session.id && s.schoolName === session.schoolName && s.year === session.year && (s.status === 'CONFIRMED' || s.status === 'LOCKED'))
+    .filter((s) => s.id !== session.id && s.schoolName === session.schoolName && s.year === session.year && s.status !== 'DRAFT' && (s.createdAt?.toMillis() ?? 0) < mine)
     .map((s) => s.id)
     .join(',');
   const [pastAssign, setPastAssign] = useState<WithId<AssignmentDoc>[] | null>(null);
@@ -73,7 +75,7 @@ export function YearTrend({ session, teachers, assignments }: { session: ExamSes
     <Card>
       <CardTitle icon="📈">학년도 감독 횟수</CardTitle>
       <p className="mt-1 text-muted">
-        {session.year}학년도 {session.schoolName}에서 확정된 시험 {pastCount}개와 이번 시험을 합친 감독 종류별 총 횟수입니다.
+        {session.year}학년도 {session.schoolName}에서 이번 시험보다 먼저 만든 시험 {pastCount}개와 이번 시험을 합친 감독 종류별 총 횟수입니다. 자동 배정도 이 횟수를 이어서 맞춥니다.
       </p>
       <div className="mt-3">
         <Fold title={`교사별 학년도 감독 횟수 (${rows.length}명)`}>

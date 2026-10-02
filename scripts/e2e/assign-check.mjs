@@ -71,13 +71,18 @@ for (let i = 0; i < 50 && heads.length < 5; i++) {
 check('4개 안 비교표', heads.length === 5 && heads.some((h) => h.includes('A안')) && heads.some((h) => h.includes('C안')), heads.join(' | '));
 await page.screenshot({ path: `${OUT}/assign-compare.png`, fullPage: true });
 
-// C안 자세히 보기 → 적용
-await compare.getByRole('button', { name: '자세히' }).last().click();
-await page.getByRole('heading', { name: /C안/ }).waitFor();
+// 추천안(바로 적용된 안)이 아닌 다른 안 하나를 자세히 보기 → 적용 (추천안은 엔진 결과에 따라 바뀐다)
+const KEY = { 'A안': 'EQUITY', 'B안': 'NO_CONSECUTIVE', 'C안': 'SUBJECT_HALLWAY' };
+const rowButtons = compare.locator('tbody tr').last().getByRole('button');
+const labels = (await rowButtons.allInnerTexts()).map((t) => t.trim());
+const pick = [3, 2, 1].find((i) => labels[i] === '자세히');
+const plan = heads[pick + 1].match(/[ABC]안/)[0];
+await rowButtons.nth(pick).click();
+await page.getByRole('heading', { name: new RegExp(plan) }).waitFor();
 await page.getByRole('button', { name: '이 결과 적용' }).click();
 await page.getByRole('status').filter({ hasText: '적용했습니다' }).waitFor({ timeout: 60000 });
 await page.getByText('현재 적용됨').waitFor();
-check('C안 적용', true);
+check(`${plan} 적용`, true);
 await page.screenshot({ path: `${OUT}/assign-applied.png`, fullPage: true });
 
 const session = await db.doc(`sessions/${SID}`).get();
@@ -85,7 +90,7 @@ const assigns = await db.collection(`sessions/${SID}/assignments`).get();
 check('세션 상태 → 자동 배정 완료', session.get('status') === 'AUTO_ASSIGNED', session.get('status'));
 check('배정 저장 (32석)', assigns.size === 32, `${assigns.size}석`);
 const run = await db.doc(`sessions/${SID}/runs/${session.get('assignmentStats.runId')}`).get();
-check('적용한 안 = C안', run.get('scenario') === 'SUBJECT_HALLWAY', run.get('scenarioLabel'));
+check(`적용한 안 = ${plan}`, run.get('scenario') === KEY[plan], run.get('scenarioLabel'));
 check('콘솔 오류 없음', errors.length === 0, errors.join(' / '));
 await browser.close();
 process.exit(failures ? 1 : 0);

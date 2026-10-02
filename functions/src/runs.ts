@@ -19,6 +19,7 @@ import { recordOp } from './undo';
 import { db, requireAdmin, serverTimestamp } from './common';
 import type { QuerySnapshot, WriteBatch } from 'firebase-admin/firestore';
 import { buildEngineInput, toRunDoc, type SessionData } from './engineInput';
+import { priorCountsFor } from './priorCounts';
 
 const RUN_OPTIONS = { timeoutSeconds: 120, memory: '512MiB' as const };
 
@@ -126,6 +127,8 @@ export const runAssignment = onCall(RUN_OPTIONS, async (req) => {
   if (data.slots.length === 0) throw new HttpsError('failed-precondition', '시험 일정이 없습니다. 준비 > 시험 일정에서 먼저 입력하세요.');
 
   data.pinned = keep ? current.filter((a) => a.source === 'MANUAL').map((a) => ({ seatId: a.id, teacherId: a.teacherId })) : [];
+  // 같은 학년도 앞선 확정 시험의 감독 횟수를 이어서 맞춘다
+  data.priorCounts = await priorCountsFor(sessionId, (await db().doc(`sessions/${sessionId}`).get()).data() ?? {}, data.teachers);
   const input = buildEngineInput(data);
   if (!input.teachers.some((t) => t.active && t.defaultRole !== 'EXCLUDED')) {
     throw new HttpsError('failed-precondition', '감독할 교사가 없습니다. 준비 > 교사 명단을 먼저 넣으세요.');

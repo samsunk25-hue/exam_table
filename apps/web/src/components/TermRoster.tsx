@@ -210,6 +210,11 @@ export function RosterImportDialog({ kind, target, all: everything, onClose }: {
     const keys = [...new Set(all.flatMap((d) => (d.term && d.term !== targetKey ? [d.term] : [])))];
     return keys.flatMap((k) => parseTermKey(k) ?? []).sort(byRecent);
   }, [all, targetKey]);
+  // 학기별 시험 이름 (같은 학기의 시험들은 교사·시험실 명단을 함께 쓴다)
+  const sessions = useSessions();
+  const examsOf = (k: string) =>
+    sessions.data.filter((x) => termKey(sessionTerm(x)) === k).map((x) => x.examName);
+  const sameTermExams = examsOf(targetKey);
   const [source, setSource] = useState<string | null>(null);
   const [clearHomeroom, setClearHomeroom] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -263,12 +268,18 @@ export function RosterImportDialog({ kind, target, all: everything, onClose }: {
         <p>
           <b>{termLabel(target)}</b>(으)로 가져올 명단을 고르세요.
         </p>
+        {sameTermExams.length > 1 && (
+          <p className="rounded-xl bg-bg p-3 text-muted">
+            같은 학기의 시험({sameTermExams.join(', ')})은 이 {KIND_LABEL[kind]} 명단을 함께 씁니다. 따로 불러오지 않아도 됩니다.
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
           {sources.map((t) => {
             const k = termKey(t);
             return (
               <Button key={k} variant={source === k ? 'primary' : 'secondary'} aria-pressed={source === k} onClick={() => setSource(k)}>
                 {termLabel(t)} ({all.filter((d) => d.term === k).length})
+                {examsOf(k).length > 0 && <span className="ml-1 font-normal text-muted">· {examsOf(k).join(', ')}</span>}
               </Button>
             );
           })}

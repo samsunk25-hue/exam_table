@@ -54,14 +54,22 @@ function rankCandidates(ctx: Context, state: State, seat: Seat, exclude?: string
   // 별도시험장 우선 교사의 그 자리는 예외, 임시 감독자는 교사가 모자랄 때만 쓰이므로 따로 둔다
   const regular = out.filter((c) => !c.teacher.temporary && !prefersSeat(ctx, c.teacher.id, seat));
   const fewest = regular.length ? Math.min(...regular.map((c) => state.countOf(c.teacher.id))) : 0;
-  const capped = out.filter((c) => c.teacher.temporary || prefersSeat(ctx, c.teacher.id, seat) || state.countOf(c.teacher.id) <= fewest);
+  const capped0 = out.filter((c) => c.teacher.temporary || prefersSeat(ctx, c.teacher.id, seat) || state.countOf(c.teacher.id) <= fewest);
+  // 학년도 누적 맞추기: 그중 앞선 확정 시험까지 감독을 가장 적게 맡은 교사부터 → 1회 더 맡는 몫이 누적이 적은 교사에게 간다
+  const regularC = capped0.filter((c) => !c.teacher.temporary && !prefersSeat(ctx, c.teacher.id, seat));
+  const fewestPrior = regularC.length ? Math.min(...regularC.map((c) => state.priorCountOf(c.teacher))) : 0;
+  const capped = capped0.filter((c) => c.teacher.temporary || prefersSeat(ctx, c.teacher.id, seat) || state.priorCountOf(c.teacher) <= fewestPrior);
   // 역할 맞추기: 그중에서도 이 종류(정감독·부감독·복도·자습·특별실)를 가장 적게 맡은 교사들만 → 역할별로도 2회 이상 벌어지지 않게.
   // 일부 시간만 배정 금지인 교사는 역할 맞추기에서 빠진다 (남은 시간은 정감독 우선)
   const kind = seatKind(seat);
   const free = (c: Candidate) => c.teacher.temporary || prefersSeat(ctx, c.teacher.id, seat) || ctx.partlyBlocked.has(c.teacher.id);
   const regular2 = capped.filter((c) => !free(c));
   const fewestKind = regular2.length ? Math.min(...regular2.map((c) => state.kindCountOf(c.teacher.id, kind))) : 0;
-  const byKind = capped.filter((c) => free(c) || state.kindCountOf(c.teacher.id, kind) <= fewestKind);
+  const byKind0 = capped.filter((c) => free(c) || state.kindCountOf(c.teacher.id, kind) <= fewestKind);
+  // 같으면 앞선 시험에서 이 종류를 적게 맡은 교사부터
+  const regular3 = byKind0.filter((c) => !free(c));
+  const fewestPriorKind = regular3.length ? Math.min(...regular3.map((c) => state.priorCountOf(c.teacher, kind))) : 0;
+  const byKind = byKind0.filter((c) => free(c) || state.priorCountOf(c.teacher, kind) <= fewestPriorKind);
   const pool = byKind.length ? byKind : capped;
   // 점수 내림차순 → 누적 부담 오름차순 → 교사 ID (ctx.teachers가 ID순이므로 안정 정렬로 보장)
   return (pool.length ? pool : out).sort((a, b) => b.score - a.score || a.load - b.load);
@@ -219,11 +227,11 @@ function countRebalance(ctx: Context, state: State, pinnedIds: Set<string>): voi
     const counts = eligible.map((t) => ({ t, c: state.countOf(t.id) }));
     if (!counts.length) return;
     const min = Math.min(...counts.map((x) => x.c));
-    const givers = counts.filter((x) => x.c >= min + 2).sort((a, b) => b.c - a.c || state.totalLoadOf(b.t) - state.totalLoadOf(a.t));
+    const givers = counts.filter((x) => x.c >= min + 2).sort((a, b) => b.c - a.c || state.cumCountOf(b.t) - state.cumCountOf(a.t) || state.totalLoadOf(b.t) - state.totalLoadOf(a.t));
     let moved = false;
     outer: for (const g of givers) {
       const own = state.assignmentsOf(g.t.id).filter((a) => !pinnedIds.has(a.seatId) && !keepsPreferred(ctx, a));
-      const receivers = counts.filter((x) => x.c <= g.c - 2).sort((a, b) => a.c - b.c || state.totalLoadOf(a.t) - state.totalLoadOf(b.t));
+      const receivers = counts.filter((x) => x.c <= g.c - 2).sort((a, b) => a.c - b.c || state.cumCountOf(a.t) - state.cumCountOf(b.t) || state.totalLoadOf(a.t) - state.totalLoadOf(b.t));
       for (const r of receivers) {
         const bands = state.loadBands();
         let best: { seat: Seat; c: Candidate } | undefined;
@@ -284,8 +292,12 @@ function equityRebalance(ctx: Context, state: State, pinnedIds: Set<string>, kee
           const lowLoad = state.totalLoadOf(low);
           if (lowLoad + a.weight >= highLoad - EPS) continue;
           if (state.countOf(low.id) >= state.countOf(high.id)) continue;
+          // 학년도 누적 감독 횟수도 받는 교사가 더 적을 때만
+          if (state.cumCountOf(low) >= state.cumCountOf(high)) continue;
           if (state.hardReason(low, seat) !== null) continue;
           if (keepKinds && kinds.length && balanced(low) && state.kindCountOf(low.id, kind) + 1 > Math.max(...kinds)) continue;
+          // 이 종류의 학년도 누적도 받는 교사가 더 적을 때만
+          if (keepKinds && state.priorCountOf(low, kind) + state.kindCountOf(low.id, kind) >= state.priorCountOf(high, kind) + state.kindCountOf(high.id, kind)) continue;
           // 일부 시간만 배정 금지인 교사에게는 정감독만 넘긴다
           if (keepKinds && ctx.partlyBlocked.has(low.id) && kind !== 'CHIEF') continue;
           const s = state.score(low, seat, bands);
@@ -453,7 +465,7 @@ function roleRebalance(ctx: Context, state: State, pinnedIds: Set<string>): void
           if (g.c - r.c < 2) continue;
           const gives = state.assignmentsOf(g.t.id).filter((a) => movable(a) && seatKind(seatOf(a)) === k);
           // 받는 교사의 총 감독이 더 적으면 맞바꾸지 않고 그냥 넘긴다 (총 횟수 차이는 그대로)
-          if (state.countOf(r.t.id) < state.countOf(g.t.id)) {
+          if (state.countOf(r.t.id) < state.countOf(g.t.id) && state.cumCountOf(r.t) < state.cumCountOf(g.t)) {
             for (const a of gives) {
               const sa = seatOf(a);
               state.remove(sa.id);
@@ -491,6 +503,53 @@ function roleRebalance(ctx: Context, state: State, pinnedIds: Set<string>): void
   }
 }
 
+/**
+ * [4단계-5] 학년도 역할 맞추기: 앞선 확정 시험까지 합친 종류별 누적이 2회 이상 차이 나면, 이번 시험의 역할별 폭을
+ * 넓히지 않는 맞바꾸기로 누적이 적은 교사에게 그 종류를 넘긴다. (이번 시험 종류별 제곱합, 누적 종류별 제곱합)이
+ * 사전순으로 줄어들 때만 바꾸므로 반드시 끝난다. 앞선 시험 기록이 없으면 하지 않는다.
+ */
+function cumRoleRebalance(ctx: Context, state: State, pinnedIds: Set<string>): void {
+  const eligible = ctx.teachers.filter((t) => isEligibleTeacher(t) && !t.temporary && !ctx.partlyBlocked.has(t.id));
+  if (!eligible.some((t) => t.priorCounts)) return;
+  const kindOf = (a: Assignment) => seatKind(ctx.seatById.get(a.seatId)!);
+  const movable = (a: Assignment) => !pinnedIds.has(a.seatId) && !keepsPreferred(ctx, a);
+  const now = (t: Teacher, k: SeatKind) => state.kindCountOf(t.id, k);
+  const cum = (t: Teacher, k: SeatKind) => state.priorCountOf(t, k) + now(t, k);
+  for (let moves = 0; moves < 500; moves++) {
+    const range = new Map(KINDS.map((k) => {
+      const v = eligible.map((t) => now(t, k));
+      return [k, { min: Math.min(...v), max: Math.max(...v) }] as const;
+    }));
+    let swapped = false;
+    outer: for (const k of KINDS) {
+      const rk = range.get(k)!;
+      for (const x of eligible) {
+        for (const y of eligible) {
+          if (cum(x, k) - cum(y, k) < 2) continue;
+          const gives = state.assignmentsOf(x.id).filter((a) => movable(a) && kindOf(a) === k);
+          const takes = state.assignmentsOf(y.id).filter((b) => movable(b) && kindOf(b) !== k);
+          for (const a of gives) {
+            for (const b of takes) {
+              const kb = kindOf(b);
+              const rb = range.get(kb)!;
+              // 이번 시험 역할별 폭은 그대로 (넓히지 않는다), 제곱합도 늘리지 않는다
+              if (now(y, k) + 1 > rk.max || now(x, k) - 1 < rk.min || now(x, kb) + 1 > rb.max || now(y, kb) - 1 < rb.min) continue;
+              if (now(x, k) - now(y, k) + now(y, kb) - now(x, kb) < 2) continue;
+              // 누적 종류별 제곱합은 줄어야 한다
+              if (cum(x, k) - cum(y, k) + cum(y, kb) - cum(x, kb) <= 2) continue;
+              if (swapTeachers(ctx, state, a, b)) {
+                swapped = true;
+                break outer;
+              }
+            }
+          }
+        }
+      }
+    }
+    if (!swapped) return;
+  }
+}
+
 /** 자동 감독 배정 실행. 같은 입력에는 항상 같은 결과를 돌려준다. */
 export function runAssignment(input: EngineInput): EngineResult {
   const ctx = buildContext(input);
@@ -504,6 +563,7 @@ export function runAssignment(input: EngineInput): EngineResult {
   equityRebalance(ctx, state, pinnedIds);
   chiefPriority(ctx, state, pinnedIds);
   roleRebalance(ctx, state, pinnedIds);
+  cumRoleRebalance(ctx, state, pinnedIds);
   equityRebalance(ctx, state, pinnedIds, true);
 
   const seats = [...ctx.seats].sort(compareSeats);

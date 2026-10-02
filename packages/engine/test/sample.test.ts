@@ -129,3 +129,42 @@ describe('일부 시간만 배정 금지인 교사는 남은 시간에 정감독
     }
   });
 });
+
+describe('두 번째 시험부터는 앞선 확정 시험의 감독 횟수를 이어서 맞춘다', () => {
+  const sample = buildSampleSchool('2026-10-16');
+  const kindOf = (a: { role: string; seatId: string }) => (a.seatId.includes('SSEP') ? 'SPECIAL' : a.role);
+  const prior: Record<string, Record<string, number>> = {};
+  const results = [1, 2, 3].map(() => {
+    const input = buildEngineInput({
+      teachers: sample.teachers,
+      rooms: sample.rooms,
+      slots: sample.slots,
+      availability: [],
+      constraints: [],
+      baseTimetable: sample.timetable,
+      useBaseTimetable: true,
+      priorCounts: structuredClone(prior),
+    });
+    const result = runAssignment(input);
+    for (const a of result.assignments) {
+      const c = (prior[a.teacherId] ??= {});
+      c[kindOf(a)] = (c[kindOf(a)] ?? 0) + 1;
+    }
+    return { input, result };
+  });
+  const ids = sample.teachers.map((t) => t.id);
+  const gap = (v: number[]) => Math.max(...v) - Math.min(...v);
+
+  it('시험마다 감독 횟수 차이는 1회 이하', () => {
+    for (const { input, result } of results) {
+      expect(result.metrics.successRate).toBe(1);
+      expect(validateAssignments(input, result.assignments)).toEqual([]);
+      expect(result.metrics.countGap).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('세 번 시험을 합친 누적 감독 횟수도 전체·역할별 모두 차이 1회 이하', () => {
+    expect(gap(ids.map((id) => Object.values(prior[id] ?? {}).reduce((n, v) => n + v, 0)))).toBeLessThanOrEqual(1);
+    for (const k of ['CHIEF', 'ASSISTANT', 'STUDY', 'SPECIAL']) expect(gap(ids.map((id) => prior[id]?.[k] ?? 0))).toBeLessThanOrEqual(1);
+  });
+});

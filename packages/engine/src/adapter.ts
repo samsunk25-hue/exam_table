@@ -1,5 +1,5 @@
 // Firestore 문서 → 배정 엔진 입력/결과 → 저장 형식 변환 (Firebase에 의존하지 않는 순수 함수)
-import type { EngineInput, EngineResult, PinnedAssignment } from './types';
+import type { DutyKind, EngineInput, EngineResult, PinnedAssignment } from './types';
 import {
   groupIdOf,
   type AvailabilityDoc,
@@ -27,6 +27,8 @@ export interface SessionData {
   extendedPreferred?: string[];
   extendedChief?: string[];
   extendedAssistant?: string[];
+  /** 교사 ID → 같은 학년도 앞선 확정 시험의 종류별 감독 횟수 */
+  priorCounts?: Record<string, Partial<Record<DutyKind, number>>>;
   pinned?: PinnedAssignment[];
 }
 
@@ -81,6 +83,7 @@ export function buildEngineInput(d: SessionData): EngineInput {
       active: t.active,
       priorLoad: t.cumulativeLoad ?? 0,
       temporary: t.temporary === true,
+      priorCounts: d.priorCounts?.[t.id],
     })),
     rooms: d.rooms.map((r) => ({
       id: r.id,

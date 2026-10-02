@@ -55,7 +55,7 @@ const A = await openApp();
 await go(A.page, '/admin/sessions/E2E_TREND2/equity');
 await A.page.getByRole('heading', { name: '학년도 감독 횟수' }).waitFor();
 const card = A.page.getByRole('heading', { name: '학년도 감독 횟수' }).locator('..');
-check('확정된 시험 1개 + 이번 시험', (await card.innerText()).includes('확정된 시험 1개'));
+check('먼저 만든 시험 1개 + 이번 시험', (await card.innerText()).includes('먼저 만든 시험 1개'));
 // 명단은 처음에 접혀 있다
 await card.getByText(/교사별 학년도 감독 횟수/).click();
 const cells = async (name) => (await card.locator('tr', { hasText: name }).locator('td').allInnerTexts()).map((x) => x.trim());

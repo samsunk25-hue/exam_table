@@ -7,7 +7,7 @@ import {
   type Context,
   prefersSeat,
 } from './context';
-import type { Assignment, ExclusionReason, Seat, Teacher } from './types';
+import type { Assignment, DutyKind, ExclusionReason, Seat, Teacher } from './types';
 
 const EPS = 1e-9;
 
@@ -17,7 +17,7 @@ export const EXTENDED_PREFERRED = 300;
 export const PARTLY_BLOCKED_CHIEF = 60;
 
 /** 감독 종류: 별도시험장 자리는 정·부와 따로 센다 */
-export type SeatKind = 'CHIEF' | 'ASSISTANT' | 'HALLWAY' | 'STUDY' | 'SPECIAL';
+export type SeatKind = DutyKind;
 /** 일부 시간만 배정 금지인 교사: 남은 시간에는 자습·부감독보다 정감독을 먼저 맡는다 (역할 맞추기에서는 빠진다) */
 export function prefersChief(ctx: Context, teacherId: string, seat: Seat): boolean {
   return ctx.partlyBlocked.has(teacherId) && seatKind(seat) === 'CHIEF';
@@ -113,6 +113,17 @@ export class State {
   }
 
   /** 이번 시험 감독 횟수 */
+  /** 앞선 확정 시험의 감독 횟수 (kind 없으면 전체) */
+  priorCountOf(teacher: Teacher, kind?: SeatKind): number {
+    const p = teacher.priorCounts ?? {};
+    return kind ? (p[kind] ?? 0) : Object.values(p).reduce((n, v) => n + (v ?? 0), 0);
+  }
+
+  /** 학년도 누적 감독 횟수 = 앞선 확정 시험 + 이번 시험 */
+  cumCountOf(teacher: Teacher): number {
+    return this.priorCountOf(teacher) + this.countOf(teacher.id);
+  }
+
   countOf(teacherId: string): number {
     return this.sessionCount.get(teacherId) ?? 0;
   }

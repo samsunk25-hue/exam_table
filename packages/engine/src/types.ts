@@ -25,7 +25,12 @@ export interface Teacher {
   priorLoad: number;
   /** 교사 명단에 없는 임시 감독자 (이번 시험만): 교사가 모자랄 때만 쓴다 */
   temporary?: boolean;
+  /** 같은 학년도 앞선 확정 시험의 감독 횟수 (종류별). 이번 시험에서 1회 더 맡는 몫을 적게 맡은 교사에게 준다 */
+  priorCounts?: Partial<Record<DutyKind, number>>;
 }
+
+/** 감독 종류: 정감독·부감독·복도·자습·특별실(별도시험장) */
+export type DutyKind = 'CHIEF' | 'ASSISTANT' | 'HALLWAY' | 'STUDY' | 'SPECIAL';
 
 export interface Room {
   id: string;

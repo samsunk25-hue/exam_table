@@ -49,7 +49,6 @@ export function FullTimetable({ data, highlight }: { data: TimetableData; highli
                             <div key={a.id} className={`font-semibold ${a.teacherId === highlight ? 'rounded-md bg-primary px-1.5 text-white' : ''}`}>
                               {label(a.teacherId, a.role)}
                               {ownTimeOf(data.slots, a.slotId, a.roomId) && <span className="ml-1 text-xs font-normal">({ownTimeOf(data.slots, a.slotId, a.roomId)})</span>}
-                              {a.period !== t.period && <span className="ml-1 text-xs font-normal text-muted">이어서</span>}
                             </div>
                           ))}
                         </td>
@@ -80,7 +79,6 @@ export function FullTimetable({ data, highlight }: { data: TimetableData; highli
                               <span key={a.id} className={`block ${a.teacherId === highlight ? 'rounded bg-primary px-1 text-white' : ''}`}>
                                 {label(a.teacherId, a.role)}
                                 {ownTimeOf(data.slots, a.slotId, a.roomId) && <span className="ml-1 text-xs font-normal">({ownTimeOf(data.slots, a.slotId, a.roomId)})</span>}
-                                {a.period !== t.period && <span className="ml-1 text-xs font-normal opacity-70">이어서</span>}
                               </span>
                             ))}
                           </span>

@@ -41,7 +41,7 @@ export function ownTimeOf(slots: TimetableData['slots'], slotId: string, roomId:
 
 /**
  * 표에서 이 감독이 보일 교시들: 자기 교시 + 별도 시간(연장)으로 겹치는 교시.
- * 예) 별도시험장 09:00~10:10이면 1교시와 2교시 칸 모두에 보인다 (2교시 칸은 "이어서").
+ * 예) 별도시험장 09:00~10:10이면 1교시와 2교시 칸 모두에 보인다.
  */
 export function shownPeriods(slots: TimetableData['slots'], a: { slotId: string; roomId: string; period: number }): number[] {
   const slot = slots.find((s) => s.id === a.slotId);
@@ -96,8 +96,7 @@ export function fullTimetableSheets(d: TimetableData): OutSheet[] {
             .filter((a) => a.date === date && a.roomId === r.id && shownPeriods(d.slots, a).includes(p.period))
             .map((a) => {
               const own = ownTimeOf(d.slots, a.slotId, a.roomId);
-              const cont = a.period !== p.period ? ' (이어서)' : '';
-              return `${name.get(a.teacherId) ?? '?'}${a.role === 'CHIEF' ? '' : `(${SEAT_ROLE_LABEL[a.role]})`}${own ? ` [${own}]` : ''}${cont}`;
+              return `${name.get(a.teacherId) ?? '?'}${a.role === 'CHIEF' ? '' : `(${SEAT_ROLE_LABEL[a.role]})`}${own ? ` [${own}]` : ''}`;
             })
             .join(', ');
           return subject && names ? `[${subject}] ${names}` : names;

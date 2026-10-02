@@ -1,12 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { DEFAULT_CLASS_WEIGHT, classLoadOf, classTimes } from '@sim/engine';
 import type { AssignmentDoc, AvailabilityDoc, BaseTimetableDoc, ConstraintDoc, RoomDoc, SlotDoc } from '@sim/shared';
-import { Alert, Button, Card, DownloadButton, Spinner, Table, Td, CardTitle } from '@/components/ui';
+import { Alert, Card, Spinner, Table, Td } from '@/components/ui';
 import { ExplainDutiesCard } from '@/components/AiCards';
 import { Fold } from '@/components/Fold';
 import { useCollection } from '@/lib/data';
-import { sessionTitle, termWhere, useSessionTeachers } from '@/lib/sessions';
-import { downloadWorkbook } from '@/lib/xlsx';
+import { termWhere, useSessionTeachers } from '@/lib/sessions';
 import { useCurrentSession } from './SessionPage';
 import { YearTrend } from './YearTrend';
 
@@ -59,7 +58,6 @@ export function SessionEquityPage() {
     const entries = timetable.data.flatMap((d) => d.entries.map((e) => ({ ...e, teacherId: d.id })));
     return classLoadOf(classTimes(slots.data, entries), 1);
   }, [slots.data, timetable.data, session.settings.classDuringExam]);
-  const [sort, setSort] = useState<'load' | 'total' | 'name'>('load');
   // 확정 이후에는 교사 누적 점수에 이번 시험이 이미 들어 있다
   const confirmed = session.status === 'CONFIRMED' || session.status === 'LOCKED';
 
@@ -117,70 +115,22 @@ export function SessionEquityPage() {
     return { mean, sd, min: Math.min(...v, 0), max: Math.max(...v, 0) };
   };
   const year = stats('total');
-  const band = (x: number) => (x > year.mean + year.sd ? 'high' : x < year.mean - year.sd ? 'low' : 'mid');
-  const sorted = [...rows].sort((a, b) => (sort === 'name' ? a.name.localeCompare(b.name, 'ko') : b[sort] - a[sort] || a.name.localeCompare(b.name, 'ko')));
+  // 이번 시험 점수가 높은 순
+  const sorted = [...rows].sort((a, b) => b.load - a.load || a.name.localeCompare(b.name, 'ko'));
   const scale = Math.max(year.max, 1);
-
-  const download = () =>
-    downloadWorkbook(`${sessionTitle(session)}_업무점수.xlsx`, [
-      {
-        name: '업무 점수',
-        rows: [
-          ['교사', '교과', '감독 횟수', ...KINDS.map((k) => k.label), '연속 감독', '수업 시간', '이번 시험 점수', '이전 누적', '학년도 누적', '제외 조건'],
-          ...sorted.map((r) => [r.name, r.subject ?? '', r.count, ...KINDS.map((k) => r.kinds[k.key]), r.consecutive, r.classHours, r.load, r.prior, r.total, r.excluded.join(' · ')]),
-        ],
-      },
-    ]);
 
   return (
     <div className="grid gap-6">
       <Card>
-        <CardTitle icon="📊">업무 점수 (형평성)</CardTitle>
-        <div className="mt-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold">정렬</span>
-            {(
-              [
-                ['load', '이번 시험 점수'],
-                ['total', '학년도 누적'],
-                ['name', '이름'],
-              ] as const
-            ).map(([k, l]) => (
-              <Button key={k} variant={sort === k ? 'primary' : 'secondary'} onClick={() => setSort(k)}>
-                {l}
-              </Button>
-            ))}
-            <span className="mx-1 hidden h-8 w-px bg-line sm:block" />
-            <DownloadButton onDownload={download} disabled={rows.length === 0}>
-              엑셀로 받기
-            </DownloadButton>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-4 text-sm">
-            <span className="flex items-center gap-1">
-              <span className="h-3 w-6 rounded bg-primary" /> 이번 시험
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="h-3 w-6 rounded bg-primary-soft" /> 이전 누적
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="size-3 rounded-full bg-alert" /> 평균보다 많이 높음
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="size-3 rounded-full bg-mint" /> 평균보다 많이 낮음
-            </span>
-          </div>
-        </div>
         {rows.length === 0 ? (
           <p className="text-muted">이 학교·학기 교사 명단이 없습니다.</p>
         ) : (
           <Fold title={`이번 시험 교사별 명단 (${rows.length}명)`}>
           <Table head={['교사', '감독', ...KINDS.map((k) => k.label), '연속', '수업', '이번', '누적', '학년도 누적 (막대)', '제외 조건']}>
             {sorted.map((r) => {
-              const b = band(r.total);
               return (
                 <tr key={r.id}>
                   <Td className="font-bold whitespace-nowrap">
-                    {b !== 'mid' && <span className={`mr-1.5 inline-block size-2.5 rounded-full ${b === 'high' ? 'bg-alert' : 'bg-mint'}`} aria-label={b === 'high' ? '평균보다 높음' : '평균보다 낮음'} />}
                     {r.name}
                     {r.subject && <span className="ml-1 text-sm font-normal text-muted">{r.subject}</span>}
                   </Td>

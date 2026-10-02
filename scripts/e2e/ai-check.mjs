@@ -1,7 +1,6 @@
 // AI 기능 점검 (에뮬레이터: 키가 없으면 가짜 응답) — swap-check 이후 실행 (E2E_SWAP 공개 상태 필요)
 // 1) 문서에서 AI로 읽기 → 통합 양식 검증 창 → 저장 → 시험 일정·교사(담임) 저장
-// 2) 업무 점수 탭 AI 공정성 리포트
-// 3) 교사 화면 "왜 이렇게 배정됐나요?"
+// 2) 교사 화면 "왜 이렇게 배정됐나요?"
 import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { go, openApp } from './session.mjs';
@@ -56,15 +55,10 @@ check('읽은 시험 일정 저장 (자습 포함 3건)', slots === 3, `${slots}
 check('읽은 교사 저장 (이 학기, 1-5 담임)', t?.term === '점검중학교|2026|2' && t?.homeroom?.classNo === 5, JSON.stringify(t?.homeroom));
 await review.getByRole('button', { name: '닫기' }).first().click();
 
-// 2. 공정성 리포트 (E2E_SWAP: swap-check가 만든 공개 상태 프로젝트)
-await go(A.page, '/admin/sessions/E2E_SWAP/equity');
-await A.page.getByRole('button', { name: '리포트 만들기' }).click();
-const ok2 = await A.page.getByText(/학년도 누적 평균/).waitFor({ timeout: 60000 }).then(() => true).catch(() => false);
-check('AI 공정성 리포트 표시', ok2);
 check('관리자 화면 콘솔 오류 없음', A.errors.length === 0, A.errors.join(' / '));
 await A.browser.close();
 
-// 3. 교사 설명
+// 2. 교사 설명
 const K = await openApp({ email: 'kim@test.kr' });
 await go(K.page, '/me');
 await K.page.getByRole('button', { name: /교환 점검/ }).click({ timeout: 3000 }).catch(() => {});

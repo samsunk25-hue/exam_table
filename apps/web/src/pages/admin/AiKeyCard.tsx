@@ -57,7 +57,7 @@ export function AiKeyCard() {
     <Card className="mb-6">
       <CardTitle icon="🔑">내 AI 키 (Claude)</CardTitle>
       <p className="mt-1 text-muted">
-        AI 기능(학교 문서 읽기, 공정성 리포트, 교사용 배정 설명)에 쓰는 내 Claude API 키입니다. 키는 서버의 비공개 저장소에만 저장되어 앱·코드·다른 관리자·교사에게
+        AI 기능(학교 문서 읽기, 글로 쓴 고려사항 → 규칙, 교사용 배정 설명)에 쓰는 내 Claude API 키입니다. 키는 서버의 비공개 저장소에만 저장되어 앱·코드·다른 관리자·교사에게
         보이지 않으며, 관리자마다 자기 키를 넣습니다. 교사용 설명은 그 시험 프로젝트를 만든 관리자의 키로 처리됩니다.
       </p>
       <div className="mt-3">

@@ -1,9 +1,9 @@
-// AI 기능 (Claude API): 학교 문서에서 시험 일정·교사 명단 읽기, 배정 이유 설명, 공정성 점검 리포트, 문장으로 불가시간 입력.
+// AI 기능 (Claude API): 학교 문서에서 시험 일정·교사 명단 읽기, 배정 이유 설명, 글로 쓴 고려사항 → 배정 규칙.
 // API 키는 관리자마다 자기 것을 넣는다 → aiKeys/{uid} (보안 규칙상 함수만 읽고 쓴다. 코드·저장소·배포 파일에 없음).
 // 교사용 설명은 그 시험 프로젝트를 만든 관리자의 키를 쓴다. 에뮬레이터에서 키가 없으면 가짜 응답으로 흐름만 점검한다.
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
-import { DEFAULT_ROLE_WEIGHTS, buildEngineInput, buildSeats, seatCandidates, type Seat } from '@sim/engine';
-import { AVAILABILITY_REASONS, SEAT_ROLE_LABEL, examTimes, isSetupEditable, type SessionStatus } from '@sim/shared';
+import { DEFAULT_ROLE_WEIGHTS, buildEngineInput, buildSeats, type Seat } from '@sim/engine';
+import { SEAT_ROLE_LABEL, type SessionStatus } from '@sim/shared';
 import { db, requireAdmin, serverTimestamp } from './common';
 import { loadData } from './runs';
 
@@ -64,17 +64,22 @@ function needKey(key: string | null, forTeacher = false): string | null {
   );
 }
 
-/** Claude 호출. tool을 주면 그 도구 입력(JSON)을, 아니면 글을 돌려준다. */
-async function claude(key: string, o: { system: string; content: Block[]; tool?: Tool; maxTokens?: number }): Promise<unknown> {
+/**
+ * Claude 호출. tool을 주면 그 도구 입력(JSON)을, 아니면 글을 돌려준다.
+ * Opus 5.5는 도구 강제 지정(tool_choice tool/any)을 받지 않으므로 auto + 지시문으로 도구를 쓰게 한다.
+ * 생각(thinking)도 max_tokens 안에서 쓰므로 넉넉히 준다 (답 길이는 지시문으로 정한다).
+ */
+async function claude(key: string, o: { system: string; content: Block[]; tool?: Tool }): Promise<unknown> {
   const res = await fetch(`${API}/messages`, {
     method: 'POST',
     headers: headers(key),
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: o.maxTokens ?? 4000,
-      system: o.system,
+      max_tokens: 16000,
+      system: o.tool ? `${o.system}
+반드시 ${o.tool.name} 도구를 한 번 호출해서 답하고, 글로만 답하지 마세요.` : o.system,
       messages: [{ role: 'user', content: o.content }],
-      ...(o.tool ? { tools: [o.tool], tool_choice: { type: 'tool', name: o.tool.name } } : {}),
+      ...(o.tool ? { tools: [o.tool], tool_choice: { type: 'auto' } } : {}),
     }),
   });
   if (res.status === 401 || res.status === 403) throw new HttpsError('permission-denied', 'AI 키가 맞지 않거나 만료되었습니다. 관리자 관리 > 내 AI 키를 확인하세요.');
@@ -83,7 +88,9 @@ async function claude(key: string, o: { system: string; content: Block[]; tool?:
     const body = await res.text();
     throw new HttpsError('unavailable', `AI 응답 오류 (${res.status}): ${body.slice(0, 200)}`);
   }
-  const json = (await res.json()) as { content: { type: string; text?: string; input?: unknown }[] };
+  const json = (await res.json()) as { stop_reason?: string; content: { type: string; text?: string; input?: unknown }[] };
+  if (json.stop_reason === 'refusal') throw new HttpsError('failed-precondition', 'AI가 이 요청에 답하지 않았습니다. 내용을 바꿔 다시 시도해 주세요.');
+  if (json.stop_reason === 'max_tokens') throw new HttpsError('resource-exhausted', '내용이 너무 길어 AI가 끝까지 답하지 못했습니다. 문서를 나눠서 다시 시도해 주세요.');
   if (o.tool) {
     const used = json.content.find((c) => c.type === 'tool_use');
     if (!used) throw new HttpsError('internal', 'AI가 결과를 정해진 형식으로 주지 않았습니다. 다시 시도해 주세요.');
@@ -186,7 +193,6 @@ export const aiExtract = onCall(AI_OPTIONS, async (req) => {
         system: '당신은 한국 중·고등학교 교무 문서를 정확히 표로 옮기는 도우미입니다. 반드시 record_school_data 도구로만 답합니다.',
         content,
         tool: EXTRACT_TOOL,
-        maxTokens: 8000,
       })) as ExtractResult);
   return {
     slots: want === 'teachers' ? [] : (out.slots ?? []),
@@ -210,7 +216,7 @@ function fakeExtract(y: number): ExtractResult {
   };
 }
 
-// ───────────────────────── 2. 배정 설명과 공정성 리포트 ─────────────────────────
+// ───────────────────────── 2. 배정 설명 ─────────────────────────
 
 const round = (n: number) => Math.round(n * 10) / 10;
 const seatLabel = (s: Seat) => `${Number(s.date.slice(5, 7))}/${Number(s.date.slice(8, 10))} ${s.period}교시 ${s.roomName} ${SEAT_ROLE_LABEL[s.role]}`;
@@ -287,72 +293,8 @@ ${duties.join('\n') || '- 없음'}
         system:
           '당신은 학교 시험 감독 배정 결과를 교사에게 친절하게 설명하는 도우미입니다. 주어진 사실만 쓰고 지어내지 마세요. 다른 교사의 이름이나 개인 사정은 언급하지 마세요. 한국어 존댓말로, 5~8문장, 필요하면 "- "로 시작하는 짧은 목록을 쓰고 마크다운 제목·굵은 글씨는 쓰지 마세요.',
         content: [{ type: 'text', text: `${facts}\n\n이 교사가 "왜 이렇게 배정됐나요?"라고 물었습니다. 감독 횟수와 시간이 정해진 이유, 다른 교사와 비교한 형평성, 바꾸고 싶을 때 할 수 있는 일(교환 요청)을 설명해 주세요.` }],
-        maxTokens: 1200,
       })) as string);
   return { text };
-});
-
-/** 관리자: 공정성 점검 리포트 + 바로 적용할 수 있는 감독 옮기기 제안 */
-export const aiFairnessReport = onCall(AI_OPTIONS, async (req) => {
-  const key = needKey(await keyOf(requireAdmin(req)));
-  const { sessionId } = (req.data ?? {}) as { sessionId?: unknown };
-  if (typeof sessionId !== 'string') throw new HttpsError('invalid-argument', '시험 프로젝트를 확인해 주세요.');
-  const L = await loadSession(sessionId, req, true);
-  const stats = loadStats(L);
-  if (!L.current.length) throw new HttpsError('failed-precondition', '배정이 아직 없습니다. 자동 배정을 먼저 적용하세요.');
-  const name = new Map(stats.map((s) => [s.id, s.name]));
-  const total = new Map(stats.map((s) => [s.id, s.total]));
-  const mean = stats.reduce((s, x) => s + x.total, 0) / (stats.length || 1);
-  const sd = Math.sqrt(stats.reduce((s, x) => s + (x.total - mean) ** 2, 0) / (stats.length || 1));
-
-  // 제안: 누적이 많은 교사의 감독을, 조건을 지키며 누적이 적은 교사에게 넘기기 (최대 5건, 같은 교사 두 번 받지 않게)
-  const plain = L.current.filter((a) => L.seats.has(a.id)).map((a) => ({ seatId: a.id, teacherId: a.teacherId }));
-  const heavy = [...stats].sort((a, b) => b.total - a.total).slice(0, 4);
-  const moves: { seatId: string; from: string; to: string; label: string; effect: string }[] = [];
-  const used = new Set<string>();
-  for (const h of heavy) {
-    // 지금 일정·시험실에 없는 옛 배정 기록은 건너뛴다
-    for (const a of L.current.filter((x) => x.teacherId === h.id && L.seats.has(x.id))) {
-      if (moves.length >= 5) break;
-      const best = seatCandidates(L.input, plain, a.id)
-        .filter((c) => !c.blockedBy && c.teacherId !== h.id && !used.has(c.teacherId) && (total.get(c.teacherId) ?? 0) + a.weight < h.total - 0.5)
-        .sort((x, y) => (total.get(x.teacherId) ?? 0) - (total.get(y.teacherId) ?? 0))[0];
-      if (!best) continue;
-      used.add(best.teacherId);
-      moves.push({
-        seatId: a.id,
-        from: h.id,
-        to: best.teacherId,
-        label: `${L.seats.get(a.id) ? seatLabel(L.seats.get(a.id)!) : a.id}: ${h.name} → ${best.name}`,
-        effect: `${h.name} ${h.total}→${round(h.total - a.weight)}, ${best.name} ${total.get(best.teacherId) ?? 0}→${round((total.get(best.teacherId) ?? 0) + a.weight)}`,
-      });
-      break; // 한 교사에서 하나씩
-    }
-  }
-
-  const table = [...stats]
-    .sort((a, b) => b.total - a.total)
-    .map((s) => `${s.name}: 감독 ${s.count}회, 이번 ${s.load}점, 학년도 누적 ${s.total}점, 연속 ${s.consecutive}쌍, 하루 최다 ${s.maxDay}회`)
-    .join('\n');
-  const facts = `교사 ${stats.length}명, 학년도 누적 평균 ${round(mean)}점, 표준편차 ${round(sd)}점
-${table}
-조건을 지키는 옮기기 제안:
-${moves.map((m, i) => `${i + 1}. ${m.label} (${m.effect})`).join('\n') || '없음'}`;
-
-  const text = !key
-    ? `(에뮬레이터 가짜 응답) 학년도 누적 평균 ${round(mean)}점, 편차 ${round(sd)}점입니다. 옮기기 제안 ${moves.length}건을 확인하세요.`
-    : ((await claude(key, {
-        system:
-          '당신은 학교 시험 감독 배정의 공정성을 점검하는 교무 도우미입니다. 주어진 수치만 근거로, 관리자(교감·교무부장)가 바로 이해하도록 한국어로 씁니다. 마크다운 제목·굵은 글씨 없이 짧은 문단과 "- " 목록만 쓰고 10~15줄 안으로 씁니다.',
-        content: [
-          {
-            type: 'text',
-            text: `${facts}\n\n공정성 점검 리포트를 써 주세요: 1) 전체 평가(편차가 큰지), 2) 부담이 몰린 교사와 적은 교사, 3) 연속·하루 3회 이상 같은 피로 위험, 4) 위 옮기기 제안을 적용하면 좋아지는 점. 제안에 없는 교체를 지어내지 마세요.`,
-          },
-        ],
-        maxTokens: 1500,
-      })) as string);
-  return { text, moves, mean: round(mean), sd: round(sd), names: Object.fromEntries(name) };
 });
 
 // ───────────────────────── 4. 글로 쓴 고려사항 → 배정 규칙 ─────────────────────────
@@ -439,7 +381,6 @@ ${L.data.slots.map((s) => `${s.date} ${s.period}교시 ${s.grade}학년 ${s.subj
 ${text}`,
           },
         ],
-        maxTokens: 3000,
         tool: RULES_TOOL,
       })) as { rules: RawRule[]; notes: string[] });
 
@@ -497,109 +438,5 @@ function fakeRules(text: string, teachers: { id: string; name: string }[], dates
   return {
     rules: [{ teacherIds: [t.id], effect, when, label: `${t.name}: ${md2}${p ? `${p[1]}교시 ` : ''}${what}` }],
     notes: ['(에뮬레이터 가짜 응답) 실제 AI 대신 간단히 읽었습니다.'],
-  };
-}
-
-// ───────────────────────── 9.1 문장으로 불가시간 입력 ─────────────────────────
-
-const AVAIL_TOOL: Tool = {
-  name: 'record_unavailable',
-  description: '문장에서 읽은 감독 불가 시간(날짜·교시)과 사유를 기록한다.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      teacherId: { type: ['string', 'null'], description: '문장이 가리키는 교사 id (교사 목록이 주어졌을 때만, 모르면 null)' },
-      cells: {
-        type: 'array',
-        description: '불가한 시험 시간. 반드시 주어진 시험 시간 목록에 있는 날짜·교시만.',
-        items: { type: 'object', properties: { date: { type: 'string', description: 'YYYY-MM-DD' }, period: { type: 'integer' } }, required: ['date', 'period'] },
-      },
-      reason: { type: 'string', description: `${AVAILABILITY_REASONS.filter((r) => r !== '기타').join('·')} 중 하나, 맞는 것이 없으면 짧은 사유 (예: 병원 진료)` },
-      notes: { type: 'array', items: { type: 'string' }, description: '모호해서 확인이 필요한 점 (한국어, 짧게)' },
-    },
-    required: ['cells', 'reason', 'notes'],
-  },
-};
-
-const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
-const dayOf = (d: string) => WEEK[new Date(`${d}T00:00:00Z`).getUTCDay()];
-
-/**
- * "내일 오전 출장입니다" 같은 문장을 불가 시간 칸으로 바꾼다 (저장은 화면에서 확인 후 기존 제출로).
- * 교사는 본인 것만, 관리자는 대리 입력용으로 교사까지 고른다. 키는 시험을 만든 관리자 것.
- */
-export const aiAvailability = onCall(AI_OPTIONS, async (req) => {
-  if (!req.auth) throw new HttpsError('unauthenticated', '로그인이 필요합니다.');
-  const admin = req.auth.token.role === 'ADMIN';
-  const { sessionId, text, teacherId: asked } = (req.data ?? {}) as { sessionId?: unknown; text?: unknown; teacherId?: unknown };
-  if (typeof sessionId !== 'string' || typeof text !== 'string' || !text.trim()) throw new HttpsError('invalid-argument', '불가 시간을 문장으로 적어 주세요.');
-  if (text.length > 1000) throw new HttpsError('invalid-argument', '1000자 이내로 적어 주세요.');
-  const L = await loadSession(sessionId, req, admin);
-  if (!isSetupEditable(L.status)) throw new HttpsError('failed-precondition', '지금은 불가 시간을 받지 않는 시험입니다.');
-  const key = needKey(
-    (admin ? await keyOf(req.auth.uid) : null) ?? (await keyOf(L.snap.get('createdBy') as string | undefined)) ?? (await keyOf(L.snap.get('updatedBy') as string | undefined)),
-    !admin,
-  );
-  const fixed = admin ? (typeof asked === 'string' && asked ? asked : null) : ((req.auth.token.teacherId as string | undefined) ?? null);
-  const teachers = admin && !fixed ? L.data.teachers.filter((t) => t.active) : [];
-  const times = examTimes(L.data.slots);
-  if (!times.length) throw new HttpsError('failed-precondition', '아직 시험 일정이 없습니다.');
-  const now = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
-
-  const raw: { teacherId?: string | null; cells: { date: string; period: number }[]; reason: string; notes: string[] } = !key
-    ? fakeAvailability(text, times, teachers)
-    : ((await claude(key, {
-        system:
-          '당신은 교사가 쓴 문장에서 시험 감독을 할 수 없는 시간을 찾는 도우미입니다. record_unavailable 도구로만 답합니다. 주어진 시험 시간 목록에 있는 날짜·교시만 고르고 지어내지 마세요. "오전"은 시작이 12:00 전인 교시, "오후"는 12:00 이후 교시, 날짜만 있고 시간이 없거나 "하루 종일"이면 그날 모든 교시, "내일·다음 주 화요일" 같은 말은 오늘 날짜를 기준으로 계산하세요. 시각(예: 10시부터)이 있으면 그 시각과 겹치는 교시를 고르세요. 시험 날짜가 아니면 notes에 적으세요.',
-        content: [
-          {
-            type: 'text',
-            text: `오늘: ${now} (${dayOf(now)})
-시험 시간 (날짜 요일 교시 시작~끝):
-${times.map((t) => `${t.date} ${dayOf(t.date)} ${t.period}교시 ${t.startTime ?? '?'}~${t.endTime ?? '?'}`).join('\n')}
-${teachers.length ? `교사 (id: 이름): ${teachers.map((t) => `${t.id}: ${t.name}`).join(', ')}\n` : ''}
-문장:
-${text}`,
-          },
-        ],
-        maxTokens: 1500,
-        tool: AVAIL_TOOL,
-      })) as { teacherId?: string | null; cells: { date: string; period: number }[]; reason: string; notes: string[] });
-
-  const valid = new Set(times.map((t) => `${t.date}|${t.period}`));
-  const seen = new Set<string>();
-  const cells = (raw.cells ?? []).filter((c) => {
-    const k = `${c.date}|${c.period}`;
-    if (!valid.has(k) || seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
-  const notes = [...(raw.notes ?? [])];
-  if (cells.length < (raw.cells ?? []).length) notes.push('시험 일정에 없는 시간은 뺐습니다.');
-  let teacherId = fixed;
-  if (admin && !fixed) {
-    teacherId = teachers.some((t) => t.id === raw.teacherId) ? (raw.teacherId as string) : null;
-    if (!teacherId) notes.push('어느 선생님인지 찾지 못했습니다. 교사를 골라 주세요.');
-  }
-  const reason = String(raw.reason ?? '').trim().slice(0, 40) || '기타';
-  return { teacherId, cells, reason, notes };
-});
-
-/** 에뮬레이터 점검용: M/D(또는 M월 D일), N교시, 오전·오후, 교사 이름을 간단히 읽는다 */
-function fakeAvailability(text: string, times: ReturnType<typeof examTimes>, teachers: { id: string; name: string }[]) {
-  const md = text.match(/(\d{1,2})\s*[/월.]\s*(\d{1,2})/);
-  const day = md ? times.filter((t) => Number(t.date.slice(5, 7)) === Number(md[1]) && Number(t.date.slice(8, 10)) === Number(md[2])) : [];
-  const p = [...text.matchAll(/(\d)\s*교시/g)].map((m) => Number(m[1]));
-  const am = /오전/.test(text);
-  const pm = /오후/.test(text);
-  const cells = day
-    .filter((t) => (p.length ? p.includes(t.period) : am ? (t.startTime ?? '00:00') < '12:00' : pm ? (t.startTime ?? '00:00') >= '12:00' : true))
-    .map((t) => ({ date: t.date, period: t.period }));
-  const reason = AVAILABILITY_REASONS.find((r) => text.includes(r)) ?? '기타';
-  return {
-    teacherId: teachers.find((t) => text.includes(t.name))?.id ?? null,
-    cells,
-    reason,
-    notes: ['(에뮬레이터 가짜 응답) 실제 AI 대신 간단히 읽었습니다.', ...(md ? [] : ['날짜를 찾지 못했습니다.'])],
   };
 }

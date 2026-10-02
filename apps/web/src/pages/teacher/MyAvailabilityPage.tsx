@@ -8,7 +8,6 @@ import {
 } from '@sim/shared';
 import { useAuth } from '@/auth/AuthProvider';
 import { AvailabilityGrid, GridLegend, ReasonPicker, dateLabel } from '@/components/AvailabilityGrid';
-import { AvailabilityText, type AvailabilityTextResult } from '@/components/AvailabilityText';
 import { Modal } from '@/components/Modal';
 import { toast } from '@/components/Toast';
 import { Alert, Button, Card, PageTitle, Spinner, Table, Td, CardTitle } from '@/components/ui';
@@ -25,7 +24,6 @@ function MyAvailabilityForm({ session, teacherId }: { session: ExamSession; teac
   const [reason, setReason] = useState('출장');
   const [busy, setBusy] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<Availability | null>(null);
-  const [reasonKey, setReasonKey] = useState(0);
 
   const times = useMemo(() => examTimes(slots.data), [slots.data]);
   const entries = useMemo(() => new Map(mine.data.map((a) => [cellKey(a), a])), [mine.data]);
@@ -46,19 +44,6 @@ function MyAvailabilityForm({ session, teacherId }: { session: ExamSession; teac
     if (next.has(key)) next.delete(key);
     else next.add(key);
     setSelected(next);
-  };
-
-  // 문장으로 고른 칸: 이미 제출한 칸은 빼고 지금 선택에 더한다
-  const fromText = (r: AvailabilityTextResult) => {
-    const keys = r.cells.map(cellKey).filter((k) => !entries.has(k));
-    if (!keys.length) {
-      toast('그 시간은 이미 제출되어 있습니다.');
-      return;
-    }
-    setSelected(new Set([...selected, ...keys]));
-    setReason(r.reason);
-    setReasonKey((n) => n + 1);
-    toast(`${keys.length}칸을 골랐습니다. 표에서 확인하고 아래 제출 버튼을 누르세요.`);
   };
 
   const submit = async () => {
@@ -99,9 +84,6 @@ function MyAvailabilityForm({ session, teacherId }: { session: ExamSession; teac
         <p className="mt-1 text-muted">
           여러 칸을 고른 뒤 사유를 선택하고 제출합니다. 이미 제출한 칸을 누르면 취소할 수 있습니다 (승인된 것도 교사 공개 전까지 취소 가능).
         </p>
-        <div className="mt-4">
-          <AvailabilityText sessionId={sid} placeholder="문장으로 적어도 됩니다. 예) 11월 3일 오전 출장, 4일 2교시 병원 진료" onResult={fromText} />
-        </div>
         <div className="my-4">
           <GridLegend />
         </div>
@@ -117,7 +99,7 @@ function MyAvailabilityForm({ session, teacherId }: { session: ExamSession; teac
       {selected.size > 0 && (
         <Card className="sticky bottom-4 z-10 border-primary shadow-lg">
           <div className="grid gap-4">
-            <ReasonPicker key={reasonKey} value={reason} onChange={setReason} />
+            <ReasonPicker value={reason} onChange={setReason} />
             <div className="flex flex-wrap items-center gap-2">
               <Button onClick={() => void submit()} disabled={busy}>
                 {busy ? '제출 중…' : `${selected.size}칸 제출`}

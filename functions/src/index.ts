@@ -10,4 +10,4 @@ export { reviewAccessRequest } from './requests';
 export { undoOperation } from './undo';
 export { notifyAccessRequest, notifyAvailability } from './notify';
 export { actSwapRequest, createSwapRequest, suggestSwaps } from './swaps';
-export { aiAvailability, aiExplainDuties, aiExtract, aiFairnessReport, aiRules, clearMyAiKey, setMyAiKey } from './ai';
+export { aiExplainDuties, aiExtract, aiRules, clearMyAiKey, setMyAiKey } from './ai';

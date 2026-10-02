@@ -97,17 +97,9 @@ export const callAiExtract = httpsCallable<
   { slots: AiSlotRow[]; teachers: AiTeacherRow[]; notes: string[] }
 >(functions, 'aiExtract', { timeout: 300_000 });
 export const callAiExplainDuties = httpsCallable<{ sessionId: string; teacherId?: string }, { text: string }>(functions, 'aiExplainDuties', { timeout: 300_000 });
-export const callAiFairnessReport = httpsCallable<
-  { sessionId: string },
-  { text: string; moves: { seatId: string; from: string; to: string; label: string; effect: string }[]; mean: number; sd: number }
->(functions, 'aiFairnessReport', { timeout: 300_000 });
 export const callAiRules = httpsCallable<{ sessionId: string; text: string }, { rules: import('@sim/shared').ConstraintDoc[]; notes: string[] }>(functions, 'aiRules', {
   timeout: 300_000,
 });
-export const callAiAvailability = httpsCallable<
-  { sessionId: string; text: string; teacherId?: string },
-  { teacherId: string | null; cells: { date: string; period: number }[]; reason: string; notes: string[] }
->(functions, 'aiAvailability', { timeout: 300_000 });
 export const callSetMyAiKey = httpsCallable<{ key: string }, { last4: string }>(functions, 'setMyAiKey');
 export const callClearMyAiKey = httpsCallable<void, { cleared: boolean }>(functions, 'clearMyAiKey');
 export const callAddAdmin = httpsCallable<{ email: string }, { email: string; applied: boolean }>(functions, 'addAdmin');

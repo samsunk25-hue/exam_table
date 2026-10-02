@@ -556,12 +556,17 @@ export function BundleCard(props: Props) {
         <Button variant="secondary" onClick={() => setAiOpen(true)} disabled={!props.editable}>
           📄 학교 문서에서 AI로 읽기
         </Button>
-        <DownloadButton onDownload={downloadSample}>샘플 양식 (교사 25명)</DownloadButton>
+        {/* 샘플 설명은 샘플 버튼 바로 오른쪽에 */}
+        <div className="flex min-w-0 flex-1 basis-80 flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <span className="shrink-0">
+            <DownloadButton onDownload={downloadSample}>샘플 양식 (교사 25명)</DownloadButton>
+          </span>
+          <p className="min-w-0 text-sm text-muted">
+            교사 25명과 기초시간표 · 3학년 × 3반(교실마다 정·부감독) · 다음 주 월요일부터 3일, 하루 3교시(1·2교시 시험 45분 + 쉬는 시간 15분, 3교시 자습). 작성 방법을 보거나
+            연습용으로 쓰세요. 그대로 올리면 가상 교사 25명이 실제로 등록됩니다.
+          </p>
+        </div>
       </div>
-      <p className="mt-2 text-sm text-muted">
-        샘플: 교사 25명 · 3학년 × 3반(교실마다 정·부감독) · 다음 주 월요일부터 3일, 하루 3교시(1·2교시 시험 45분 + 쉬는 시간 15분, 3교시 자습). 작성 방법을 보거나 연습용으로
-        쓰세요. 그대로 올리면 가상 교사 25명이 실제로 등록됩니다.
-      </p>
       {importing && <BundleImportDialog {...props} onClose={() => setImporting(false)} />}
       {aiOpen && (
         <AiExtractDialog

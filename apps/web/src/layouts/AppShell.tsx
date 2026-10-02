@@ -4,6 +4,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { AnimalBounce, AnimalParade } from '@/components/AnimalParade';
 import { AppFooter, AppTitle, HeroImage } from '@/components/Brand';
 import { NotificationBell } from '@/components/NotificationBell';
+import { ToTop } from '@/components/ToTop';
 import { TermProvider } from '@/components/TermRoster';
 import { Button } from '@/components/ui';
 import { usingEmulators } from '@/lib/firebase';
@@ -80,6 +81,7 @@ export function BrandFrame({ nav = [], modeLabel, bell = true, children }: { nav
         {children}
       </main>
       <AppFooter />
+      <ToTop />
     </div>
   );
 }

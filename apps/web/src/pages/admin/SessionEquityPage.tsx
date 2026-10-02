@@ -196,7 +196,7 @@ export function SessionEquityPage() {
         )}
       </Card>
 
-      <YearTrend session={session} teachers={teachers.data} assignments={assignments.data} />
+      <YearTrend session={session} teachers={teachers.data} assignments={assignments.data} classHours={classHours} />
       {assignments.data.length > 0 && (
         <ExplainDutiesCard
           sessionId={session.id}

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { AssignmentDoc, TeacherDoc, WithId } from '@sim/shared';
+import type { AssignmentDoc, AvailabilityDoc, ConstraintDoc, TeacherDoc, WithId } from '@sim/shared';
 import { Fold } from '@/components/Fold';
 import { Card, Spinner, Table, Td, CardTitle } from '@/components/ui';
 import { useCollection } from '@/lib/data';
@@ -24,8 +24,22 @@ const round = (n: number) => Math.round(n * 10) / 10;
  * 학년도 누적 부담 + 이번 시험 연속 감독 + 하루 최다 감독으로 피로도를 예측한다.
  * 학기마다 교사 문서가 따로 있으므로 같은 사람은 이메일(없으면 이름)로 잇는다.
  */
-export function YearTrend({ session, teachers, assignments }: { session: ExamSession; teachers: WithId<TeacherDoc>[]; assignments: WithId<AssignmentDoc>[] }) {
+export function YearTrend({
+  session,
+  teachers,
+  assignments,
+  classHours,
+}: {
+  session: ExamSession;
+  teachers: WithId<TeacherDoc>[];
+  assignments: WithId<AssignmentDoc>[];
+  /** 교사별 시험 시간 중 수업 시간 (시험 없는 학년 수업) */
+  classHours?: Map<string, number>;
+}) {
   const sessions = useSessions();
+  // 부담이 적은 이유를 보여 주려고 이 시험의 불가시간·배정 금지 규칙을 읽는다
+  const availability = useCollection<AvailabilityDoc>(`sessions/${session.id}/availability`);
+  const constraints = useCollection<ConstraintDoc>(`sessions/${session.id}/constraints`);
   const ledger = useCollection<Ledger>('loadLedger');
   const everyone = useCollection<TeacherDoc>('teachers');
 
@@ -67,6 +81,19 @@ export function YearTrend({ session, teachers, assignments }: { session: ExamSes
     // 피로도: 학년도 누적이 평균보다 얼마나 높은지(표준점수) + 연속 감독 + 하루 3회 이상
     const mean = rows.reduce((s, r) => s + r.year, 0) / (rows.length || 1);
     const sd = Math.sqrt(rows.reduce((s, r) => s + (r.year - mean) ** 2, 0) / (rows.length || 1)) || 1;
+    // 부담이 적은 이유: 교사 명단 설정, 불가시간, 배정 금지 규칙, 시험 중 수업
+    const lowWhy = (t: WithId<TeacherDoc>, now: number) => {
+      const why: string[] = [];
+      if (t.defaultRole === 'EXCLUDED') why.push('교사 명단에서 감독 제외로 설정');
+      const off = availability.data.filter((a) => a.teacherId === t.id && a.status !== 'REJECTED').length;
+      if (off) why.push(`불가시간 ${off}칸`);
+      const forbid = constraints.data.filter((c) => (c.teacherId === t.id || c.teacherId === '*') && c.priority === 'HARD').length;
+      if (forbid) why.push(`배정 금지 규칙 ${forbid}개`);
+      const cls = classHours?.get(t.id) ?? 0;
+      if (cls) why.push(`시험 중 수업 ${cls}시간`);
+      if (!why.length && now === 0) why.push('이번 시험 감독 0회 — 설정이 바뀐 뒤 자동 배정을 다시 실행하지 않았을 수 있음');
+      return why.length ? ` (${why.join(' · ')})` : '';
+    };
     const scored = rows.map((r) => {
       const z = (r.year - mean) / sd;
       const score = z + r.consecutive * 0.5 + Math.max(0, r.maxDay - 2) * 0.7;
@@ -74,13 +101,13 @@ export function YearTrend({ session, teachers, assignments }: { session: ExamSes
         z > 0.8 ? `학년도 누적이 평균보다 높음(${r.year}점)` : null,
         r.consecutive ? `연속 감독 ${r.consecutive}쌍` : null,
         r.maxDay >= 3 ? `하루 최다 ${r.maxDay}회` : null,
-        z < -0.5 ? '학년도 부담 적음' : null,
+        z < -0.5 ? `학년도 부담 적음${lowWhy(r.t, r.now)}` : null,
       ].filter(Boolean) as string[];
       const level: Level = score >= 1.2 ? 'high' : score <= -0.5 ? 'low' : 'mid';
       return { ...r, score, level, reasons };
     });
     return { past, rows: scored.sort((a, b) => b.score - a.score || a.t.name.localeCompare(b.t.name, 'ko')) };
-  }, [sessions.data, ledger.data, everyone.data, teachers, assignments, session]);
+  }, [sessions.data, ledger.data, everyone.data, teachers, assignments, session, availability.data, constraints.data, classHours]);
 
   if (sessions.loading || ledger.loading || everyone.loading) return <Spinner />;
   const short = (s: ExamSession) => `${s.semester}학기 ${s.examName}`;

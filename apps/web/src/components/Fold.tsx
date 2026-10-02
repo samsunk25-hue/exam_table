@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
-/** 긴 목록 접기/펼치기 (처음엔 펼침). 제목 줄을 누르면 접힌다 */
-export function Fold({ title, children, defaultOpen = true }: { title: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
+/** 긴 목록 접기/펼치기 (처음엔 접힘). 제목 줄을 누르면 펼쳐진다 */
+export function Fold({ title, children, defaultOpen = false }: { title: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
   return (
     <details open={defaultOpen} className="group">
       <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 rounded-xl px-2 font-semibold hover:bg-bg [&::-webkit-details-marker]:hidden">

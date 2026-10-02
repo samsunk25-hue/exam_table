@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { SPACE_TYPE_LABEL, nextId, termFields, termLabel, type RoomDoc, type SpaceType, type TermRef, type WithId } from '@sim/shared';
 import { Modal } from '@/components/Modal';
-import { RosterImportDialog, useTerm } from '@/components/TermRoster';
+import { useTerm } from '@/components/TermRoster';
 import { Alert, Button, Card, Field, Select, Spinner, Table, Td, Empty } from '@/components/ui';
 import { commitOps, ref, useCollection } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
@@ -144,7 +144,6 @@ export function RoomsPage() {
   const legacy = everyone.data.filter((r) => !r.term).length;
   const takenIds = useMemo(() => everyone.data.map((r) => r.id), [everyone.data]);
   const [editing, setEditing] = useState<Room | 'new' | null>(null);
-  const [importing, setImporting] = useState(false);
   const rooms = useMemo(() => sortRooms(data), [data]);
   const seats = data.reduce((s, r) => s + r.chiefCount + r.assistantCount, 0);
 
@@ -162,7 +161,7 @@ export function RoomsPage() {
       )}
       {legacy > 0 && choice.current && (
         <div className="mb-4">
-          <Alert tone="info">학기가 지정되지 않은 예전 시험실 {legacy}개가 있습니다. "다른 학기에서 불러오기"로 이 학기에 넣을 수 있습니다.</Alert>
+          <Alert tone="info">학기가 지정되지 않은 예전 시험실 {legacy}개가 있습니다. 개요의 "다른 학기에서 불러오기"로 이 학기에 넣을 수 있습니다.</Alert>
         </div>
       )}
 
@@ -174,12 +173,6 @@ export function RoomsPage() {
       {choice.current && (
         <div className="mb-4 flex flex-wrap gap-2">
           <Button onClick={() => setEditing('new')}>+ 특별실 추가</Button>
-          {/* 다른 학기 명단이나 학기 미지정 예전 자료가 있을 때만 */}
-          {everyone.data.some((x) => x.term !== choice.key) && (
-            <Button variant="secondary" onClick={() => setImporting(true)}>
-              다른 학기에서 불러오기
-            </Button>
-          )}
         </div>
       )}
 
@@ -188,7 +181,7 @@ export function RoomsPage() {
         {error && <Alert>{error}</Alert>}
         {!loading && data.length === 0 && (
           <Empty icon="🏫" title="이 학기에 등록된 시험실이 없습니다">
-            위에서 학년별 학급 수만 넣으면 교실이 한 번에 만들어집니다. 다른 학기 시험실은 "다른 학기에서 불러오기"로 가져옵니다.
+            위에서 학년별 학급 수만 넣으면 교실이 한 번에 만들어집니다. 다른 학기 시험실은 개요의 "다른 학기에서 불러오기"로 가져옵니다.
           </Empty>
         )}
         {rooms.length > 0 && (
@@ -215,7 +208,6 @@ export function RoomsPage() {
       {editing && choice.current && (
         <RoomForm room={editing === 'new' ? null : editing} all={data} takenIds={takenIds} term={choice.current} onClose={() => setEditing(null)} />
       )}
-      {importing && choice.current && <RosterImportDialog kind="rooms" target={choice.current} all={everyone.data} onClose={() => setImporting(false)} />}
     </>
   );
 }

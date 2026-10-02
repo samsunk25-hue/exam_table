@@ -14,7 +14,6 @@ import { BreakTimeBar } from '@/components/BreakTimeBar';
 import { ClockTimePicker } from '@/components/ClockTimePicker';
 import { ExamGridEditor, STUDY, SUBJECTS } from '@/components/ExamGridEditor';
 import { SubjectCombo } from '@/components/SubjectCombo';
-import { ScheduleImportDialog } from '@/components/ScheduleImportDialog';
 import { Modal } from '@/components/Modal';
 import { PlacementEditor } from './SessionSetupPage';
 import { toast } from '@/components/Toast';
@@ -342,7 +341,6 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
   const [placing, setPlacing] = useState<Slot | null>(null);
   const [copying, setCopying] = useState<Slot | null>(null);
   const [grid, setGrid] = useState<{ dates: string[] } | null>(null);
-  const [importing, setImporting] = useState(false);
   // 기간 선택: 시작일 → 종료일 두 번 누른다
   const [rangeMode, setRangeMode] = useState(false);
   const [range, setRange] = useState<{ from: string; to: string | null } | null>(null);
@@ -416,9 +414,6 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
       {editable && (
         <div className="flex flex-wrap items-center gap-3">
           <Button onClick={() => setGrid({ dates: [] })}>시험 시간표 표로 입력</Button>
-          <Button variant="secondary" onClick={() => setImporting(true)}>
-            다른 프로젝트에서 불러오기
-          </Button>
           <span className="text-muted">날짜·교시 시간을 정하고 표에 과목(또는 "자습")을 한 번에 적습니다.</span>
         </div>
       )}
@@ -563,7 +558,6 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
       </div>
 
 
-      {importing && <ScheduleImportDialog session={session} slots={slots.data} rooms={rooms.data} onClose={() => setImporting(false)} />}
       {placing && <PlacementEditor sid={session.id} slot={slots.data.find((x) => x.id === placing.id) ?? placing} slots={slots.data} rooms={rooms.data} onClose={() => setPlacing(null)} />}
       {copying && <CopyExamDialog sid={session.id} source={copying} slots={slots.data} rooms={rooms.data} grades={grades} onClose={() => setCopying(null)} />}
       {grid && <ExamGridEditor session={session} slots={slots.data} rooms={rooms.data} initialDates={grid.dates} onClose={() => setGrid(null)} />}

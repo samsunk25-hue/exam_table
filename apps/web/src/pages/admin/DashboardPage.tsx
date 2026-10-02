@@ -66,7 +66,7 @@ function CreateSessionForm({ onDone }: { onDone: () => void }) {
   const [year, setYear] = useState(currentSchoolYear());
   const [semester, setSemester] = useState(new Date().getMonth() >= 7 ? 2 : 1);
   const [examName, setExamName] = useState('');
-  // 같은 학교 지난 학기 교사·시험실은 자동으로 이어받는다 (예외는 교사 명단·시험실의 "다른 학기에서 불러오기")
+  // 같은 학교 지난 학기 교사·시험실은 자동으로 이어받는다 (예외는 개요의 "다른 학기에서 불러오기")
   const allTeachers = useCollection<TeacherDoc>('teachers');
   const allRooms = useCollection<RoomDoc>('rooms');
   const target = { school: schoolName.trim(), year, semester };

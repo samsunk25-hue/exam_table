@@ -13,11 +13,10 @@ import {
   type WithId,
 } from '@sim/shared';
 import { Modal } from '@/components/Modal';
-import { RosterImportDialog, useTerm } from '@/components/TermRoster';
+import { useTerm } from '@/components/TermRoster';
 import { Alert, Button, Card, Field, Select, Spinner, Table, Td, Empty } from '@/components/ui';
 import { commitOps, ref, useCollection } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
-import { BundleUploadButton } from './BundleCard';
 import { useCurrentSession } from './SessionPage';
 import { TempStaffCard } from './TempStaffCard';
 
@@ -262,7 +261,6 @@ export function TeachersPage() {
   const legacy = everyone.data.filter((t) => !t.term).length;
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Teacher | 'new' | null>(null);
-  const [importing, setImporting] = useState(false);
 
   const teachers = useMemo(() => sortTeachers(data), [data]);
   const shown = teachers.filter((t) => {
@@ -287,7 +285,7 @@ export function TeachersPage() {
       )}
       {legacy > 0 && choice.current && (
         <div className="mb-4">
-          <Alert tone="info">학기가 지정되지 않은 예전 교사 {legacy}명이 있습니다. "다른 학기에서 불러오기"로 이 학기에 넣을 수 있습니다.</Alert>
+          <Alert tone="info">학기가 지정되지 않은 예전 교사 {legacy}명이 있습니다. 개요의 "다른 학기에서 불러오기"로 이 학기에 넣을 수 있습니다.</Alert>
         </div>
       )}
 
@@ -295,13 +293,6 @@ export function TeachersPage() {
       {choice.current && (
         <div className="mb-4 flex flex-wrap gap-2">
           <Button onClick={() => setEditing('new')}>+ 교사 추가</Button>
-          <BundleUploadButton session={session} />
-          {/* 다른 학기 명단이나 학기 미지정 예전 자료가 있을 때만 */}
-          {everyone.data.some((x) => x.term !== choice.key) && (
-            <Button variant="secondary" onClick={() => setImporting(true)}>
-              다른 학기에서 불러오기
-            </Button>
-          )}
         </div>
       )}
 
@@ -328,7 +319,7 @@ export function TeachersPage() {
         {error && <Alert>{error}</Alert>}
         {!loading && data.length === 0 && (
           <Empty icon="👩‍🏫" title="이 학기에 등록된 교사가 없습니다">
-            위의 "엑셀(통합 양식) 올리기"나 "+ 교사 추가"로 넣으세요. 다른 학기 명단은 "다른 학기에서 불러오기"로 가져옵니다.
+            "+ 교사 추가"나 개요의 "기초 자료 한 번에 입력"으로 넣으세요. 다른 학기 명단은 개요의 "다른 학기에서 불러오기"로 가져옵니다.
           </Empty>
         )}
         {shown.length > 0 && (
@@ -367,7 +358,6 @@ export function TeachersPage() {
           onClose={() => setEditing(null)}
         />
       )}
-      {importing && choice.current && <RosterImportDialog kind="teachers" target={choice.current} all={everyone.data} onClose={() => setImporting(false)} />}
     </>
   );
 }

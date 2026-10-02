@@ -51,13 +51,21 @@ await go(page, '/admin/sessions/TERM_26_2/teachers');
 check('프로젝트 안 교사 명단 = 그 프로젝트 학기 (2026-2)', await page.getByText(`${SCHOOL} · 2026학년도 2학기`).first().isVisible());
 check('이 학기 명단은 비어 있음', await page.getByText('이 학기에 등록된 교사가 없습니다').isVisible());
 
-async function importFrom(label, skip) {
+// 다른 학기에서 불러오기는 개요(기초 자료 한 번에 입력) 한 곳에 있다
+async function openImport(kindLabel) {
+  await go(page, '/admin/sessions/TERM_26_2');
   await page.getByRole('button', { name: '다른 학기에서 불러오기' }).click();
+  const ask = page.getByRole('dialog', { name: '다른 학기에서 불러오기' });
+  if (await ask.isVisible({ timeout: 1500 }).catch(() => false)) await ask.getByRole('button', { name: kindLabel, exact: true }).click();
+}
+async function importFrom(label, skip) {
+  await openImport('교사');
   const dlg = page.getByRole('dialog', { name: '다른 학기 교사 불러오기' });
   await dlg.getByRole('button', { name: label }).click();
   if (skip) await dlg.getByRole('checkbox', { name: `${skip} 가져오기` }).uncheck();
   await dlg.getByRole('button', { name: /^\d+(명|개) 불러오기$/ }).click();
   await dlg.waitFor({ state: 'detached' }); // 창이 닫히면 저장 완료
+  await go(page, '/admin/sessions/TERM_26_2/teachers');
 }
 const inTerm = async (t) => (await db.collection('teachers').where('term', '==', t).get()).docs;
 
@@ -86,8 +94,8 @@ await page.getByRole('cell', { name: '일학기쌤' }).waitFor();
 check('학기 바꾸기 → 그 학기 명단만 (1학기 2명)', (await page.locator('tbody tr').count()) === 2);
 
 // 준비 > 시험실: 다른 학기 시험실 불러오기
-await go(page, '/admin/sessions/TERM_26_2/rooms');
-await page.getByRole('button', { name: '다른 학기에서 불러오기' }).click();
+check('교사 명단·시험실 화면에는 불러오기·통합 양식 버튼 없음', (await page.getByRole('button', { name: /다른 학기에서 불러오기|엑셀(통합 양식)/ }).count()) === 0);
+await openImport('시험실');
 const rd = page.getByRole('dialog', { name: '다른 학기 시험실 불러오기' });
 await rd.getByRole('button', { name: /2026학년도 1학기/ }).click();
 await rd.getByRole('button', { name: /^\d+(명|개) 불러오기$/ }).click();

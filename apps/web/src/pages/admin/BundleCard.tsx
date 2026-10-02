@@ -458,35 +458,6 @@ function AiExtractDialog({ year, onClose, onRead }: { year: number; onClose: () 
 }
 
 /** 필요한 자료를 직접 불러오는 통합 양식 카드 (개요 탭용) */
-/** 교사 명단·시험실 화면에서 바로: 통합 양식(엑셀) 올리기 */
-export function BundleUploadButton({ session }: { session: ExamSession }) {
-  const [open, setOpen] = useState(false);
-  const termTeachers = useCollection<TeacherDoc>('teachers', termWhere(session));
-  const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
-  const slots = useCollection<SlotDoc>(`sessions/${session.id}/slots`);
-  const timetable = useCollection<BaseTimetableDoc>(`sessions/${session.id}/baseTimetable`);
-  const editable = isSetupEditable(session.status);
-  const ready = ![termTeachers, rooms, slots, timetable].some((x) => x.loading);
-  return (
-    <>
-      <Button variant="secondary" onClick={() => setOpen(true)} disabled={!editable || !ready}>
-        엑셀(통합 양식) 올리기
-      </Button>
-      {open && (
-        <BundleImportDialog
-          session={session}
-          editable={editable}
-          teachers={termTeachers.data.filter((t) => !t.temporary)}
-          rooms={rooms.data}
-          slots={slots.data}
-          timetable={timetable.data}
-          onClose={() => setOpen(false)}
-        />
-      )}
-    </>
-  );
-}
-
 export function BundleSection({ session }: { session: ExamSession }) {
   const termTeachers = useCollection<TeacherDoc>('teachers', termWhere(session));
   // 통합 양식·점검은 정식 교사만 (임시 감독자 제외)
@@ -510,6 +481,38 @@ export function BundleSection({ session }: { session: ExamSession }) {
         timetable={timetable.data}
       />
       <Readiness session={session} slots={slots.data} rooms={rooms.data} teachers={teachers.data} timetable={timetable.data} />
+    </>
+  );
+}
+
+/**
+ * 다른 학기에서 불러오기 (교사·시험실): 다른 학기나 학기 미지정 예전 자료가 있을 때만 보인다.
+ * 교사 명단·시험실 화면에 따로 있던 버튼을 여기 한 곳으로 모았다.
+ */
+function OtherTermImport({ session }: { session: ExamSession }) {
+  const allTeachers = useCollection<TeacherDoc>('teachers');
+  const allRooms = useCollection<RoomDoc>('rooms');
+  const [kind, setKind] = useState<RosterKind | 'ask' | null>(null);
+  const key = termKey(sessionTerm(session));
+  const other = { teachers: allTeachers.data.some((x) => x.term !== key && !x.temporary), rooms: allRooms.data.some((x) => x.term !== key) };
+  if (!other.teachers && !other.rooms) return null;
+  return (
+    <>
+      <Button variant="secondary" onClick={() => setKind(other.teachers && other.rooms ? 'ask' : other.teachers ? 'teachers' : 'rooms')}>
+        다른 학기에서 불러오기
+      </Button>
+      {kind === 'ask' && (
+        <Modal title="다른 학기에서 불러오기" onClose={() => setKind(null)}>
+          <p className="text-muted">무엇을 불러올까요? 다음 창에서 학기와 가져올 항목을 고릅니다.</p>
+          <div className="mt-4 flex gap-2">
+            <Button onClick={() => setKind('teachers')}>교사</Button>
+            <Button onClick={() => setKind('rooms')}>시험실</Button>
+          </div>
+        </Modal>
+      )}
+      {(kind === 'teachers' || kind === 'rooms') && (
+        <RosterImportDialog kind={kind} target={sessionTerm(session)} all={kind === 'teachers' ? allTeachers.data : allRooms.data} onClose={() => setKind(null)} />
+      )}
     </>
   );
 }
@@ -557,6 +560,7 @@ export function BundleCard(props: Props) {
         <Button variant="secondary" onClick={() => setAiOpen(true)} disabled={!props.editable}>
           📄 학교 문서에서 AI로 읽기
         </Button>
+        <OtherTermImport session={session} />
         {/* 샘플 설명은 샘플 버튼 바로 오른쪽에 */}
         <div className="flex min-w-0 flex-1 basis-80 flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
           <span className="shrink-0">

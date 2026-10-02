@@ -54,8 +54,10 @@ check('임시 감독자 추가 (이 프로젝트만)', temp && tdoc?.temporary =
 
 // 배정 설정(자동 배정 화면): 기초시간표는 현황만, 올리기는 준비 화면 한 곳으로 (중복 버튼 없음)
 await go(A.page, `/admin/sessions/${SID}/assign`);
-await A.page.getByRole('link', { name: /기초 자료 한 번에 입력에서 올리기/ }).waitFor();
-check('배정 설정: 기초시간표 현황 + 준비 화면 링크, 올리기 버튼 없음', (await A.page.getByRole('button', { name: '기초시간표 올리기' }).count()) === 0);
+await A.page.getByRole('heading', { name: '배정 설정' }).waitFor();
+check('배정 설정: 기초시간표 현황 줄·올리기 버튼 없음', (await A.page.getByRole('button', { name: '기초시간표 올리기' }).count()) === 0 && (await A.page.getByText(/^기초시간표:/).count()) === 0);
+// 시험 없는 학년 수업(기본 켜짐)인데 기초시간표가 없으면 올리라고 안내
+check('기초시간표가 없으면 입력 안내', await A.page.getByText('누가 수업하는지 알려면 기초시간표가 필요합니다.').waitFor({ timeout: 10000 }).then(() => true).catch(() => false));
 check('프로젝트 탭에 기초시간표 탭 없음', (await A.page.getByRole('navigation', { name: '시험 프로젝트 메뉴' }).getByText('기초시간표').count()) === 0);
 
 // 검색 + 감독 없음

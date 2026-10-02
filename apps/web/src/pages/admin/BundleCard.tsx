@@ -1,4 +1,3 @@
-import { Link } from 'react-router';
 import { useMemo, useState } from 'react';
 import {
   BUNDLE_SHEETS,
@@ -582,21 +581,5 @@ export function BundleCard(props: Props) {
       )}
       {aiResult && <BundleImportDialog {...props} initialSheets={aiResult.sheets} notes={aiResult.notes} onClose={() => setAiResult(null)} />}
     </Card>
-  );
-}
-
-/** 배정 설정 > 기초시간표: 현재 상태만. 올리기·양식 받기는 준비 화면(기초 자료 한 번에 입력) 한 곳에서 */
-export function TimetableUpload({ session }: { session: ExamSession }) {
-  const timetable = useCollection<BaseTimetableDoc>(`sessions/${session.id}/baseTimetable`);
-  const total = timetable.data.reduce((s, d) => s + d.entries.length, 0);
-  return (
-    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-bg p-3">
-      <span className="text-sm">
-        기초시간표: {timetable.data.length ? <b>교사 {timetable.data.length}명 · 수업 {total}건</b> : <b className="text-alert">아직 없음</b>}
-      </span>
-      <Link to={`/admin/sessions/${session.id}`} className="inline-flex min-h-12 items-center px-2 font-semibold text-primary-strong underline-offset-4 hover:underline">
-        준비 › 기초 자료 한 번에 입력에서 올리기 →
-      </Link>
-    </div>
   );
 }

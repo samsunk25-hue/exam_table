@@ -5,7 +5,6 @@ import { Alert, Card, Toggle, CardTitle } from '@/components/ui';
 import { useCollection } from '@/lib/data';
 import { errorMessage } from '@/lib/firebase';
 import { termWhere, updateSessionSettings, type ExamSession } from '@/lib/sessions';
-import { TimetableUpload } from './BundleCard';
 
 /**
  * 배정 설정 (자동 배정 화면 위): 기초시간표는 올리기만 하면 반영되고(스위치 없음),
@@ -49,7 +48,6 @@ export function AssignSettingsCard({ session }: { session: ExamSession }) {
   return (
     <Card>
       <CardTitle icon="⚙️">배정 설정</CardTitle>
-      <TimetableUpload session={session} />
       <div className="mt-3">
         <Toggle
           label="시험 없는 학년은 수업 (수업 중인 교사는 감독 제외·수업 시간도 업무 점수)"

@@ -316,6 +316,11 @@ export function TeachersPage() {
         </div>
       )}
 
+      {/* 임시 감독자는 긴 교사 명단 아래에 묻히지 않게 위에 */}
+      <div className="mb-6">
+        <TempStaffCard session={session} />
+      </div>
+
       <Card>
         <input
           type="search"
@@ -356,9 +361,6 @@ export function TeachersPage() {
         )}
       </Card>
 
-      <div className="mt-6">
-        <TempStaffCard session={session} />
-      </div>
 
       {editing && choice.current && (
         <TeacherForm

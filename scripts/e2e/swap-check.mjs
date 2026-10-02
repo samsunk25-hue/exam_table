@@ -27,19 +27,19 @@ const until = async (fn, ms = 20000) => {
   return false;
 };
 
-// 준비: 교사 공개 상태, 1교시 김국어 / 2교시 이수학 (같은 교실)
+// 준비: 교사 공개 상태, 1교시 김국어 / 2교시 이수학 (같은 교실, 두 교사 모두 담임이 아닌 1-3반 — 담임은 자기 반 정·부감독 제외)
 const SID = 'E2E_SWAP';
 await db.recursiveDelete(db.doc(`sessions/${SID}`));
 await db.doc(`sessions/${SID}`).set({
   schoolName: '점검중학교', year: 2026, semester: 2, examName: '교환 점검', status: 'PUBLISHED',
   settings: { useBaseTimetable: false }, createdAt: new Date(Date.now() + 300_000), updatedBy: 'seed',
 });
-await db.doc('rooms/RSW').set({ name: '교환-1', spaceType: 'CLASSROOM', grade: 1, classNo: 1, chiefCount: 1, assistantCount: 0, ...TERM, updatedBy: 'seed' });
+await db.doc('rooms/RSW').set({ name: '교환-1', spaceType: 'CLASSROOM', grade: 1, classNo: 3, chiefCount: 1, assistantCount: 0, ...TERM, updatedBy: 'seed' });
 const seat = (p) => `2026-10-12_${p}_1__RSW_CHIEF_1`;
 for (const [p, t] of [[1, 'T001'], [2, 'T002']]) {
   await db.doc(`sessions/${SID}/slots/2026-10-12_${p}_1`).set({
     date: '2026-10-12', period: p, grade: 1, subject: p === 1 ? '국어' : '수학', type: 'EXAM', startTime: p === 1 ? '09:00' : '10:00', endTime: p === 1 ? '09:45' : '10:45',
-    rooms: [{ roomId: 'RSW', classNo: 1, headcount: null, roomType: 'NORMAL' }], updatedBy: 'seed',
+    rooms: [{ roomId: 'RSW', classNo: 3, headcount: null, roomType: 'NORMAL' }], updatedBy: 'seed',
   });
   await db.doc(`sessions/${SID}/assignments/${seat(p)}`).set({
     slotId: `2026-10-12_${p}_1`, groupId: `2026-10-12_${p}_1__RSW`, roomId: 'RSW', role: 'CHIEF', weight: 1, teacherId: t,

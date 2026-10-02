@@ -112,25 +112,28 @@ export class State {
     return teacher.priorLoad + this.sessionLoadOf(teacher.id) + (this.ctx.classLoad.get(teacher.id) ?? 0);
   }
 
-  /** 이번 시험 감독 횟수 */
-  /** 앞선 확정 시험의 감독 횟수 (kind 없으면 전체) */
-  priorCountOf(teacher: Teacher, kind?: SeatKind): number {
-    const p = teacher.priorCounts ?? {};
+  /** 같은 학년도 앞선 시험의 감독 횟수 (kind 없으면 전체) */
+  priorCountOf(teacherId: string, kind?: SeatKind): number {
+    const p = this.ctx.teacherById.get(teacherId)?.priorCounts ?? {};
     return kind ? (p[kind] ?? 0) : Object.values(p).reduce((n, v) => n + (v ?? 0), 0);
   }
 
-  /** 학년도 누적 감독 횟수 = 앞선 확정 시험 + 이번 시험 */
-  cumCountOf(teacher: Teacher): number {
-    return this.priorCountOf(teacher) + this.countOf(teacher.id);
-  }
-
-  countOf(teacherId: string): number {
+  /** 이번 시험 감독 횟수 (지표용) */
+  sessionCountOf(teacherId: string): number {
     return this.sessionCount.get(teacherId) ?? 0;
   }
 
-  /** 이번 시험에서 이 종류(정감독·부감독·복도·자습·특별실) 감독 횟수 */
+  /**
+   * 학년도 누적 감독 횟수 = 앞선 시험 + 이번 시험. 횟수 맞추기는 모두 이 값으로 한다
+   * → 앞선 시험에서 (배정 금지 등으로) 적게 맡은 교사는 이번 시험에서 더 맡아 누적이 같아진다.
+   */
+  countOf(teacherId: string): number {
+    return this.priorCountOf(teacherId) + this.sessionCountOf(teacherId);
+  }
+
+  /** 이 종류(정감독·부감독·복도·자습·특별실)의 학년도 누적 감독 횟수 (앞선 시험 + 이번 시험) */
   kindCountOf(teacherId: string, kind: SeatKind): number {
-    return this.kindCount.get(`${teacherId}|${kind}`) ?? 0;
+    return this.priorCountOf(teacherId, kind) + (this.kindCount.get(`${teacherId}|${kind}`) ?? 0);
   }
 
   assignmentsOf(teacherId: string): Assignment[] {
@@ -211,12 +214,12 @@ export class State {
     if (teacher.temporary) add(-80, '임시 감독자 (교사가 모자랄 때만)');
     else if (load <= bands.low + EPS) add(w.lowLoad, '학년도 감독 부담이 적은 편');
     else if (load >= bands.high - EPS) add(w.highLoad, '학년도 감독 부담이 많은 편');
-    // 이번 시험에서 이미 많이 맡은 교사일수록 감점 (지금 맡은 좌석은 빼고 센다).
+    // 학년도 누적으로 이미 많이 맡은 교사일수록 감점 (지금 맡은 좌석은 빼고 센다).
     // 별도시험장 우선 교사의 별도시험장 자리는 예외 — 횟수는 횟수 맞추기 단계가 그 교사의 일반 감독을 넘겨 맞춘다
     const preferredHere = prefersSeat(this.ctx, teacher.id, seat);
     if (!teacher.temporary && !preferredHere) {
       const mine = this.countOf(teacher.id) - (ignoreSeatId && this.bySeat.get(ignoreSeatId)?.teacherId === teacher.id ? 1 : 0);
-      add(w.countBalance * Math.max(0, mine - bands.minCount), '이번 시험 감독이 이미 많음');
+      add(w.countBalance * Math.max(0, mine - bands.minCount), '감독 횟수가 이미 많음');
     }
 
     if (teacher.homeroom === null || teacher.homeroom.grade !== seat.grade) {

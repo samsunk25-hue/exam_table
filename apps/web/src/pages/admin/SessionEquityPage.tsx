@@ -34,13 +34,10 @@ interface Row {
   consecutive: number;
   /** 시험 없는 학년 수업 시간 */
   classHours: number;
-  /** 이번 시험 전까지 학년도 누적 */
-  prior: number;
-  total: number;
 }
 
 /**
- * 업무 점수(형평성): 교사별 이번 시험 업무 점수와 학년도 누적, 평균에서 얼마나 떨어졌는지.
+ * 점검: 교사별 이번 시험 감독 횟수·업무 점수와 제외 조건 (학년도 누적은 아래 학년도 감독 횟수 표).
  * 업무 점수 = 맡은 감독의 역할 가중치 합 (정 1.0 · 부 0.8 · 복도 0.7 · 연장 1.5 · 자습 0.5 등 배정 엔진과 같은 값)
  */
 export function SessionEquityPage() {
@@ -58,8 +55,6 @@ export function SessionEquityPage() {
     const entries = timetable.data.flatMap((d) => d.entries.map((e) => ({ ...e, teacherId: d.id })));
     return classLoadOf(classTimes(slots.data, entries), 1);
   }, [slots.data, timetable.data, session.settings.classDuringExam]);
-  // 확정 이후에는 교사 누적 점수에 이번 시험이 이미 들어 있다
-  const confirmed = session.status === 'CONFIRMED' || session.status === 'LOCKED';
 
   const writerRule = session.settings.examWriter ?? 'NONE';
   const special = useMemo(() => new Set(rooms.data.filter((r) => r.spaceType === 'SEPARATE').map((r) => r.id)), [rooms.data]);
@@ -105,27 +100,16 @@ export function SessionEquityPage() {
           const [d, p] = k.split('|');
           return times.has(`${d}|${Number(p) + 1}`);
         }).length;
-        const cumulative = t.cumulativeLoad ?? 0;
-        const prior = round(confirmed ? cumulative - load : cumulative);
-        return { id: t.id, name: t.name, subject: t.subject, count: mine.length, kinds, excluded, load, consecutive, classHours: hours, prior, total: round(prior + load) };
+        return { id: t.id, name: t.name, subject: t.subject, count: mine.length, kinds, excluded, load, consecutive, classHours: hours };
       });
-  }, [teachers.data, assignments.data, confirmed, classHours, special, availability.data, constraints.data, slots.data, writerRule]);
+  }, [teachers.data, assignments.data, classHours, special, availability.data, constraints.data, slots.data, writerRule]);
 
   if (teachers.loading || assignments.loading || slots.loading || timetable.loading || rooms.loading) return <Spinner />;
   const error = teachers.error ?? assignments.error;
   if (error) return <Alert>{error}</Alert>;
 
-  const stats = (key: 'load' | 'total') => {
-    const v = rows.map((r) => r[key]);
-    const n = v.length || 1;
-    const mean = v.reduce((s, x) => s + x, 0) / n;
-    const sd = Math.sqrt(v.reduce((s, x) => s + (x - mean) ** 2, 0) / n);
-    return { mean, sd, min: Math.min(...v, 0), max: Math.max(...v, 0) };
-  };
-  const year = stats('total');
   // 이번 시험 점수가 높은 순
   const sorted = [...rows].sort((a, b) => b.load - a.load || a.name.localeCompare(b.name, 'ko'));
-  const scale = Math.max(year.max, 1);
 
   return (
     <div className="grid gap-6">
@@ -136,7 +120,7 @@ export function SessionEquityPage() {
           <p className="text-muted">이 학교·학기 교사 명단이 없습니다.</p>
         ) : (
           <Fold title={`이번 시험 교사별 명단 (${rows.length}명)`}>
-          <Table head={['교사', '감독', ...KINDS.map((k) => k.label), '연속', '수업', '이번', '누적', '학년도 누적 (막대)', '제외 조건']}>
+          <Table head={['교사', '감독', ...KINDS.map((k) => k.label), '연속', '수업', '이번', '제외 조건']}>
             {sorted.map((r) => {
               return (
                 <tr key={r.id}>
@@ -155,13 +139,6 @@ export function SessionEquityPage() {
                     {r.classHours ? `${r.classHours}시간` : 0}
                   </Td>
                   <Td className="font-bold">{r.load}</Td>
-                  <Td>{r.total}</Td>
-                  <Td className="w-[18%] min-w-32">
-                    <div className="flex h-4 overflow-hidden rounded bg-bg" title={`이전 ${r.prior} + 이번 ${r.load} = ${r.total}`}>
-                      <div className="bg-primary-soft" style={{ width: `${(Math.max(r.prior, 0) / scale) * 100}%` }} />
-                      <div className="bg-primary" style={{ width: `${(r.load / scale) * 100}%` }} />
-                    </div>
-                  </Td>
                   <Td className="min-w-48 text-sm text-muted">{r.excluded.join(' · ')}</Td>
                 </tr>
               );

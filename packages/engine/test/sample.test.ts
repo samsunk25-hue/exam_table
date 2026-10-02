@@ -168,3 +168,43 @@ describe('두 번째 시험부터는 앞선 확정 시험의 감독 횟수를 �
     for (const k of ['CHIEF', 'ASSISTANT', 'STUDY', 'SPECIAL']) expect(gap(ids.map((id) => prior[id]?.[k] ?? 0))).toBeLessThanOrEqual(1);
   });
 });
+
+describe('앞선 시험에서 배정 금지로 적게 맡은 교사는 다음 시험에서 더 맡는다', () => {
+  const sample = buildSampleSchool('2026-10-16');
+  const blocked = sample.teachers.slice(0, 3).map((t) => t.id);
+  const kindOf = (a: { role: string; seatId: string }) => (a.seatId.includes('SSEP') ? 'SPECIAL' : a.role);
+  const run = (constraints: Parameters<typeof buildEngineInput>[0]['constraints'], priorCounts?: Record<string, Record<string, number>>) => {
+    const input = buildEngineInput({
+      teachers: sample.teachers,
+      rooms: sample.rooms,
+      slots: sample.slots,
+      availability: [],
+      constraints,
+      baseTimetable: sample.timetable,
+      useBaseTimetable: true,
+      priorCounts,
+    });
+    return { input, result: runAssignment(input) };
+  };
+  // 첫 시험: 3명은 모든 감독 금지 (연수)
+  const first = run(blocked.map((teacherId) => ({ teacherId, type: 'RULE', priority: 'HARD', label: '연수' })));
+  const prior: Record<string, Record<string, number>> = {};
+  for (const a of first.result.assignments) {
+    const c = (prior[a.teacherId] ??= {});
+    c[kindOf(a)] = (c[kindOf(a)] ?? 0) + 1;
+  }
+  const second = run([], prior);
+  const now = (id: string) => second.result.assignments.filter((a) => a.teacherId === id).length;
+  const others = sample.teachers.map((t) => t.id).filter((id) => !blocked.includes(id));
+
+  it('첫 시험에서는 0회', () => {
+    for (const id of blocked) expect(first.result.assignments.some((a) => a.teacherId === id)).toBe(false);
+  });
+
+  it('두 번째 시험에서는 다른 교사보다 훨씬 많이 맡아 누적 차이를 줄인다 (연속 감독 포함)', () => {
+    expect(second.result.metrics.successRate).toBe(1);
+    expect(validateAssignments(second.input, second.result.assignments)).toEqual([]);
+    const most = Math.max(...others.map(now));
+    for (const id of blocked) expect(now(id)).toBeGreaterThanOrEqual(most + 2);
+  });
+});

@@ -41,6 +41,7 @@ for (const period of [1, 2]) {
   await go(page, '/me/availability');
   await page.getByRole('button', { name: '불가시간 점검', exact: false }).first().click().catch(() => {});
   await page.getByRole('button', { name: /^1교시/ }).first().click();
+  check('안내: 이번에 적게 맡으면 다음 시험에서 더 많이(연속 포함)', await page.getByText(/다음\s*시험에서 감독이 더 많이\(연속 감독 포함\)/).isVisible());
   await page.getByRole('button', { name: '연수', exact: true }).click();
   await page.getByRole('button', { name: '1칸 제출' }).click();
   await page.getByRole('status').filter({ hasText: '제출했습니다' }).waitFor();

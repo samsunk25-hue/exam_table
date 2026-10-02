@@ -84,6 +84,12 @@ function MyAvailabilityForm({ session, teacherId }: { session: ExamSession; teac
         <p className="mt-1 text-muted">
           여러 칸을 고른 뒤 사유를 선택하고 제출합니다. 이미 제출한 칸을 누르면 취소할 수 있습니다 (승인된 것도 교사 공개 전까지 취소 가능).
         </p>
+        <div className="mt-3">
+        <Alert tone="info">
+          감독은 학년도 전체 횟수가 선생님마다 같아지도록 배정합니다. 불가 시간 때문에 이번 시험 감독이 다른 선생님보다 적으면 다음
+          시험에서 감독이 더 많이(연속 감독 포함) 배정될 수 있습니다. 이번 시험의 남은 시간에도 연속 감독이 배정될 수 있습니다.
+        </Alert>
+        </div>
         <div className="my-4">
           <GridLegend />
         </div>

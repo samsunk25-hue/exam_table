@@ -104,6 +104,10 @@ export const callAiFairnessReport = httpsCallable<
 export const callAiRules = httpsCallable<{ sessionId: string; text: string }, { rules: import('@sim/shared').ConstraintDoc[]; notes: string[] }>(functions, 'aiRules', {
   timeout: 300_000,
 });
+export const callAiAvailability = httpsCallable<
+  { sessionId: string; text: string; teacherId?: string },
+  { teacherId: string | null; cells: { date: string; period: number }[]; reason: string; notes: string[] }
+>(functions, 'aiAvailability', { timeout: 300_000 });
 export const callSetMyAiKey = httpsCallable<{ key: string }, { last4: string }>(functions, 'setMyAiKey');
 export const callClearMyAiKey = httpsCallable<void, { cleared: boolean }>(functions, 'clearMyAiKey');
 export const callAddAdmin = httpsCallable<{ email: string }, { email: string; applied: boolean }>(functions, 'addAdmin');

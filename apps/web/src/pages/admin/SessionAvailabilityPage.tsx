@@ -10,6 +10,7 @@ import {
   type SlotDoc,
 } from '@sim/shared';
 import { AvailabilityGrid, GridLegend, ReasonPicker, dateLabel } from '@/components/AvailabilityGrid';
+import { AvailabilityText, type AvailabilityTextResult } from '@/components/AvailabilityText';
 import { Modal } from '@/components/Modal';
 import { toast } from '@/components/Toast';
 import { Alert, Button, Card, Select, Spinner, Table, Td, CardTitle } from '@/components/ui';
@@ -207,7 +208,25 @@ function ProxyCard({ sid, teachers, times, all }: { sid: string; teachers: { id:
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [reason, setReason] = useState('출장');
   const [busy, setBusy] = useState(false);
+  const [reasonKey, setReasonKey] = useState(0);
   const entries = useMemo(() => new Map(all.filter((a) => a.teacherId === teacherId).map((a) => [cellKey(a), a])), [all, teacherId]);
+
+  // 문장으로 고른 칸 (교사 이름까지 적으면 교사도 고른다). 교사가 바뀌면 선택을 새로 시작한다.
+  const fromText = (r: AvailabilityTextResult) => {
+    const who = r.teacherId ?? teacherId;
+    if (!who) return;
+    const have = new Set(all.filter((a) => a.teacherId === who).map(cellKey));
+    const keys = r.cells.map(cellKey).filter((k) => !have.has(k));
+    if (!keys.length) {
+      toast('그 시간은 이미 입력되어 있습니다.');
+      return;
+    }
+    setSelected(new Set([...(who === teacherId ? selected : []), ...keys]));
+    setTeacherId(who);
+    setReason(r.reason);
+    setReasonKey((n) => n + 1);
+    toast(`${teachers.find((t) => t.id === who)?.name} 교사 ${keys.length}칸을 골랐습니다. 확인 후 대리 입력을 누르세요.`);
+  };
 
   const submit = async () => {
     setBusy(true);
@@ -230,6 +249,14 @@ function ProxyCard({ sid, teachers, times, all }: { sid: string; teachers: { id:
     <Card>
       <CardTitle icon="✍️">대리 입력</CardTitle>
       <p className="mt-1 text-muted">교사 대신 불가 시간을 입력합니다. 관리자가 입력한 항목은 바로 승인됩니다.</p>
+      <div className="mt-3">
+        <AvailabilityText
+          sessionId={sid}
+          teacherId={teacherId || undefined}
+          placeholder={teacherId ? '문장으로 적어도 됩니다. 예) 11/3 오전 출장' : '예) 김국어 11/3 오전 출장 — 이름까지 적으면 교사도 골라 줍니다'}
+          onResult={fromText}
+        />
+      </div>
       <div className="mt-3 max-w-sm">
         <Select
           label="교사"
@@ -258,7 +285,7 @@ function ProxyCard({ sid, teachers, times, all }: { sid: string; teachers: { id:
           />
           {selected.size > 0 && (
             <>
-              <ReasonPicker value={reason} onChange={setReason} />
+              <ReasonPicker key={reasonKey} value={reason} onChange={setReason} />
               <div className="flex gap-2">
                 <Button onClick={() => void submit()} disabled={busy}>
                   {busy ? '입력 중…' : `${selected.size}칸 대리 입력`}

@@ -50,6 +50,26 @@ export function overlappingPeriods(slots: SlotDoc[], slot: SlotDoc, p: Placement
   return [...out].sort((a, b) => a - b);
 }
 
+/**
+ * 별도시험장(연장 시간)은 교시마다 감독이 따로라서, 한 교시 감독이 맡는 시간: 그 교시 시작(첫 교시는 별도 시작)부터
+ * 다음 겹치는 교시 시작 전까지(마지막은 별도 종료까지). 예) 09:00~10:10이 2교시(10:00~)와 겹치면 1교시 09:00~10:00, 2교시 10:00~10:10.
+ * 별도 시간이 없으면 null.
+ */
+export function seatTimeRange(slots: SlotDoc[], slot: SlotDoc, p: Placement, period: number): { start: string; end: string } | null {
+  const start = p.startTime ?? slot.startTime;
+  const end = p.endTime ?? slot.endTime;
+  if (!p.startTime && !p.endTime) return null;
+  if (!start || !end) return null;
+  if (p.roomType !== 'EXTENDED') return { start, end };
+  const periods = [slot.period, ...overlappingPeriods(slots, slot, p)];
+  const startOf = (q: number) => slots.find((o) => o.date === slot.date && o.period === q && o.startTime)?.startTime ?? null;
+  const i = periods.indexOf(period);
+  if (i < 0) return { start, end };
+  const from = i === 0 ? start : (startOf(period) ?? start);
+  const to = i === periods.length - 1 ? end : (startOf(periods[i + 1]!) ?? end);
+  return { start: from, end: to };
+}
+
 export function buildEngineInput(d: SessionData): EngineInput {
   return {
     teachers: d.teachers.map((t) => ({

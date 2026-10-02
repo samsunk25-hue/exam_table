@@ -14,7 +14,8 @@ export const DEFAULT_WEIGHTS: Weights = {
   baseMatch: 50,
   lowLoad: 30,
   highLoad: -40,
-  notHomeroomGrade: 10,
+  // 담임은 자기 반만 피하면 되므로 학년 단위 가점은 쓰지 않는다 (자기 반은 하드 조건 OWN_CLASS)
+  notHomeroomGrade: 0,
   consecutive: -30,
   softConstraint: -50,
   hallwayMatch: 20,
@@ -51,6 +52,7 @@ export const EXCLUSION_LABEL: Record<ExclusionReason, string> = {
   EXAM_WRITER: '출제 과목 시험',
   IN_CLASS: '수업 중',
   THREE_IN_ROW: '수업 포함 3연속',
+  OWN_CLASS: '자기 반(담임)',
 };
 
 /** YYYY-MM-DD → 1=월 ... 7=일 */
@@ -80,6 +82,8 @@ export interface Context {
   inClass: Set<string>;
   /** 교사별 이번 시험 기간 수업 업무 점수 (수업 시간 × classWeight) */
   classLoad: Map<string, number>;
+  /** 일부 시간만 배정 금지(불가시간·금지 규칙)인 교사: 남은 시간에는 연속 감독도 감점하지 않는다 */
+  partlyBlocked: Set<string>;
   /** 별도시험장 감독 우선 교사 (정감독 자리 / 부감독 자리) */
   extendedPrefer: { chief: Set<string>; assistant: Set<string> };
 }
@@ -138,10 +142,11 @@ export function buildSeats(input: EngineInput, roleWeights: RoleWeights): Seat[]
       throw new Error(`그룹 ${group.id}: 슬롯 또는 시험실을 찾을 수 없습니다.`);
     }
 
-    const push = (role: Role, count: number) => {
+    // period를 주면 그 교시만 맡는 자리 (별도시험장 교시별 감독). 첫 교시는 예전과 같은 ID
+    const push = (role: Role, count: number, period?: number) => {
       for (let i = 1; i <= count; i++) {
         seats.push({
-          id: `${group.id}_${role}_${i}`,
+          id: period === undefined || period === slot.period ? `${group.id}_${role}_${i}` : `${group.id}_P${period}_${role}_${i}`,
           groupId: group.id,
           slotId: slot.id,
           roomId: room.id,
@@ -150,8 +155,8 @@ export function buildSeats(input: EngineInput, roleWeights: RoleWeights): Seat[]
           seatNo: i,
           weight: roleWeights[role],
           date: slot.date,
-          period: slot.period,
-          periods: [...new Set([slot.period, ...(group.alsoPeriods ?? [])])].sort((a, b) => a - b),
+          period: period ?? slot.period,
+          periods: period !== undefined ? [period] : [...new Set([slot.period, ...(group.alsoPeriods ?? [])])].sort((a, b) => a - b),
           grade: group.grade,
           classNo: group.classNo,
           subject: slot.subject,
@@ -165,8 +170,14 @@ export function buildSeats(input: EngineInput, roleWeights: RoleWeights): Seat[]
     } else if (slot.type === 'STUDY') {
       // 자습 교시는 시험실마다 감독 1명이면 된다 (시험실의 정·부감독 수와 상관없이)
       push('STUDY', Math.min(1, room.chiefCount + room.assistantCount));
+    } else if (group.roomType === 'EXTENDED') {
+      // 별도시험장: 연장 시간이 다음 교시에 걸쳐도 교시마다 정·부감독을 따로 둔다
+      for (const p of [...new Set([slot.period, ...(group.alsoPeriods ?? [])])].sort((a, b) => a - b)) {
+        push('CHIEF', room.chiefCount, p);
+        push('ASSISTANT', room.assistantCount, p);
+      }
     } else {
-      push(group.roomType === 'EXTENDED' ? 'EXTENDED' : 'CHIEF', room.chiefCount);
+      push('CHIEF', room.chiefCount);
       push('ASSISTANT', room.assistantCount);
     }
   }
@@ -222,6 +233,10 @@ export function buildContext(input: EngineInput): Context {
     baseMatch,
     inClass,
     classLoad,
+    partlyBlocked: new Set([
+      ...input.availability.filter((a) => a.status !== 'REJECTED').map((a) => a.teacherId),
+      ...input.constraints.filter((c) => c.priority === 'HARD' && c.teacherId !== '*').map((c) => c.teacherId),
+    ]),
     extendedPrefer: {
       chief: new Set([...(input.settings.extendedPreferred ?? []), ...(input.settings.extendedChief ?? [])]),
       assistant: new Set([...(input.settings.extendedPreferred ?? []), ...(input.settings.extendedAssistant ?? [])]),
@@ -268,6 +283,10 @@ export function staticHardReason(ctx: Context, teacher: Teacher, seat: Seat): Ex
   // 일반 교사는 교실·복도 모두 가능, 복도전담 교사는 복도만
   if (teacher.defaultRole === 'HALLWAY' && seat.role !== 'HALLWAY') return 'ROLE_MISMATCH';
   if (seat.periods.some((p) => ctx.unavailable.has(`${teacher.id}|${seat.date}|${p}`))) return 'UNAVAILABLE';
+  // 담임은 자기 반 시험 감독(정·부)을 맡지 않는다. 자기 반 자습 감독·같은 학년 다른 반·복도는 괜찮다
+  if (teacher.homeroom && (seat.role === 'CHIEF' || seat.role === 'ASSISTANT') && seat.classNo !== null && seat.grade === teacher.homeroom.grade && seat.classNo === teacher.homeroom.classNo) {
+    return 'OWN_CLASS';
+  }
   if (seat.periods.some((p) => ctx.inClass.has(`${teacher.id}|${seat.date}|${p}`))) return 'IN_CLASS';
   // 출제 교사는 자기 과목 시험 시간에 교실 감독 불가 (복도 대기는 가능)
   if (ctx.input.settings.examWriterRule === 'NO_ROOM' && teacher.subject && teacher.subject === seat.subject && seat.role !== 'HALLWAY') {
@@ -276,6 +295,30 @@ export function staticHardReason(ctx: Context, teacher: Teacher, seat: Seat): Ex
   const cs = constraintsFor(ctx, teacher.id);
   if (cs.some((c) => c.priority === 'HARD' && constraintApplies(c, teacher, seat))) {
     return 'CONSTRAINT';
+  }
+  return null;
+}
+
+/**
+ * 배정할 수 없는 구체적 사유 (있을 때만): 불가시간은 신청 사유(출장 등), 예외 규칙은 그 규칙 설명.
+ * 감독 배정 편집의 후보 목록에서 "불가시간 (출장)"처럼 보인다.
+ */
+export function blockDetail(ctx: Context, teacher: Teacher, seat: Seat, reason: ExclusionReason | null): string | null {
+  if (reason === 'UNAVAILABLE') {
+    const why = ctx.input.availability
+      .filter((a) => a.teacherId === teacher.id && a.date === seat.date && seat.periods.includes(a.period) && a.status !== 'REJECTED')
+      .map((a) => a.reason?.trim())
+      .filter((r): r is string => !!r);
+    return why.length ? [...new Set(why)].join(', ') : null;
+  }
+  if (reason === 'CONSTRAINT') {
+    const labels = constraintsFor(ctx, teacher.id)
+      .filter((c) => c.priority === 'HARD' && constraintApplies(c, teacher, seat))
+      .map((c) =>
+        c.label ??
+        (c.type === 'HOMEROOM_EXCLUDE' ? '자기 반 감독 제외' : c.type === 'SUBJECT_EXCLUDE' ? `${c.target} 시험 감독 제외` : c.type === 'SLOT_EXCLUDE' ? '이 시험 감독 제외' : '배정 금지 규칙'),
+      );
+    return labels.length ? [...new Set(labels)].join(', ') : null;
   }
   return null;
 }

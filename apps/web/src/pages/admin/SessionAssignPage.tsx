@@ -267,7 +267,7 @@ export function SessionAssignPage() {
       <Card>
         <CardTitle icon="🪄">자동 배정 실행</CardTitle>
         <p className="mt-1 text-muted">
-          하드 조건(동시간 중복, 불가시간, 연장 감독 직후)을 지키면서 점수(기초시간표 일치, 부담 형평성, 연속 배정 등)가 높은 교사를 배정합니다.
+          하드 조건(동시간 중복, 불가시간, 배정 금지 규칙)을 지키면서 점수(기초시간표 일치, 부담 형평성, 연속 배정 등)가 높은 교사를 배정합니다.
           기본안과 대안 3개를 함께 계산해 가장 좋은 안을 바로 적용하고, 시간표 편집에서 직접 정한 배정은 그대로 둡니다.
         </p>
         <div className="mt-3 grid gap-2">

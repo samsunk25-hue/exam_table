@@ -90,7 +90,7 @@ export function AssignSettingsCard({ session }: { session: ExamSession }) {
           <span className="font-semibold">별도시험장 감독 우선 교사</span>
           {(
             [
-              ['chief', '정감독(연장)'],
+              ['chief', '정감독'],
               ['assistant', '부감독'],
             ] as const
           ).map(([key, label]) => (
@@ -131,7 +131,7 @@ export function AssignSettingsCard({ session }: { session: ExamSession }) {
             </div>
           ))}
           <span className="text-sm text-muted">
-            고른 교사를 별도시험장의 그 자리(정감독=연장 감독, 부감독)에 먼저 배정합니다 (불가시간·같은 시간 다른 감독은 그대로 지킴). 자동 배정을 다시 실행하면 반영됩니다.
+            고른 교사를 별도시험장의 그 자리(정감독·부감독, 교시마다)에 먼저 배정합니다 (불가시간·같은 시간 다른 감독은 그대로 지킴). 자동 배정을 다시 실행하면 반영됩니다.
           </span>
         </div>
       )}

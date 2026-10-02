@@ -89,6 +89,8 @@ export interface Constraint {
   priority: ConstraintPriority;
   /** SOFT 규칙 가감점 (기본 weights.softConstraint) */
   penalty?: number;
+  /** 사람이 읽는 한 줄 설명 (글로 쓴 고려사항에서 만든 규칙 등) */
+  label?: string;
 }
 
 export interface BaseTimetableEntry {
@@ -208,7 +210,9 @@ export type ExclusionReason =
   | 'EXAM_WRITER'
   | 'IN_CLASS'
   /** 시험 감독과 수업이 함께 있는 날, 감독·수업을 합쳐 3교시 연속 */
-  | 'THREE_IN_ROW';
+  | 'THREE_IN_ROW'
+  /** 담임은 자기 반 시험의 정·부감독을 맡지 않는다 (자습 감독은 가능) */
+  | 'OWN_CLASS';
 
 export interface UnassignedSeat {
   seat: Seat;

@@ -179,7 +179,7 @@ function SeatDialog({
                 <tr key={c.teacherId} className={c.blockedBy ? 'text-muted' : ''}>
                   <Td className="font-bold">{c.name}</Td>
                   <Td>{c.blockedBy ? '' : c.score}</Td>
-                  <Td className="text-sm">{c.blockedBy ? EXCLUSION_LABEL[c.blockedBy] : c.reason}</Td>
+                  <Td className="text-sm">{c.blockedBy ? `${EXCLUSION_LABEL[c.blockedBy]}${c.blockedDetail ? ` (${c.blockedDetail})` : ''}` : c.reason}</Td>
                   <Td>
                     {!c.blockedBy && c.teacherId !== current?.teacherId && (
                       <Button
@@ -387,7 +387,7 @@ export function SessionEditorPage() {
     return callApplyChanges({
       sessionId: session.id,
       changes: orphans.map((a) => ({ seatId: a.id, teacherId: null })),
-      reason: '자습 교시 감독은 시험실마다 1명',
+      reason: '감독 자리 규칙 변경 (자습 1명·별도시험장 교시별)',
       label: '없는 자리 배정 정리',
     })
       .then(() => toast(`남아 있던 배정 ${orphans.length}건을 정리했습니다.`))
@@ -468,7 +468,7 @@ export function SessionEditorPage() {
           <div className="mt-3">
             <Alert tone="info">
               <p>
-                감독 자리 규칙이 바뀌어(자습 교시는 시험실마다 1명) 지금은 없는 자리에 배정 {orphans.length}건이 남아 있습니다:{' '}
+                감독 자리 규칙이 바뀌어(자습 교시는 시험실마다 1명, 별도시험장은 교시마다 따로) 지금은 없는 자리에 배정 {orphans.length}건이 남아 있습니다:{' '}
                 {orphans
                   .slice(0, 5)
                   .map((a) => `${data.nameOf(a.teacherId)} ${Number(a.date.slice(5, 7))}/${Number(a.date.slice(8, 10))} ${a.period}교시 ${roomName.get(a.roomId) ?? ''}`)

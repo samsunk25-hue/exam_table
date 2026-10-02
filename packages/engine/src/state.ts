@@ -11,8 +11,8 @@ import type { Assignment, ExclusionReason, Seat, Teacher } from './types';
 
 const EPS = 1e-9;
 
-/** 별도시험장 우선 교사 가점 (횟수 맞추기 감점보다 커서 우선 교사가 먼저 맡는다) */
-export const EXTENDED_PREFERRED = 100;
+/** 별도시험장 우선 교사 가점: 연속·부담·횟수 감점을 다 합쳐도 이기도록 크게 (하드 조건은 그대로 지킨다) */
+export const EXTENDED_PREFERRED = 300;
 
 export interface LoadBands {
   low: number;
@@ -31,6 +31,8 @@ export class State {
   readonly bySeat = new Map<string, Assignment>();
   private readonly teacherTimes = new Map<string, Map<string, Set<string>>>();
   private readonly sessionLoad = new Map<string, number>();
+  /** 교사별 이번 시험 감독 횟수 (자주 쓰므로 따로 센다) */
+  private readonly sessionCount = new Map<string, number>();
 
   constructor(private readonly ctx: Context) {}
 
@@ -53,6 +55,7 @@ export class State {
       set.add(a.seatId);
     }
     this.sessionLoad.set(a.teacherId, (this.sessionLoad.get(a.teacherId) ?? 0) + a.weight);
+    this.sessionCount.set(a.teacherId, (this.sessionCount.get(a.teacherId) ?? 0) + 1);
   }
 
   remove(seatId: string): Assignment | undefined {
@@ -62,6 +65,7 @@ export class State {
     const seat = this.ctx.seatById.get(seatId)!;
     for (const p of seat.periods) this.teacherTimes.get(a.teacherId)?.get(timeKey(seat.date, p))?.delete(seatId);
     this.sessionLoad.set(a.teacherId, (this.sessionLoad.get(a.teacherId) ?? 0) - a.weight);
+    this.sessionCount.set(a.teacherId, (this.sessionCount.get(a.teacherId) ?? 0) - 1);
     return a;
   }
 
@@ -90,7 +94,7 @@ export class State {
 
   /** 이번 시험 감독 횟수 */
   countOf(teacherId: string): number {
-    return this.assignmentsOf(teacherId).length;
+    return this.sessionCount.get(teacherId) ?? 0;
   }
 
   assignmentsOf(teacherId: string): Assignment[] {
@@ -150,45 +154,49 @@ export class State {
 
   score(teacher: Teacher, seat: Seat, bands: LoadBands, ignoreSeatId?: string): Scored {
     const w = this.ctx.weights;
-    const parts: string[] = [];
+    // 배정 이유는 숫자 없이 사람이 읽는 말로: 좋은 점 / 아쉬운 점
+    const good: string[] = [];
+    const bad: string[] = [];
     let score = 0;
     const add = (value: number, label: string) => {
       if (value === 0) return;
       score += value;
-      parts.push(`${value > 0 ? '+' : ''}${value}(${label})`);
+      (value > 0 ? good : bad).push(label);
     };
 
-    if (isBaseMatch(this.ctx, teacher, seat)) add(w.baseMatch, '기초일치');
-    if (seat.role === 'HALLWAY' && teacher.defaultRole === 'HALLWAY') add(w.hallwayMatch, '복도전담');
+    if (isBaseMatch(this.ctx, teacher, seat)) add(w.baseMatch, '원래 그 반 수업 교사');
+    if (seat.role === 'HALLWAY' && teacher.defaultRole === 'HALLWAY') add(w.hallwayMatch, '복도 전담 교사');
     if (teacher.subject && teacher.subject === seat.subject) {
-      if (seat.role === 'HALLWAY') add(w.examSubjectHallway, '출제교사 복도');
-      else add(w.examSubjectRoom, '출제과목 감독');
+      if (seat.role === 'HALLWAY') add(w.examSubjectHallway, '출제 과목 교사라 복도 대기');
+      else add(w.examSubjectRoom, '자기 과목 시험 교실 감독');
     }
 
     const load = this.totalLoadOf(teacher);
-    if (teacher.temporary) add(-80, '임시 감독자');
-    else if (load <= bands.low + EPS) add(w.lowLoad, '부담하위');
-    else if (load >= bands.high - EPS) add(w.highLoad, '부담상위');
+    if (teacher.temporary) add(-80, '임시 감독자 (교사가 모자랄 때만)');
+    else if (load <= bands.low + EPS) add(w.lowLoad, '학년도 감독 부담이 적은 편');
+    else if (load >= bands.high - EPS) add(w.highLoad, '학년도 감독 부담이 많은 편');
     // 이번 시험에서 이미 많이 맡은 교사일수록 감점 (지금 맡은 좌석은 빼고 센다).
     // 별도시험장 우선 교사의 별도시험장 자리는 예외 — 횟수는 횟수 맞추기 단계가 그 교사의 일반 감독을 넘겨 맞춘다
     const preferredHere = prefersSeat(this.ctx, teacher.id, seat);
     if (!teacher.temporary && !preferredHere) {
       const mine = this.countOf(teacher.id) - (ignoreSeatId && this.bySeat.get(ignoreSeatId)?.teacherId === teacher.id ? 1 : 0);
-      add(w.countBalance * Math.max(0, mine - bands.minCount), '이번 감독 많음');
+      add(w.countBalance * Math.max(0, mine - bands.minCount), '이번 시험 감독이 이미 많음');
     }
 
     if (teacher.homeroom === null || teacher.homeroom.grade !== seat.grade) {
-      add(w.notHomeroomGrade, '비담임');
+      add(w.notHomeroomGrade, '그 학년 담임이 아님');
     }
 
     const adjacent =
       this.seatsAt(teacher.id, seat.date, seat.periods[0]! - 1, ignoreSeatId).length > 0 ||
       this.seatsAt(teacher.id, seat.date, seat.periods[seat.periods.length - 1]! + 1, ignoreSeatId).length > 0;
-    if (adjacent) add(w.consecutive, '연속');
+    // 일부 시간만 배정 금지인 교사는 남은 시간에 몰아서 맡을 수 있게 연속 감점을 주지 않는다
+    if (adjacent && !this.ctx.partlyBlocked.has(teacher.id)) add(w.consecutive, '바로 앞뒤 교시에도 감독');
 
-    add(softConstraintPenalty(this.ctx, teacher, seat), '예외규칙');
-    if (preferredHere) add(EXTENDED_PREFERRED, '별도시험장 우선');
+    add(softConstraintPenalty(this.ctx, teacher, seat), '예외 규칙');
+    if (preferredHere) add(EXTENDED_PREFERRED, '별도시험장 우선 교사');
 
-    return { score, reason: parts.length > 0 ? parts.join(', ') : '0(가감점 없음)' };
+    const reason = [good.length ? `좋은 점: ${good.join(' · ')}` : '', bad.length ? `아쉬운 점: ${bad.join(' · ')}` : ''].filter(Boolean).join(' / ');
+    return { score, reason: reason || '특별히 더하거나 뺄 점 없음' };
   }
 }

@@ -33,12 +33,12 @@ await db.doc(`sessions/${SID}`).set({
   schoolName: '점검중학교', year: 2026, semester: 2, examName: '끌어놓기 점검', status: 'REVIEW',
   settings: { useBaseTimetable: false }, createdAt: new Date(), updatedBy: 'seed',
 });
-await db.doc('rooms/RDD').set({ name: '끌기-1', spaceType: 'CLASSROOM', grade: 1, classNo: 1, chiefCount: 1, assistantCount: 0, ...TERM, updatedBy: 'seed' });
+await db.doc('rooms/RDD').set({ name: '끌기-1', spaceType: 'CLASSROOM', grade: 1, classNo: 9, chiefCount: 1, assistantCount: 0, ...TERM, updatedBy: 'seed' });
 const seat = (p) => `2026-10-12_${p}_1__RDD_CHIEF_1`;
 for (const p of [1, 2, 3]) {
   await db.doc(`sessions/${SID}/slots/2026-10-12_${p}_1`).set({
     date: '2026-10-12', period: p, grade: 1, subject: '과학', type: 'EXAM', startTime: `${8 + p}:00`.padStart(5, '0'), endTime: `${8 + p}:45`.padStart(5, '0'),
-    rooms: [{ roomId: 'RDD', classNo: 1, headcount: null, roomType: 'NORMAL' }], updatedBy: 'seed',
+    rooms: [{ roomId: 'RDD', classNo: 9, headcount: null, roomType: 'NORMAL' }], updatedBy: 'seed',
   });
 }
 for (const [p, t] of [[1, 'T001'], [2, 'T002']]) {

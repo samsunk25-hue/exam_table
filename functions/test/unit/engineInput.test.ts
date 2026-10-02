@@ -64,7 +64,7 @@ describe('Firestore 자료 → 엔진 입력', () => {
     expect(run.metrics).toMatchObject({ seatCount: 2, assignedCount: 2, successRate: 1 });
     const byRoom = Object.fromEntries(run.assignments.map((a) => [a.roomId, a]));
     expect(byRoom.R1).toMatchObject({ teacherId: 'T2', date: '2026-10-12', period: 1, role: 'CHIEF' });
-    expect(byRoom.R1!.reason).toContain('기초일치');
+    expect(byRoom.R1!.reason).toContain('원래 그 반 수업 교사');
     expect(byRoom.H1).toMatchObject({ teacherId: 'T3', role: 'HALLWAY' });
     expect(run.loads.T2).toEqual([1, 1]);
     expect(run.loads.T1).toEqual([0, 5]);

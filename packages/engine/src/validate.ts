@@ -1,4 +1,4 @@
-import { EXCLUSION_LABEL, buildContext } from './context';
+import { EXCLUSION_LABEL, blockDetail, buildContext } from './context';
 import { State } from './state';
 import type { Assignment, EngineInput, ExclusionReason, Violation } from './types';
 
@@ -69,6 +69,8 @@ export interface SeatCandidate {
   name: string;
   /** null이면 배정 가능 */
   blockedBy: ExclusionReason | null;
+  /** 불가시간 사유·예외 규칙 설명 (있을 때만) */
+  blockedDetail: string | null;
   score: number;
   reason: string;
   load: number;
@@ -95,7 +97,8 @@ export function seatCandidates(
     .map((t) => {
       const blockedBy = state.hardReason(t, seat);
       const s = state.score(t, seat, bands);
-      return { teacherId: t.id, name: t.name, blockedBy, score: s.score, reason: s.reason, load: state.totalLoadOf(t) };
+      const blockedDetail = blockDetail(ctx, t, seat, blockedBy);
+      return { teacherId: t.id, name: t.name, blockedBy, blockedDetail, score: s.score, reason: s.reason, load: state.totalLoadOf(t) };
     })
     .filter((c) => c.blockedBy !== 'INACTIVE' && c.blockedBy !== 'ROLE_MISMATCH')
     .sort(

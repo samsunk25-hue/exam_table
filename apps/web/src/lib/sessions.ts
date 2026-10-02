@@ -29,7 +29,7 @@ export interface SessionSettings {
   classDuringExam?: boolean;
   /** 별도시험장 감독 우선 교사 — 예전 설정(정·부 모두). 새로 고르면 아래 둘로 옮긴다 */
   extendedPreferred?: string[];
-  /** 별도시험장 정감독(연장) 우선 교사 */
+  /** 별도시험장 정감독 우선 교사 */
   extendedChief?: string[];
   /** 별도시험장 부감독 우선 교사 */
   extendedAssistant?: string[];

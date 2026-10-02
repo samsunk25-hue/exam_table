@@ -1,5 +1,5 @@
-// 학년도 추이·피로도 예측: 1학기 확정 시험(다른 학기 교사 문서, 같은 이메일) + 이번 2학기 시험
-// 김국어: 1학기 5점 + 이번 3교시 연속 3회 → 피로도 높음 / 박영어: 감독 없음 → 낮음
+// 학년도 감독 횟수: 1학기 확정 시험(다른 학기 교사 문서, 같은 이메일) + 이번 2학기 시험을 종류별로 합친다
+// 김국어: 1학기 정감독 2·부감독 1·별도시험장 1 + 이번 정감독 3 → 정 5 · 부 1 · 특별실 1 · 합계 7 / 박영어: 0
 import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { go, openApp } from './session.mjs';
@@ -27,6 +27,11 @@ await db.doc('sessions/E2E_TREND2').set({ ...base, semester: 2, examName: '추�
 // 1학기 교사 문서 (같은 이메일, 다른 ID) + 확정 원장
 await db.doc('teachers/T1KIM').set({ name: '김국어', email: 'kim@test.kr', subject: '국어', homeroom: null, defaultRole: 'NORMAL', active: true, cumulativeLoad: 5, ...T1, updatedBy: 'seed' });
 await db.doc('loadLedger/E2E_TREND1_T1KIM').set({ sessionId: 'E2E_TREND1', teacherId: 'T1KIM', load: 5 });
+// 1학기 확정 시험의 김국어 배정 (정 2·부 1·별도시험장 1)
+await db.doc('rooms/RTRSEP').set({ name: '추이 별도시험장', spaceType: 'SEPARATE', grade: null, classNo: null, chiefCount: 1, assistantCount: 0, ...T1, updatedBy: 'seed' });
+for (const [id, role, roomId] of [['a1', 'CHIEF', 'RTR'], ['a2', 'CHIEF', 'RTR'], ['a3', 'ASSISTANT', 'RTR'], ['a4', 'CHIEF', 'RTRSEP']]) {
+  await db.doc(`sessions/E2E_TREND1/assignments/${id}`).set({ slotId: 's', groupId: 'g', roomId, role, weight: 1, teacherId: 'T1KIM', score: 0, reason: 'seed', source: 'AUTO', date: '2026-07-01', period: 1, runId: null });
+}
 // 이번 학기 명단: 김국어(T2KIM)·이수학·박영어
 const teacher = (id, name, email, subject) => db.doc(`teachers/${id}`).set({ name, email, subject, homeroom: null, defaultRole: 'NORMAL', active: true, cumulativeLoad: 0, ...TERM, updatedBy: 'seed' });
 await teacher('T2KIM', '김국어', 'kim@test.kr', '국어');
@@ -48,18 +53,17 @@ for (const p of [1, 2, 3]) {
 
 const A = await openApp();
 await go(A.page, '/admin/sessions/E2E_TREND2/equity');
-await A.page.getByRole('heading', { name: '학년도 추이와 피로도 예측' }).waitFor();
-const card = A.page.getByRole('heading', { name: '학년도 추이와 피로도 예측' }).locator('..');
+await A.page.getByRole('heading', { name: '학년도 감독 횟수' }).waitFor();
+const card = A.page.getByRole('heading', { name: '학년도 감독 횟수' }).locator('..');
+check('확정된 시험 1개 + 이번 시험', (await card.innerText()).includes('확정된 시험 1개'));
 // 명단은 처음에 접혀 있다
-await card.getByText(/교사별 피로도 명단/).click();
-const kim = card.locator('tr', { hasText: '김국어' });
-const kimText = await kim.innerText();
-check('지난 시험 열 (1학기 기말)', (await card.innerText()).includes('1학기 추이 1학기 기말'));
-check('김국어: 1학기 5 + 이번 3 = 학년도 8', /5\s+3\s+8/.test(kimText.replace(/\s+/g, ' ')), kimText.replace(/\s+/g, ' '));
-check('김국어 피로도 높음 (연속 감독)', kimText.includes('높음') && kimText.includes('연속 감독 2쌍'));
-const park = (await card.locator('tr', { hasText: '박영어' }).innerText()).replace(/\s+/g, ' ');
-check('박영어 피로도 낮음', park.includes('낮음'), park + ' / 행 ' + (await card.locator('tbody tr').count()));
-check('피로도 높음 안내', (await card.innerText()).includes('피로도 높음 1명'));
+await card.getByText(/교사별 학년도 감독 횟수/).click();
+const cells = async (name) => (await card.locator('tr', { hasText: name }).locator('td').allInnerTexts()).map((x) => x.trim());
+const kim = await cells('김국어');
+check('김국어: 정 5 · 부 1 · 복도 0 · 특별실 1 · 자습 0 · 합계 7', kim.slice(1).join(',') === '5,1,0,1,0,7', kim.join(','));
+const park = await cells('박영어');
+check('박영어: 모두 0', park.slice(1).join(',') === '0,0,0,0,0,0', park.join(','));
+check('피로도 표·안내 없음', !(await card.innerText()).includes('피로도'));
 await A.page.screenshot({ path: 'scripts/e2e/out/trend.png', fullPage: true });
 check('콘솔 오류 없음', A.errors.length === 0, A.errors.join(' / '));
 await A.browser.close();
@@ -67,4 +71,5 @@ for (const id of ['E2E_TREND1', 'E2E_TREND2']) await db.recursiveDelete(db.doc(`
 await db.doc('loadLedger/E2E_TREND1_T1KIM').delete();
 for (const id of ['T1KIM', 'T2KIM', 'T2LEE', 'T2PARK']) await db.doc(`teachers/${id}`).delete();
 await db.doc('rooms/RTR').delete();
+await db.doc('rooms/RTRSEP').delete();
 process.exit(failures ? 1 : 0);

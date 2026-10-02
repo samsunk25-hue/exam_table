@@ -8,7 +8,7 @@ import {
   type TeacherDoc,
   type WithId,
 } from '@sim/shared';
-import { overlappingPeriods } from '@sim/engine';
+import { overlappingPeriods, seatTimeRange } from '@sim/engine';
 import { dateLabel } from '@/components/AvailabilityGrid';
 import { toast } from '@/components/Toast';
 import { downloadWorkbook, type OutCell, type OutSheet } from './xlsx';
@@ -33,17 +33,23 @@ export interface Duty {
   subject: string;
 }
 
-/** 특별실 등 시험 시간과 다르게 운영하는 배치의 시간 ("10:00~10:50"), 없으면 null */
-export function ownTimeOf(slots: TimetableData['slots'], slotId: string, roomId: string): string | null {
-  const p = slots.find((s) => s.id === slotId)?.rooms.find((x) => x.roomId === roomId);
-  return p?.startTime && p.endTime ? `${p.startTime}~${p.endTime}` : null;
+/**
+ * 특별실 등 시험 시간과 다르게 운영하는 배치에서 이 감독이 맡는 시간 ("10:00~10:50"), 없으면 null.
+ * 별도시험장이 다음 교시에 걸치면 교시마다 나뉜 시간 (예: 1교시 09:00~10:00, 2교시 10:00~10:10)
+ */
+export function ownTimeOf(slots: TimetableData['slots'], a: { slotId: string; roomId: string; period: number }): string | null {
+  const slot = slots.find((s) => s.id === a.slotId);
+  const p = slot?.rooms.find((x) => x.roomId === a.roomId);
+  const t = slot && p ? seatTimeRange(slots, slot, p, a.period) : null;
+  return t ? `${t.start}~${t.end}` : null;
 }
 
 /**
- * 표에서 이 감독이 보일 교시들: 자기 교시 + 별도 시간(연장)으로 겹치는 교시.
- * 예) 별도시험장 09:00~10:10이면 1교시와 2교시 칸 모두에 보인다.
+ * 표에서 이 감독이 보일 교시들. 예전 연장감독(한 명이 이어서 맡던 배정)만 겹치는 교시 칸에도 보이고,
+ * 지금은 별도시험장도 교시마다 감독이 따로라서 자기 교시에만 보인다.
  */
-export function shownPeriods(slots: TimetableData['slots'], a: { slotId: string; roomId: string; period: number }): number[] {
+export function shownPeriods(slots: TimetableData['slots'], a: { slotId: string; roomId: string; period: number; role: string }): number[] {
+  if (a.role !== 'EXTENDED') return [a.period];
   const slot = slots.find((s) => s.id === a.slotId);
   const p = slot?.rooms.find((x) => x.roomId === a.roomId);
   return slot && p ? [a.period, ...overlappingPeriods(slots, slot, p).filter((x) => x !== a.period)] : [a.period];
@@ -56,14 +62,15 @@ export function dutiesOf(teacherId: string, d: TimetableData): Duty[] {
     .filter((a) => a.teacherId === teacherId)
     .map((a) => {
       const s = slotById.get(a.slotId);
-      // 특별실 별도 시간이 있으면 그 시간으로
+      // 특별실 별도 시간이 있으면 그 시간으로 (별도시험장은 교시별로 나뉜 시간)
       const p = s?.rooms.find((x) => x.roomId === a.roomId);
+      const own = s && p ? seatTimeRange(d.slots, s, p, a.period) : null;
       return {
         id: a.id,
         date: a.date,
         period: a.period,
-        startTime: (p?.startTime || s?.startTime) ?? null,
-        endTime: (p?.endTime || s?.endTime) ?? null,
+        startTime: own?.start ?? s?.startTime ?? null,
+        endTime: own?.end ?? s?.endTime ?? null,
         roomName: roomById.get(a.roomId)?.name ?? '',
         role: SEAT_ROLE_LABEL[a.role],
         grade: s?.grade ?? 0,
@@ -95,7 +102,7 @@ export function fullTimetableSheets(d: TimetableData): OutSheet[] {
           const names = d.assignments
             .filter((a) => a.date === date && a.roomId === r.id && shownPeriods(d.slots, a).includes(p.period))
             .map((a) => {
-              const own = ownTimeOf(d.slots, a.slotId, a.roomId);
+              const own = ownTimeOf(d.slots, a);
               return `${name.get(a.teacherId) ?? '?'}${a.role === 'CHIEF' ? '' : `(${SEAT_ROLE_LABEL[a.role]})`}${own ? ` [${own}]` : ''}`;
             })
             .join(', ');

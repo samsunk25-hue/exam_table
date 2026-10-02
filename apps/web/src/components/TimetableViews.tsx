@@ -48,7 +48,7 @@ export function FullTimetable({ data, highlight }: { data: TimetableData; highli
                           {cell(t.period, r.id).map((a) => (
                             <div key={a.id} className={`font-semibold ${a.teacherId === highlight ? 'rounded-md bg-primary px-1.5 text-white' : ''}`}>
                               {label(a.teacherId, a.role)}
-                              {ownTimeOf(data.slots, a.slotId, a.roomId) && <span className="ml-1 text-xs font-normal">({ownTimeOf(data.slots, a.slotId, a.roomId)})</span>}
+                              {ownTimeOf(data.slots, a) && <span className="ml-1 text-xs font-normal">({ownTimeOf(data.slots, a)})</span>}
                             </div>
                           ))}
                         </td>
@@ -78,7 +78,7 @@ export function FullTimetable({ data, highlight }: { data: TimetableData; highli
                             {cell(t.period, r.id).map((a) => (
                               <span key={a.id} className={`block ${a.teacherId === highlight ? 'rounded bg-primary px-1 text-white' : ''}`}>
                                 {label(a.teacherId, a.role)}
-                                {ownTimeOf(data.slots, a.slotId, a.roomId) && <span className="ml-1 text-xs font-normal">({ownTimeOf(data.slots, a.slotId, a.roomId)})</span>}
+                                {ownTimeOf(data.slots, a) && <span className="ml-1 text-xs font-normal">({ownTimeOf(data.slots, a)})</span>}
                               </span>
                             ))}
                           </span>

@@ -24,7 +24,6 @@ const KNOBS: Knob[] = [
   { key: 'highLoad', label: '부담 많은 교사 피하기', hint: '누적 업무점수가 높은 교사에게 감점', max: 200, negative: true },
   { key: 'consecutive', label: '연속 감독 피하기', hint: '같은 날 이어지는 교시 감독에 감점', max: 300, negative: true },
   { key: 'baseMatch', label: '기초시간표 반과 맞추기', hint: '그 시간 그 반 수업 교사에게 가점', max: 200, onlyBase: true },
-  { key: 'notHomeroomGrade', label: '다른 학년 담임 우선', hint: '시험 학년의 담임이 아닌 교사에게 가점', max: 100 },
   { key: 'hallwayMatch', label: '복도전담 교사는 복도로', hint: '복도전담 교사가 복도를 맡으면 가점', max: 100 },
   { key: 'examSubjectHallway', label: '출제 교사 복도 대기', hint: '시험 과목 교사가 그 시간 복도면 가점, 교실이면 감점', max: 200, pair: 'examSubjectRoom' },
 ];

@@ -1,4 +1,4 @@
-// 별도시험장 우선 교사: 배정 설정에서 교사를 고르면 자동 배정이 그 교사를 별도시험장 정감독(연장)·부감독에 먼저 넣는다
+// 별도시험장 우선 교사: 배정 설정에서 교사를 고르면 자동 배정이 그 교사를 별도시험장 정감독·부감독에 먼저 넣는다
 // 실행: sample-check.mjs 다음에 (E2E_SAMPLE, 별도시험장 배치가 있는 샘플 학교)
 import { createRequire } from 'node:module';
 import { go, openApp, runCompare } from './session.mjs';
@@ -31,9 +31,9 @@ const picks = teachers.slice(-2); // 이름순 마지막 두 명
 
 const { browser, page, errors } = await openApp();
 await go(page, `/admin/sessions/${SID}/assign`);
-// 정감독(연장)은 picks[0], 부감독은 picks[1]
+// 정감독은 picks[0], 부감독은 picks[1]
 const [chief, assistant] = picks;
-for (const [label, t] of [['정감독(연장)', chief], ['부감독', assistant]]) {
+for (const [label, t] of [['정감독', chief], ['부감독', assistant]]) {
   await page.getByLabel(`별도시험장 ${label} 우선 교사 추가`).selectOption({ value: t.id });
   await page.getByRole('button', { name: `${label} ${t.name} 빼기` }).waitFor();
 }
@@ -53,7 +53,7 @@ const sepRooms = new Set((await db.collection('rooms').where('name', '==', '별�
 const sepSeats = docs.filter((d) => sepRooms.has(d.get('roomId')));
 const okSeat = (d) => d.get('teacherId') === (d.get('role') === 'ASSISTANT' ? assistant.id : chief.id);
 const good = sepSeats.filter(okSeat);
-check('별도시험장 정감독(연장)·부감독 자리를 각 우선 교사가 맡음', applied && sepSeats.length > 0 && good.length === sepSeats.length, `${good.length} / ${sepSeats.length}자리`);
+check('별도시험장 정감독·부감독 자리를 각 우선 교사가 맡음', applied && sepSeats.length > 0 && good.length === sepSeats.length, `${good.length} / ${sepSeats.length}자리`);
 check('콘솔 오류 없음', errors.length === 0, errors.join(' / '));
 await browser.close();
 await db.doc(`sessions/${SID}`).set({ settings: { extendedPreferred: [], extendedChief: [], extendedAssistant: [] } }, { merge: true });

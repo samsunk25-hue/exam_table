@@ -1,4 +1,5 @@
 // 감독 10분 전 알림: 어떤 감독에게 무엇을 보낼지 정한다 (Firestore에 의존하지 않는 순수 함수)
+import { seatTimeRange } from '@sim/engine';
 import { SEAT_ROLE_LABEL, type AssignmentDoc, type RoomDoc, type SlotDoc, type WithId } from '@sim/shared';
 
 /** 시작 몇 분 전부터 보내는지 */
@@ -21,7 +22,7 @@ export function kstNow(now: Date): { date: string; minute: number } {
 }
 
 /**
- * 지금부터 10분 안에 시작하는 감독. 시작 시각은 시험실 별도 시간(연장 등)이 있으면 그것, 없으면 시험 시각.
+ * 지금부터 10분 안에 시작하는 감독. 시작 시각은 시험실 별도 시간이 있으면 그것(별도시험장은 교시별로 나뉜 시간), 없으면 시험 시각.
  * 시각이 없는 시험은 보내지 않는다. 학생 안내사항은 관리자가 적은 경우에만 붙인다.
  */
 export function planReminders(opts: {
@@ -41,8 +42,9 @@ export function planReminders(opts: {
     const slot = slotById.get(a.slotId);
     if (!slot) continue;
     const place = slot.rooms.find((p) => p.roomId === a.roomId);
-    const start = place?.startTime ?? slot.startTime;
-    const end = place?.endTime ?? slot.endTime;
+    const own = place ? seatTimeRange(slots, slot, place, a.period) : null;
+    const start = own?.start ?? slot.startTime;
+    const end = own?.end ?? slot.endTime;
     if (!start) continue;
     const left = toMin(start) - now.minute;
     if (left <= 0 || left > REMIND_BEFORE_MIN) continue;

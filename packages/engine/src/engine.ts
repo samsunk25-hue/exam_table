@@ -49,17 +49,15 @@ function rankCandidates(ctx: Context, state: State, seat: Seat, exclude?: string
     const s = state.score(t, seat, bands);
     out.push({ teacher: t, score: s.score, reason: s.reason, load: state.totalLoadOf(t) });
   }
-  // 감독 횟수 차이 상한: 가장 적은 교사보다 MAX_COUNT_GAP회 이상 많은 교사는 다른 후보가 있으면 빼고 고른다
-  // (별도시험장 우선 교사의 그 자리는 예외)
-  const capped = out.filter(
-    (c) => c.teacher.temporary || prefersSeat(ctx, c.teacher.id, seat) || state.countOf(c.teacher.id) < bands.minCount + MAX_COUNT_GAP,
-  );
+  // 감독 횟수 맞추기: 이 자리를 맡을 수 있는 교사 중 이번 시험 감독이 가장 적은 교사들 안에서만 고른다
+  // → 교사별 총 감독 횟수가 2회 이상 벌어지지 않게 (점수는 그 안에서 순서를 정한다).
+  // 별도시험장 우선 교사의 그 자리는 예외, 임시 감독자는 교사가 모자랄 때만 쓰이므로 따로 둔다
+  const regular = out.filter((c) => !c.teacher.temporary && !prefersSeat(ctx, c.teacher.id, seat));
+  const fewest = regular.length ? Math.min(...regular.map((c) => state.countOf(c.teacher.id))) : 0;
+  const capped = out.filter((c) => c.teacher.temporary || prefersSeat(ctx, c.teacher.id, seat) || state.countOf(c.teacher.id) <= fewest);
   // 점수 내림차순 → 누적 부담 오름차순 → 교사 ID (ctx.teachers가 ID순이므로 안정 정렬로 보장)
   return (capped.length ? capped : out).sort((a, b) => b.score - a.score || a.load - b.load);
 }
-
-/** 이번 시험 감독 횟수 차이 상한 (목표는 1, 사정이 있어도 3을 넘기지 않는다) */
-const MAX_COUNT_GAP = 3;
 
 function makeAssignment(seat: Seat, c: Candidate, source: Assignment['source']): Assignment {
   return {
@@ -178,7 +176,7 @@ function ejectionChain(ctx: Context, state: State, pinnedIds: Set<string>): void
       const busy = state.busyAt(t.id, seat);
       if (busy.length !== 1) continue;
       const otherId = busy[0]!;
-      if (pinnedIds.has(otherId)) continue;
+      if (pinnedIds.has(otherId) || keepsPreferred(ctx, state.bySeat.get(otherId)!)) continue;
       if (state.hardReason(t, seat, otherId) !== null) continue;
 
       const original = state.remove(otherId)!;

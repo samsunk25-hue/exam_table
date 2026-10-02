@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 export const APP_NAME = '쌤밸런스';
 export const APP_SUBTITLE = '시험 감독 매니저';
@@ -8,15 +8,24 @@ const TITLE_SIZE = {
   md: 'text-[1.55rem] sm:text-[2.1rem]',
   lg: 'text-[2.3rem] sm:text-[2.8rem]',
   /** 머리글: 크게 */
-  xl: 'text-[2rem] sm:text-[2.8rem] lg:text-[3.3rem]',
+  xl: 'text-[2rem] max-[374px]:text-[1.75rem] sm:text-[2.8rem] lg:text-[3.3rem]',
 };
 
-/** 필기체 앱 제목. size: 작게(md) / 로그인 화면(lg) / 머리글(xl) */
-export function AppTitle({ size = 'md', as: Tag = 'div' }: { size?: keyof typeof TITLE_SIZE; as?: 'div' | 'h1' }) {
+/**
+ * 필기체 앱 제목. size: 작게(md) / 로그인 화면(lg) / 머리글(xl)
+ * 휴대폰에서는 "쌤밸런스"(+ 옆 장식) 첫 줄, "시험 감독 매니저" 둘째 줄로 나눈다.
+ */
+export function AppTitle({ size = 'md', as: Tag = 'div', beside }: { size?: keyof typeof TITLE_SIZE; as?: 'div' | 'h1'; /** 휴대폰 첫 줄 제목 옆 장식 */ beside?: ReactNode }) {
   return (
     <Tag className={`font-hand leading-none ${TITLE_SIZE[size]}`}>
-      <span className="text-primary-strong">{APP_NAME}</span>
-      <span className="text-ink">: {APP_SUBTITLE}</span>
+      <span className="whitespace-nowrap">
+        <span className="text-primary-strong">{APP_NAME}</span>
+        {beside}
+      </span>
+      <span className="block whitespace-nowrap text-ink md:inline">
+        <span className="hidden md:inline">: </span>
+        {APP_SUBTITLE}
+      </span>
     </Tag>
   );
 }

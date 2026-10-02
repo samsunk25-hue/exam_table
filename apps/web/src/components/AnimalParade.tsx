@@ -10,6 +10,19 @@ const ANIMALS: { emoji: string; duration: number; delay: number; hop: number }[]
   { emoji: '🐥', duration: 40, delay: -24, hop: 0.3 },
 ];
 
+/** 휴대폰: 제목 옆에서 세 마리가 제자리에서 통통 튄다 (행진할 자리가 없어서) */
+export function AnimalBounce() {
+  return (
+    <span className="no-print ml-1 inline-flex align-bottom text-[1.1rem] md:hidden" aria-hidden>
+      {ANIMALS.slice(0, 3).map((a, i) => (
+        <span key={a.emoji} className="animal-bounce" style={{ animationDelay: `${i * 0.18}s` }}>
+          {a.emoji}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export function AnimalParade() {
   return (
     <div className="animal-parade no-print pointer-events-none relative hidden min-w-48 flex-1 self-stretch md:block" aria-hidden>

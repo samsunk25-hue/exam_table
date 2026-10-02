@@ -193,6 +193,18 @@ table,
   50% { left: calc(100% - 2rem); transform: scaleX(1); }
   100% { left: 0; transform: scaleX(1); }
 }
+/* 휴대폰 제목 옆: 제자리 통통 (AnimalBounce) */
+.animal-bounce {
+  display: inline-block;
+  transform-origin: 50% 100%;
+  animation: animal-bounce 0.9s ease-in-out infinite;
+}
+@keyframes animal-bounce {
+  0%, 100% { transform: translateY(0) scale(1.08, 0.92); }
+  15% { transform: translateY(0) scale(1, 1); }
+  50% { transform: translateY(-0.45rem) scale(0.96, 1.05); }
+  85% { transform: translateY(0) scale(1, 1); }
+}
 /* 걷는 모습: 발을 옮길 때마다 몸을 좌우로 살짝 기울인다 (튀지 않게 위아래 1px만) */
 @keyframes animal-hop {
   from { transform: rotate(-7deg) translateY(0); }

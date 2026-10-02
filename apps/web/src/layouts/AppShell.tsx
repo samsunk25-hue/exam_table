@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { useAuth } from '@/auth/AuthProvider';
-import { AnimalParade } from '@/components/AnimalParade';
+import { AnimalBounce, AnimalParade } from '@/components/AnimalParade';
 import { AppFooter, AppTitle, HeroImage } from '@/components/Brand';
 import { NotificationBell } from '@/components/NotificationBell';
 import { TermProvider } from '@/components/TermRoster';
@@ -42,10 +42,10 @@ export function BrandFrame({ nav = [], modeLabel, bell = true, children }: { nav
         <div className="no-print bg-mint-soft px-4 py-1 text-center text-sm">로컬 에뮬레이터 연결 중 (실제 데이터 아님)</div>
       )}
       <header aria-label={`${modeLabel} 화면`} className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1440px] items-center gap-4 px-4 py-3 lg:px-8">
-          <div className="min-w-0 md:shrink-0">
+        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3 md:gap-x-4 md:flex-nowrap lg:px-8">
+          <div className="shrink-0 md:min-w-0">
             {/* 제목만 크게 (역할·이메일 표시는 뺐다) */}
-            <AppTitle size="xl" />
+            <AppTitle size="xl" beside={<AnimalBounce />} />
           </div>
           {/* 제목 오른쪽 빈 공간에 대문 그림 (시간표 + 태블릿 든 선생님, 비율 유지, 휴대폰에서는 숨김) */}
           <div className="hidden min-w-0 flex-1 justify-end md:flex">
@@ -53,7 +53,7 @@ export function BrandFrame({ nav = [], modeLabel, bell = true, children }: { nav
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-0">
             {bell && <NotificationBell />}
-            <Button variant="secondary" className="shrink-0" onClick={() => void signOut()}>
+            <Button variant="secondary" className="shrink-0 max-md:px-3" onClick={() => void signOut()}>
               로그아웃
             </Button>
           </div>

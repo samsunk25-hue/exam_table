@@ -221,10 +221,13 @@ async function saveSteps(
   if (plan.slots) {
     const existing = new Map(ctx.slots.map((s) => [s.id, s]));
     const keep = new Set(plan.slots.map((s) => s.id));
+    // 같은 시험이 이미 있으면 배치를 물려받는다. 단 기존 자료 삭제면 파일 기준으로 새로 배치하고,
+    // 유지여도 지금 없는 시험실(삭제된 시험실)은 뺀다 — 남겨 두면 "삭제된 시험실" 오류가 나고 자동 배치도 건너뛴다
+    const roomsOf = (id: string) => (replace ? [] : (existing.get(id)?.rooms ?? []).filter((p) => roomsAfter.has(p.roomId)));
     const ops: BatchOp[] = plan.slots.map(({ id, ...data }) => ({
       type: 'set',
       ref: ref(slotPath, id),
-      data: { ...data, rooms: existing.get(id)?.rooms ?? [] },
+      data: { ...data, rooms: roomsOf(id) },
     }));
     // 기존 유지면 파일에 없는 시험은 그대로 둔다
     const removed = replace ? ctx.slots.filter((s) => !keep.has(s.id)) : [];
@@ -234,7 +237,7 @@ async function saveSteps(
     if (Object.keys(times).length) ops.push({ type: 'set', ref: ref('sessions', sid), data: { settings: { periodTimes: times } }, merge: true });
     await commitOps(ops);
     slotsAfter = [
-      ...plan.slots.map((s) => ({ ...s, rooms: existing.get(s.id)?.rooms ?? [] })),
+      ...plan.slots.map((s) => ({ ...s, rooms: roomsOf(s.id) })),
       ...(replace ? [] : ctx.slots.filter((s) => !keep.has(s.id))),
     ];
     done.push(`시험 일정 ${plan.slots.length}건${removed.length ? ` (삭제 ${removed.length})` : ''}`);

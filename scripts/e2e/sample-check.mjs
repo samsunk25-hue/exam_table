@@ -85,6 +85,27 @@ const clashes = run.assignments
   .filter((ext) => run.assignments.some((o) => o.teacherId === ext.teacherId && at(o.seatId).date === at(ext.seatId).date && at(o.seatId).period === 2));
 check('연장 시간이 겹치는 2교시에는 같은 교사 배정 없음', clashes.length === 0, `${clashes.length}건`);
 await page.screenshot({ path: `${OUT}/sample-assign.png`, fullPage: true });
+
+// 샘플을 "기존 자료 지우고 파일 내용으로 바꾸기"로 다시 올리기: 파일에 없는 시험실이 시험에 배치되어 있어도
+// 삭제된 시험실이 남지 않고 자동 배치가 새로 된다 (전에는 "삭제된 시험실이 배치되어 있습니다" 오류)
+await db.doc('rooms/ROLD').set({ name: '옛시험실', spaceType: 'CLASSROOM', grade: 1, classNo: 9, chiefCount: 1, assistantCount: 1, term: '샘플중학교|2026|2', school: '샘플중학교', year: 2026, semester: 2 });
+const g2 = slotDocs.docs.find((d) => d.get('grade') === 2 && d.get('type') === 'EXAM');
+await g2.ref.update({ rooms: [...g2.get('rooms'), { roomId: 'ROLD', classNo: 9, headcount: null, roomType: 'NORMAL' }] });
+await go(page, `/admin/sessions/${SID}`);
+await page.getByRole('button', { name: '통합 양식 업로드' }).click();
+await dialog.locator('input[type=file]').setInputFiles(file);
+await dialog.getByText(/검증 결과/).waitFor();
+await dialog.getByRole('button', { name: '저장', exact: true }).click();
+await page.getByRole('button', { name: /기존 자료 지우고 파일 내용으로 바꾸기/ }).click();
+await dialog.getByText('저장했습니다.').waitFor({ timeout: 60000 });
+await dialog.getByRole('button', { name: '닫기' }).first().click();
+const roomIds = new Set((await db.collection('rooms').get()).docs.map((d) => d.id));
+const slots2 = (await db.collection(`sessions/${SID}/slots`).get()).docs;
+const stale = slots2.filter((d) => d.get('rooms').some((p) => !roomIds.has(p.roomId)));
+check('다시 올려도 삭제된 시험실을 가리키는 시험 없음', !roomIds.has('ROLD') && stale.length === 0, `${stale.length}건`);
+const p1g1b = slots2.filter((d) => d.get('grade') === 1 && d.get('period') === 1);
+check('다시 올린 뒤 배치도 같음 (교실 3 + 별도시험장)', p1g1b.every((d) => roomsOf(d) === '1,2,3,SEP'), p1g1b.map(roomsOf).join(' / '));
+check('시험실 배치 수 = 시험 27건에 맞음', slots2.length === 27 && slots2.reduce((n, d) => n + d.get('rooms').length, 0) === 27 * 3 + 3, `${slots2.reduce((n, d) => n + d.get('rooms').length, 0)}개`);
 check('콘솔 오류 없음', errors.length === 0, errors.join(' / '));
 await browser.close();
 process.exit(failures ? 1 : 0);

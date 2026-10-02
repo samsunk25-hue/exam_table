@@ -1,5 +1,5 @@
 // AI 기능 점검 (에뮬레이터: 키가 없으면 가짜 응답) — swap-check 이후 실행 (E2E_SWAP 공개 상태 필요)
-// 1) 문서에서 AI로 읽기 → 통합 양식 검증 창 → 저장 → 시험 일정·교사(담임) 저장
+// 1) 문서에서 AI로 읽기 → 통합 양식 검증 창 → 저장 → 시험 일정·교사(담임)·기초시간표 저장
 // 2) 교사 화면 "왜 이렇게 배정됐나요?"
 import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -39,11 +39,15 @@ const A = await openApp();
 await go(A.page, `/admin/sessions/${SID}`);
 await A.page.getByRole('button', { name: '📄 학교 문서에서 AI로 읽기' }).click();
 const dlg = A.page.getByRole('dialog', { name: '학교 문서에서 AI로 읽기' });
+check('읽을 자료: 시험 일정·교사 명단·기초시간표 모두 기본 선택', (await dlg.getByRole('button', { pressed: true }).count()) === 3);
 await dlg.getByLabel('문서 내용 붙여 넣기').fill('10월 12일 1교시 1학년 국어, 2학년 수학 / 문서교사가 국어 1-5 담임');
 await dlg.getByRole('button', { name: 'AI로 읽기' }).click();
 const review = A.page.getByRole('dialog', { name: 'AI가 읽은 자료 확인·저장' });
 await review.getByRole('heading', { name: /검증 결과/ }).waitFor({ timeout: 60000 });
-check('AI 결과 → 통합 양식 검증 창', (await review.innerText()).includes('시험 3건 · 교사 2명을 읽었습니다'));
+await review.getByText(/을 읽었습니다/).first().waitFor({ timeout: 10000 }).catch(() => {});
+const reviewText = await review.innerText();
+check('AI 결과 → 통합 양식 검증 창', reviewText.includes('시험 3건 · 교사 2명 · 기초시간표 교사 1명(수업 3건)을 읽었습니다'), reviewText.replace(/s+/g, ' ').slice(0, 600));
+check('기초시간표 전체 교체 안내', reviewText.includes('기초시간표 전체가 읽은 내용으로 바뀝니다'));
 await A.page.screenshot({ path: 'scripts/e2e/out/ai-extract.png' });
 await review.getByRole('button', { name: '저장', exact: true }).click();
 const keep = A.page.getByRole('button', { name: /기존 자료 유지/ });
@@ -53,6 +57,9 @@ const slots = (await db.collection(`sessions/${SID}/slots`).get()).size;
 const t = (await db.collection('teachers').where('name', '==', '문서교사가').get()).docs[0]?.data();
 check('읽은 시험 일정 저장 (자습 포함 3건)', slots === 3, `${slots}건`);
 check('읽은 교사 저장 (이 학기, 1-5 담임)', t?.term === '점검중학교|2026|2' && t?.homeroom?.classNo === 5, JSON.stringify(t?.homeroom));
+const tId = (await db.collection('teachers').where('name', '==', '문서교사가').get()).docs[0]?.id;
+const tt = tId ? (await db.doc(`sessions/${SID}/baseTimetable/${tId}`).get()).get('entries') : null;
+check('읽은 기초시간표 저장 (월1 1-5 국어 등 3칸)', tt?.length === 3 && tt.some((e) => e.weekday === 1 && e.period === 1 && e.grade === 1 && e.classNo === 5 && e.subject === '국어'), JSON.stringify(tt));
 await review.getByRole('button', { name: '닫기' }).first().click();
 
 check('관리자 화면 콘솔 오류 없음', A.errors.length === 0, A.errors.join(' / '));

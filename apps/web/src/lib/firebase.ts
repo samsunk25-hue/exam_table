@@ -92,9 +92,15 @@ export interface AiTeacherRow {
   homeroomClass?: number | null;
   email?: string | null;
 }
+/** 기초시간표: 교사별 수업 목록 ("월1 1-3 국어") */
+export interface AiTimetableRow {
+  teacher: string;
+  lessons: string[];
+}
+export type AiPart = 'schedule' | 'teachers' | 'timetable';
 export const callAiExtract = httpsCallable<
-  { kind: 'both' | 'schedule' | 'teachers'; files: { name: string; mediaType: string; data: string }[]; text?: string; year: number },
-  { slots: AiSlotRow[]; teachers: AiTeacherRow[]; notes: string[] }
+  { parts: AiPart[]; files: { name: string; mediaType: string; data: string }[]; text?: string; year: number },
+  { slots: AiSlotRow[]; teachers: AiTeacherRow[]; timetable: AiTimetableRow[]; notes: string[] }
 >(functions, 'aiExtract', { timeout: 300_000 });
 export const callAiExplainDuties = httpsCallable<{ sessionId: string; teacherId?: string }, { text: string }>(functions, 'aiExplainDuties', { timeout: 300_000 });
 export const callAiRules = httpsCallable<{ sessionId: string; text: string }, { rules: import('@sim/shared').ConstraintDoc[]; notes: string[] }>(functions, 'aiRules', {

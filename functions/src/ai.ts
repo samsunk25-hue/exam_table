@@ -103,7 +103,7 @@ async function claude(key: string, o: { system: string; content: Block[]; tool?:
 
 const EXTRACT_TOOL: Tool = {
   name: 'record_school_data',
-  description: '문서에서 읽은 시험 일정과 교사 명단을 기록한다.',
+  description: '문서에서 읽은 시험 일정·교사 명단·기초시간표를 기록한다.',
   input_schema: {
     type: 'object',
     properties: {
@@ -138,30 +138,59 @@ const EXTRACT_TOOL: Tool = {
           required: ['name'],
         },
       },
+      timetable: {
+        type: 'array',
+        description: '기초시간표 (평소 주간 수업). 교사 1명 = 한 줄.',
+        items: {
+          type: 'object',
+          properties: {
+            teacher: { type: 'string', description: '교사 이름' },
+            lessons: { type: 'array', items: { type: 'string' }, description: '수업 하나 = "요일교시 학년-반 과목" 예: "월1 1-3 국어", "목5 2-1" (과목 생략 가능, 월~금만)' },
+          },
+          required: ['teacher', 'lessons'],
+        },
+      },
       notes: { type: 'array', items: { type: 'string' }, description: '읽기 어려웠던 부분, 확인이 필요한 점 (한국어, 짧게)' },
     },
-    required: ['slots', 'teachers', 'notes'],
+    required: ['slots', 'teachers', 'timetable', 'notes'],
   },
+};
+
+type Part = 'schedule' | 'teachers' | 'timetable';
+const PART_TASK: Record<Part, string> = {
+  schedule: '시험 일정',
+  teachers: '교사 명단',
+  timetable: '기초시간표',
 };
 
 interface ExtractResult {
   slots: { date: string; period: number; startTime?: string | null; endTime?: string | null; grade: number; subject: string; type: '시험' | '자습' }[];
   teachers: { name: string; subject?: string | null; homeroomGrade?: number | null; homeroomClass?: number | null; email?: string | null }[];
+  timetable: { teacher: string; lessons: string[] }[];
   notes: string[];
 }
 
 const MEDIA = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'text/plain', 'text/csv']);
 
-/** 교육계획서·시험 시간표·업무 분장표 등(PDF·사진·글)에서 시험 일정과 교사 명단을 읽는다 */
+/** 교육계획서·시험 시간표·업무 분장표·시간표 등(PDF·사진·글)에서 시험 일정·교사 명단·기초시간표를 읽는다 */
 export const aiExtract = onCall(AI_OPTIONS, async (req) => {
   const key = needKey(await keyOf(requireAdmin(req)));
-  const { kind, files, text, year } = (req.data ?? {}) as {
+  const { kind, parts, files, text, year } = (req.data ?? {}) as {
     kind?: unknown;
+    parts?: unknown;
     files?: { name?: unknown; mediaType?: unknown; data?: unknown }[];
     text?: unknown;
     year?: unknown;
   };
-  const want = kind === 'schedule' || kind === 'teachers' ? kind : 'both';
+  // parts: 읽을 자료 목록. kind는 예전 화면용 (both / schedule / teachers)
+  const want = new Set<Part>(
+    Array.isArray(parts)
+      ? parts.filter((p): p is Part => p === 'schedule' || p === 'teachers' || p === 'timetable')
+      : kind === 'schedule' || kind === 'teachers'
+        ? [kind]
+        : ['schedule', 'teachers'],
+  );
+  if (!want.size) throw new HttpsError('invalid-argument', '읽을 자료를 하나 이상 골라 주세요.');
   const list = Array.isArray(files) ? files.slice(0, 4) : [];
   const content: Block[] = [];
   for (const f of list) {
@@ -176,14 +205,18 @@ export const aiExtract = onCall(AI_OPTIONS, async (req) => {
   if (!content.length) throw new HttpsError('invalid-argument', '읽을 파일이나 글을 넣어 주세요.');
 
   const y = typeof year === 'number' ? year : new Date().getFullYear();
-  const task =
-    want === 'schedule' ? '시험 일정만 읽으세요 (teachers는 빈 배열).' : want === 'teachers' ? '교사 명단만 읽으세요 (slots는 빈 배열).' : '시험 일정과 교사 명단을 모두 읽으세요.';
+  const chosen = (['schedule', 'teachers', 'timetable'] as const).filter((p) => want.has(p));
+  const skipped = { schedule: 'slots', teachers: 'teachers', timetable: 'timetable' } as const;
+  const task = `${chosen.map((p) => PART_TASK[p]).join('·')}을(를) 읽으세요${
+    chosen.length < 3 ? ` (${(['schedule', 'teachers', 'timetable'] as const).filter((p) => !want.has(p)).map((p) => skipped[p]).join('·')}는 빈 배열)` : ''
+  }.`;
   content.push({
     type: 'text',
     text: `위 학교 문서에서 ${task}
 - 학년도는 ${y}학년도입니다. 날짜에 연도가 없으면 3~12월은 ${y}년, 1~2월은 ${y + 1}년으로 쓰세요.
 - 시험 일정: 날짜·교시·학년마다 한 줄. "자습"·"자율학습"은 type을 자습으로. 시간이 적혀 있으면 HH:MM으로.
 - 교사 명단: 교사(담임·교과 교사)만. 행정직원은 빼세요. 담임은 "1-3" 같은 표기를 학년·반 숫자로.
+- 기초시간표: 평소 주간 수업 시간표를 교사별로. 수업 하나를 "월1 1-3 국어"처럼 (요일 한 글자 + 교시, 학년-반, 과목). 학급별 시간표라면 각 칸의 교사 이름을 보고 교사별로 모으세요. 칸에 교사 이름이 없으면 과목만 보고 교사를 짐작하지 말고 notes에 적으세요. 창체·동아리처럼 학년-반이 없는 수업은 빼세요.
 - 문서에 없는 값은 지어내지 말고 null로 두고, 애매한 점은 notes에 적으세요.`,
   });
 
@@ -195,8 +228,9 @@ export const aiExtract = onCall(AI_OPTIONS, async (req) => {
         tool: EXTRACT_TOOL,
       })) as ExtractResult);
   return {
-    slots: want === 'teachers' ? [] : (out.slots ?? []),
-    teachers: want === 'schedule' ? [] : (out.teachers ?? []),
+    slots: want.has('schedule') ? (out.slots ?? []) : [],
+    teachers: want.has('teachers') ? (out.teachers ?? []) : [],
+    timetable: want.has('timetable') ? (out.timetable ?? []).filter((t) => t.teacher && Array.isArray(t.lessons) && t.lessons.length) : [],
     notes: out.notes ?? [],
   };
 });
@@ -212,6 +246,7 @@ function fakeExtract(y: number): ExtractResult {
       { name: '문서교사가', subject: '국어', homeroomGrade: 1, homeroomClass: 5, email: null },
       { name: '문서교사나', subject: '수학', homeroomGrade: null, homeroomClass: null, email: 'doc.b@test.kr' },
     ],
+    timetable: [{ teacher: '문서교사가', lessons: ['월1 1-5 국어', '화2 1-5 국어', '수3 1-4'] }],
     notes: ['(에뮬레이터 가짜 응답) 실제 AI 키가 없어서 예시 자료를 돌려줍니다.'],
   };
 }

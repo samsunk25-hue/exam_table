@@ -6,10 +6,12 @@ import {
   analyzeBundle,
   buildSampleSchool,
   isSetupEditable,
+  safeSheetName,
   sessionTerm,
   termKey,
   termLabel,
   termFields,
+  timetableGridRows,
   type BaseTimetableDoc,
   type BundleKey,
   type RoomDoc,
@@ -23,7 +25,7 @@ import { RosterImportDialog, rememberTerm, type RosterKind } from '@/components/
 import { useCollection } from '@/lib/data';
 import { Readiness } from './Readiness';
 import { bundleSheets, replacePreview, saveBundle, timetableSheets, type SaveMode } from '@/lib/bundle';
-import { callAiExtract, errorMessage, type AiSlotRow, type AiTeacherRow } from '@/lib/firebase';
+import { callAiExtract, errorMessage, type AiPart, type AiSlotRow, type AiTeacherRow, type AiTimetableRow } from '@/lib/firebase';
 import { termWhere, type ExamSession } from '@/lib/sessions';
 import { downloadWorkbook, readWorkbook, type SheetData } from '@/lib/xlsx';
 
@@ -267,9 +269,19 @@ const toBase64 = (file: File) =>
     r.readAsDataURL(file);
   });
 
-/** AI가 읽은 표 → 통합 양식 시트 (기존 검증·저장 과정을 그대로 쓴다) */
-function toSheets(slots: AiSlotRow[], teachers: AiTeacherRow[]): SheetData[] {
+/** "월1 1-3 국어" → 수업 한 칸 (못 읽으면 null) */
+function parseLesson(text: string) {
+  const m = text.trim().match(/^([월화수목금])\s*(\d{1,2})(?:교시)?\s+(\d)\s*-\s*(\d{1,2})(?:\s+(.+))?$/);
+  if (!m) return null;
+  return { weekday: '월화수목금'.indexOf(m[1]!) + 1, period: Number(m[2]), grade: Number(m[3]), classNo: Number(m[4]), subject: m[5]?.trim() || null };
+}
+
+/** AI가 읽은 표 → 통합 양식 시트 (기존 검증·저장 과정을 그대로 쓴다). 기초시간표는 교사별 격자 시트 */
+function toSheets(slots: AiSlotRow[], teachers: AiTeacherRow[], timetable: AiTimetableRow[]): { sheets: SheetData[]; ttTeachers: number; lessons: number; skipped: string[] } {
   const sheets: SheetData[] = [];
+  const skipped: string[] = [];
+  let lessons = 0;
+  let ttTeachers = 0;
   if (slots.length) {
     sheets.push({
       name: BUNDLE_SHEETS.slots,
@@ -295,12 +307,23 @@ function toSheets(slots: AiSlotRow[], teachers: AiTeacherRow[]): SheetData[] {
       ],
     });
   }
-  return sheets;
+  for (const t of timetable) {
+    const entries = t.lessons.flatMap((l) => {
+      const e = parseLesson(l);
+      if (!e) skipped.push(`${t.teacher} "${l}"`);
+      return e ? [e] : [];
+    });
+    if (!entries.length) continue;
+    lessons += entries.length;
+    ttTeachers++;
+    sheets.push({ name: safeSheetName(t.teacher.trim()), rows: timetableGridRows(entries) });
+  }
+  return { sheets, ttTeachers, lessons, skipped };
 }
 
-/** 학교 문서(PDF·사진·글)를 AI로 읽어 시험 일정·교사 명단 자료로 만든다 */
+/** 학교 문서(PDF·사진·글)를 AI로 읽어 시험 일정·교사 명단·기초시간표 자료로 만든다 */
 function AiExtractDialog({ year, onClose, onRead }: { year: number; onClose: () => void; onRead: (r: { sheets: SheetData[]; notes: string[] }) => void }) {
-  const [kind, setKind] = useState<'both' | 'schedule' | 'teachers'>('both');
+  const [parts, setParts] = useState<Set<AiPart>>(new Set(['schedule', 'teachers', 'timetable']));
   const [files, setFiles] = useState<File[]>([]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -314,6 +337,7 @@ function AiExtractDialog({ year, onClose, onRead }: { year: number; onClose: () 
     const bad = files.find((f) => !TYPE_OF[ext(f)] && !isExcel(f));
     if (bad) return setError(`"${bad.name}"은(는) 읽을 수 없는 형식입니다. 엑셀·PDF·사진(PNG·JPG)·글(TXT·CSV)로 올려 주세요. 한글(HWP)은 PDF로 저장해서 올리세요.`);
     if (total > MAX_BYTES) return setError('파일이 너무 큽니다 (모두 합쳐 7MB까지). 필요한 쪽만 PDF로 저장하거나 사진 크기를 줄여 주세요.');
+    if (!parts.size) return setError('읽을 자료를 하나 이상 골라 주세요.');
     if (!files.length && !text.trim()) return setError('파일을 고르거나 내용을 붙여 넣어 주세요.');
     setBusy(true);
     try {
@@ -332,13 +356,28 @@ function AiExtractDialog({ year, onClose, onRead }: { year: number; onClose: () 
         files.filter((f) => !isExcel(f)).map(async (f) => ({ name: f.name, mediaType: TYPE_OF[ext(f)]!, data: await toBase64(f) })),
       );
       const allText = [excelText, text.trim()].filter(Boolean).join('\n\n');
-      const { data } = await callAiExtract({ kind, files: payload, text: allText || undefined, year });
-      if (!data.slots.length && !data.teachers.length) {
+      const { data } = await callAiExtract({ parts: [...parts], files: payload, text: allText || undefined, year });
+      const timetable = data.timetable ?? [];
+      if (!data.slots.length && !data.teachers.length && !timetable.length) {
         setError(`읽어 낸 자료가 없습니다.${data.notes.length ? ` (${data.notes.join(' / ')})` : ''}`);
         setBusy(false);
         return;
       }
-      onRead({ sheets: toSheets(data.slots, data.teachers), notes: [`시험 ${data.slots.length}건 · 교사 ${data.teachers.length}명을 읽었습니다.`, ...data.notes] });
+      const out = toSheets(data.slots, data.teachers, timetable);
+      const read = [
+        parts.has('schedule') && `시험 ${data.slots.length}건`,
+        parts.has('teachers') && `교사 ${data.teachers.length}명`,
+        parts.has('timetable') && `기초시간표 교사 ${out.ttTeachers}명(수업 ${out.lessons}건)`,
+      ].filter(Boolean);
+      onRead({
+        sheets: out.sheets,
+        notes: [
+          `${read.join(' · ')}을 읽었습니다.`,
+          ...(out.lessons ? ['기초시간표는 저장하면 이 프로젝트의 기초시간표 전체가 읽은 내용으로 바뀝니다. 일부 교사만 읽혔다면 저장 전에 확인하세요.'] : []),
+          ...(out.skipped.length ? [`읽지 못한 수업 ${out.skipped.length}칸: ${out.skipped.slice(0, 5).join(', ')}${out.skipped.length > 5 ? ' …' : ''}`] : []),
+          ...data.notes,
+        ],
+      });
     } catch (e) {
       setError(errorMessage(e));
       setBusy(false);
@@ -349,20 +388,33 @@ function AiExtractDialog({ year, onClose, onRead }: { year: number; onClose: () 
     <Modal title="학교 문서에서 AI로 읽기" onClose={() => !busy && onClose()} wide>
       <div className="grid gap-4">
         <p className="text-muted">
-          교육계획서의 시험 시간표, 업무 분장표·담임 배정표 같은 문서를 올리면 AI가 시험 일정과 교사 명단(담당 교과·담임반)을 읽어 통합 양식처럼 채워 줍니다. 저장 전에
-          검증 결과를 확인할 수 있습니다.
+          교육계획서의 시험 시간표, 업무 분장표·담임 배정표, 교사별·학급별 시간표 같은 문서를 올리면 AI가 시험 일정, 교사 명단(담당 교과·담임반), 기초시간표를 읽어
+          통합 양식처럼 채워 줍니다. 저장 전에 검증 결과를 확인할 수 있습니다.
         </p>
         <fieldset>
-          <legend className="mb-2 font-semibold">무엇을 읽을까요?</legend>
+          <legend className="mb-2 font-semibold">
+            무엇을 읽을까요? <span className="font-normal text-muted">(여러 개 고를 수 있고, 문서에 없는 자료는 비워 둡니다)</span>
+          </legend>
           <div className="flex flex-wrap gap-2">
             {(
               [
-                ['both', '시험 일정 + 교사 명단'],
-                ['schedule', '시험 일정만'],
-                ['teachers', '교사 명단만'],
+                ['schedule', '시험 일정'],
+                ['teachers', '교사 명단'],
+                ['timetable', '기초시간표'],
               ] as const
             ).map(([k, l]) => (
-              <Button key={k} variant={kind === k ? 'primary' : 'secondary'} aria-pressed={kind === k} onClick={() => setKind(k)}>
+              <Button
+                key={k}
+                variant={parts.has(k) ? 'primary' : 'secondary'}
+                aria-pressed={parts.has(k)}
+                onClick={() => {
+                  const next = new Set(parts);
+                  if (next.has(k)) next.delete(k);
+                  else next.add(k);
+                  setParts(next);
+                }}
+              >
+                {parts.has(k) ? '✓ ' : ''}
                 {l}
               </Button>
             ))}

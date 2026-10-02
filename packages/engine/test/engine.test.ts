@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { overlappingPeriods, runAssignment, seatCandidates, validateAssignments, weekdayOf, type EngineInput } from '../src';
+import { newViolations, overlappingPeriods, runAssignment, seatCandidates, validateAssignments, weekdayOf, type EngineInput } from '../src';
 import { emptyInput, fakeSchool, teacher } from './fixtures';
 
 /** 교실 1개, 시험 1개(날짜 2026-10-12 월요일 1교시) */
@@ -55,6 +55,17 @@ describe('하드 조건', () => {
     expect(r.unassigned[0]!.message).toBe(
       '1-1반 수학 부감독 미배정 (가용 인력 0명 - 불가시간 2명, 동시간 타 감독 1명)',
     );
+  });
+
+  it('수정 검사는 바꾸기 전부터 있던 위반(배정 뒤 승인된 불가시간)을 막지 않고, 새 위반만 막는다', () => {
+    const input = oneRoom({
+      teachers: [teacher('A'), teacher('B'), teacher('C')],
+      availability: [{ teacherId: 'A', date: '2026-10-12', period: 1, status: 'APPROVED' }],
+    });
+    const before = [{ seatId: 'G1_CHIEF_1', teacherId: 'A' }]; // A는 배정 뒤에 불가시간이 승인됨
+    expect(newViolations(input, before, [...before, { seatId: 'G1_ASSISTANT_1', teacherId: 'B' }])).toEqual([]);
+    const added = newViolations(input, [{ seatId: 'G1_CHIEF_1', teacherId: 'B' }], [{ seatId: 'G1_CHIEF_1', teacherId: 'A' }]);
+    expect(added.map((v) => v.teacherId)).toEqual(['A']);
   });
 
   it('동시간대 중복 배정을 하지 않는다', () => {

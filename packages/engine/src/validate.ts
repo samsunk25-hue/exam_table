@@ -103,3 +103,13 @@ export function seatCandidates(
         Number(a.blockedBy !== null) - Number(b.blockedBy !== null) || b.score - a.score || a.load - b.load,
     );
 }
+
+/**
+ * 바꾼 뒤(after)에 새로 생긴 위반만. 바꾸기 전(before)에도 있던 위반(예: 배정 뒤에 승인된 불가시간)은
+ * 이번 변경과 상관없으므로 저장을 막지 않는다.
+ */
+export function newViolations(input: EngineInput, before: AssignmentLike[], after: AssignmentLike[]): Violation[] {
+  const key = (v: Violation) => `${v.seatId}|${v.teacherId}|${v.reason}`;
+  const old = new Set(validateAssignments(input, before).map(key));
+  return validateAssignments(input, after).filter((v) => !old.has(key(v)));
+}

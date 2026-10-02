@@ -1,6 +1,6 @@
 // 교사 교환 요청: 교사가 방법을 찾아 요청 → 관련 교사 수락 → 관리자 승인 시 반영
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
-import { DEFAULT_ROLE_WEIGHTS, buildEngineInput, buildSeats, findSwapChains, seatCandidates, validateAssignments, type Seat } from '@sim/engine';
+import { DEFAULT_ROLE_WEIGHTS, buildEngineInput, buildSeats, findSwapChains, newViolations, seatCandidates, type Seat } from '@sim/engine';
 import {
   OPEN_SWAP_STATUSES,
   SEAT_ROLE_LABEL,
@@ -74,7 +74,8 @@ function checkMoves(L: Loaded, moves: { seatId: string; from: string; to: string
     if (!L.names.has(m.to)) return '교사 명단에 없는 교사가 포함되어 있습니다.';
   }
   for (const m of moves) now.set(m.seatId, m.to);
-  const v = validateAssignments(L.input, [...now].map(([seatId, teacherId]) => ({ seatId, teacherId })));
+  // 바꾸기 전부터 있던 위반은 이 교환과 상관없으므로 막지 않는다
+  const v = newViolations(L.input, L.plain, [...now].map(([seatId, teacherId]) => ({ seatId, teacherId })));
   return v.length ? v.slice(0, 2).map((x) => x.message).join(' / ') : null;
 }
 

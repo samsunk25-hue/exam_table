@@ -241,6 +241,89 @@ function ExamForm({
   );
 }
 
+/** 같은 날·교시·과목 시험을 다른 학년으로 복사 (시험실은 시험 추가처럼 자동 배치) */
+function CopyExamDialog({ sid, source, slots, rooms, grades, onClose }: { sid: string; source: Slot; slots: Slot[]; rooms: WithId<RoomDoc>[]; grades: number[]; onClose: () => void }) {
+  const taken = (g: number) => slots.some((x) => x.id === slotIdOf(source.date, source.period, g));
+  const [picked, setPicked] = useState<Set<number>>(() => new Set(grades.filter((g) => g !== source.grade && !taken(g))));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const copy = async () => {
+    const targets = [...picked].sort((a, b) => a - b);
+    if (!targets.length) return setError('복사할 학년을 고르세요.');
+    setBusy(true);
+    setError(null);
+    // 같은 시간에 이미 쓰는 시험실은 자동 배치에서 뺀다
+    const used = new Set(slots.filter((x) => x.date === source.date && x.period === source.period).flatMap((x) => x.rooms.map((p) => p.roomId)));
+    const ops: BatchOp[] = targets.map((g) => {
+      const placements = autoPlacements({ grade: g }, rooms).filter((p) => !used.has(p.roomId));
+      placements.forEach((p) => used.add(p.roomId));
+      const data: SlotDoc = {
+        date: source.date,
+        period: source.period,
+        startTime: source.startTime,
+        endTime: source.endTime,
+        grade: g,
+        subject: source.subject,
+        type: source.type,
+        rooms: placements,
+      };
+      return { type: 'set', ref: ref(`sessions/${sid}/slots`, slotIdOf(source.date, source.period, g)), data: { ...data } };
+    });
+    try {
+      await commitOps(ops, '시험 복사');
+      toast(`${targets.map((g) => `${g}학년`).join('·')}에 ${source.subject} 시험을 복사했습니다.`);
+      onClose();
+    } catch (e) {
+      setError(errorMessage(e));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title={`${source.period}교시 ${source.grade}학년 ${source.subject} 복사`} onClose={() => !busy && onClose()}>
+      <p className="text-muted">
+        같은 날 같은 교시{source.startTime ? `(${source.startTime}~${source.endTime ?? ''})` : ''}에 같은 과목 시험을 만들 학년을 고르세요. 시험실은 학년 교실로 자동 배치됩니다.
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {grades
+          .filter((g) => g !== source.grade)
+          .map((g) => (
+            <Button
+              key={g}
+              variant={picked.has(g) ? 'primary' : 'secondary'}
+              aria-pressed={picked.has(g)}
+              disabled={taken(g)}
+              title={taken(g) ? '이 교시에 이미 시험이 있습니다' : undefined}
+              onClick={() => {
+                const next = new Set(picked);
+                if (next.has(g)) next.delete(g);
+                else next.add(g);
+                setPicked(next);
+              }}
+            >
+              {picked.has(g) ? '✓ ' : ''}
+              {g}학년{taken(g) ? ' (이미 있음)' : ''}
+            </Button>
+          ))}
+      </div>
+      {error && (
+        <div className="mt-3">
+          <Alert>{error}</Alert>
+        </div>
+      )}
+      <div className="mt-4 flex gap-2">
+        <Button onClick={() => void copy()} disabled={busy || !picked.size}>
+          {busy ? '복사 중…' : `${picked.size}개 학년에 복사`}
+        </Button>
+        <Button variant="secondary" onClick={onClose} disabled={busy}>
+          취소
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
 export function ScheduleEditor({ session }: { session: ExamSession }) {
   const slots = useCollection<SlotDoc>(`sessions/${session.id}/slots`);
   const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
@@ -250,6 +333,7 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
   const [form, setForm] = useState<{ editing: Slot | null } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [placing, setPlacing] = useState<Slot | null>(null);
+  const [copying, setCopying] = useState<Slot | null>(null);
   const [grid, setGrid] = useState<{ dates: string[] } | null>(null);
   const [importing, setImporting] = useState(false);
   // 기간 선택: 시작일 → 종료일 두 번 누른다
@@ -450,6 +534,9 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
                             <Button variant="ghost" onClick={() => setPlacing(s)} title="교실·복도·특별실 배치, 특별실 별도 시간">
                               배치
                             </Button>
+                            <Button variant="ghost" onClick={() => setCopying(s)} title="같은 교시·과목 시험을 다른 학년에 복사">
+                              복사
+                            </Button>
                             <Button variant="ghost" onClick={() => setForm({ editing: s })}>
                               수정
                             </Button>
@@ -470,6 +557,7 @@ export function ScheduleEditor({ session }: { session: ExamSession }) {
 
       {importing && <ScheduleImportDialog session={session} slots={slots.data} rooms={rooms.data} onClose={() => setImporting(false)} />}
       {placing && <PlacementEditor sid={session.id} slot={slots.data.find((x) => x.id === placing.id) ?? placing} slots={slots.data} rooms={rooms.data} onClose={() => setPlacing(null)} />}
+      {copying && <CopyExamDialog sid={session.id} source={copying} slots={slots.data} rooms={rooms.data} grades={grades} onClose={() => setCopying(null)} />}
       {grid && <ExamGridEditor session={session} slots={slots.data} rooms={rooms.data} initialDates={grid.dates} onClose={() => setGrid(null)} />}
       {form && selected && (
         <ExamForm session={session} date={selected} slots={slots.data} rooms={rooms.data} editing={form.editing} grades={grades} onClose={() => setForm(null)} />

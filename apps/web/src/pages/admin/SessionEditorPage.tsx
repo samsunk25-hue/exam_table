@@ -113,10 +113,18 @@ function SeatDialog({
 
   const search = () => {
     if (!current) return;
-    const t0 = performance.now();
     const found = findSwapChains(data.input, plain, { teacherId: current.teacherId, seatId: seat.id, partnerId: partner || undefined }, { maxTeachers: 4, limit: 5 });
     setChains(found);
-    if (!found.length) toast(`교환 경로를 찾지 못했습니다 (${Math.round(performance.now() - t0)}ms 탐색).`, 'alert');
+    if (!found.length) {
+      // 왜 없는지와 다음에 할 일을 알려 준다
+      const me = data.nameOf(current.teacherId);
+      toast(
+        partner
+          ? `${me} 교사가 이 감독을 내주고 ${data.nameOf(partner)} 교사의 감독을 받아 오는 방법이 없습니다. 서로의 감독 시간에 수업·불가시간·다른 감독이 겹치거나 연속 감독이 너무 길어집니다. 상대를 "누구든"으로 두고 다시 찾아보세요.`
+          : `${me} 교사가 이 감독을 내주고 다른 감독을 받는 방법이 없습니다 (4명까지 이어서 찾아봄). "교사 바꾸기"에서 이 시간이 비어 있는 교사에게 넘기세요.`,
+        'alert',
+      );
+    }
   };
 
   return (
@@ -146,7 +154,7 @@ function SeatDialog({
               비우기
             </Button>
           )}
-          <Button variant="ghost" disabled={busy} onClick={() => void markNone()} title="이 자리는 감독을 두지 않습니다 (자동 배정에서 빼고 미배정으로 세지 않음)">
+          <Button variant="secondary" disabled={busy} onClick={() => void markNone()} title="이 자리는 감독을 두지 않습니다 (자동 배정에서 빼고 미배정으로 세지 않음)">
             감독 없음으로 정하기
           </Button>
         </div>
@@ -331,6 +339,7 @@ export function SessionEditorPage() {
   const [search, setSearch] = useState('');
   // 끌어다 놓기: 잡은 좌석, 올려놓은 좌석(가능 여부), 사유 입력 대기
   const [dragFrom, setDragFrom] = useState<string | null>(null);
+  const [cleaning, setCleaning] = useState(false);
   const [hover, setHover] = useState<{ seatId: string; ok: boolean } | null>(null);
   const [pendingDrop, setPendingDrop] = useState<{ changes: Change[]; label: string; text: string } | null>(null);
 
@@ -372,15 +381,18 @@ export function SessionEditorPage() {
   const byId = new Map(data.assignments.map((a) => [a.id, a]));
   const orphans = assignments.data.filter((a) => !byId.has(a.id));
   const roomName = new Map(rooms.data.map((r) => [r.id, r.name]));
-  const cleanOrphans = () =>
-    callApplyChanges({
+  const cleanOrphans = () => {
+    setCleaning(true);
+    return callApplyChanges({
       sessionId: session.id,
       changes: orphans.map((a) => ({ seatId: a.id, teacherId: null })),
       reason: '자습 교시 감독은 시험실마다 1명',
       label: '없는 자리 배정 정리',
     })
       .then(() => toast(`남아 있던 배정 ${orphans.length}건을 정리했습니다.`))
-      .catch((e: unknown) => toast(errorMessage(e), 'alert'));
+      .catch((e: unknown) => toast(errorMessage(e), 'alert'))
+      .finally(() => setCleaning(false));
+  };
   const usedRooms = new Set(data.seats.map((s) => s.roomId));
   const roomList = sortRooms(rooms.data.filter((r) => usedRooms.has(r.id)));
   const none = new Set(session.settings.noSupervisor ?? []);
@@ -462,8 +474,8 @@ export function SessionEditorPage() {
                   .join(', ')}
                 {orphans.length > 5 ? ' …' : ''}. 정리하면 교사 시간표에서도 빠집니다.
               </p>
-              <Button className="mt-2" onClick={() => void cleanOrphans()}>
-                정리하기
+              <Button className="mt-2" disabled={cleaning} onClick={() => void cleanOrphans()}>
+                {cleaning ? '정리 중…' : '정리하기'}
               </Button>
             </Alert>
           </div>

@@ -69,6 +69,13 @@ describe('형평성: 매 시험 감독 수는 비슷하게, 누적 차이는 줄
     expect(result.metrics.countGap).toBeLessThanOrEqual(1);
   });
 
+  it('정감독·부감독 횟수도 교사마다 비슷하게 (차이 2회 이하)', () => {
+    for (const role of ['CHIEF', 'ASSISTANT']) {
+      const v = eligible.map((t) => result.assignments.filter((a) => a.teacherId === t.id && a.role === role).length);
+      expect(Math.max(...v) - Math.min(...v)).toBeLessThanOrEqual(2);
+    }
+  });
+
   it('1회 더 맡는 교사는 학년도 누적이 낮은 쪽', () => {
     const max = Math.max(...eligible.map((t) => count.get(t.id) ?? 0));
     const avgPrior = (ids: string[]) => ids.reduce((s, id) => s + input.teachers.find((t) => t.id === id)!.priorLoad, 0) / ids.length;

@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
-import { NavLink, Outlet } from 'react-router';
+import { useState, type ReactNode } from 'react';
+import { NavLink, Outlet, useNavigate } from 'react-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { AnimalBounce, AnimalParade } from '@/components/AnimalParade';
 import { AppFooter, AppTitle, HeroImage } from '@/components/Brand';
+import { Modal } from '@/components/Modal';
 import { NotificationBell } from '@/components/NotificationBell';
 import { ToTop } from '@/components/ToTop';
 import { TermProvider } from '@/components/TermRoster';
@@ -36,6 +37,8 @@ function Shell({ nav, modeLabel }: { nav: NavItem[]; modeLabel: string; termPick
 /** 머리글(제목·대문 그림·동물) + 본문 + 바닥글. 승인 전 화면은 메뉴·알림 없이 같은 틀을 쓴다 */
 export function BrandFrame({ nav = [], modeLabel, bell = true, children }: { nav?: NavItem[]; modeLabel: string; bell?: boolean; children: ReactNode }) {
   const { signOut } = useAuth();
+  const navigate = useNavigate();
+  const [toLogin, setToLogin] = useState(false);
 
   return (
     <div className="min-h-dvh">
@@ -45,8 +48,10 @@ export function BrandFrame({ nav = [], modeLabel, bell = true, children }: { nav
       <header aria-label={`${modeLabel} 화면`} className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3 md:gap-x-4 md:flex-nowrap lg:px-8">
           <div className="shrink-0 md:min-w-0">
-            {/* 제목만 크게 (역할·이메일 표시는 뺐다) */}
-            <AppTitle size="xl" beside={<AnimalBounce />} />
+            {/* 제목만 크게 (역할·이메일 표시는 뺐다). 누르면 로그인 화면으로 갈지 묻는다 */}
+            <button type="button" className="cursor-pointer text-left" aria-label="로그인 화면으로 가기" onClick={() => setToLogin(true)}>
+              <AppTitle size="xl" beside={<AnimalBounce />} />
+            </button>
           </div>
           {/* 제목 오른쪽 빈 공간에 대문 그림 (시간표 + 태블릿 든 선생님, 비율 유지, 휴대폰에서는 숨김) */}
           <div className="hidden min-w-0 flex-1 justify-end md:flex">
@@ -82,6 +87,26 @@ export function BrandFrame({ nav = [], modeLabel, bell = true, children }: { nav
       </main>
       <AppFooter />
       <ToTop />
+      {toLogin && (
+        <Modal title="로그인 화면으로 가시겠습니까?" onClose={() => setToLogin(false)}>
+          <p className="text-muted">로그아웃되고 로그인 화면으로 이동합니다.</p>
+          <div className="mt-4 flex gap-2">
+            <Button
+              onClick={() =>
+                void signOut().then(() => {
+                  setToLogin(false);
+                  navigate('/login');
+                })
+              }
+            >
+              확인
+            </Button>
+            <Button variant="secondary" onClick={() => setToLogin(false)}>
+              취소
+            </Button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

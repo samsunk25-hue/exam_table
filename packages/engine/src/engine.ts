@@ -49,9 +49,17 @@ function rankCandidates(ctx: Context, state: State, seat: Seat, exclude?: string
     const s = state.score(t, seat, bands);
     out.push({ teacher: t, score: s.score, reason: s.reason, load: state.totalLoadOf(t) });
   }
+  // 감독 횟수 차이 상한: 가장 적은 교사보다 MAX_COUNT_GAP회 이상 많은 교사는 다른 후보가 있으면 빼고 고른다
+  // (별도시험장 우선 교사의 그 자리는 예외)
+  const capped = out.filter(
+    (c) => c.teacher.temporary || prefersSeat(ctx, c.teacher.id, seat) || state.countOf(c.teacher.id) < bands.minCount + MAX_COUNT_GAP,
+  );
   // 점수 내림차순 → 누적 부담 오름차순 → 교사 ID (ctx.teachers가 ID순이므로 안정 정렬로 보장)
-  return out.sort((a, b) => b.score - a.score || a.load - b.load);
+  return (capped.length ? capped : out).sort((a, b) => b.score - a.score || a.load - b.load);
 }
+
+/** 이번 시험 감독 횟수 차이 상한 (목표는 1, 사정이 있어도 3을 넘기지 않는다) */
+const MAX_COUNT_GAP = 3;
 
 function makeAssignment(seat: Seat, c: Candidate, source: Assignment['source']): Assignment {
   return {
@@ -350,6 +358,57 @@ function round(v: number): number {
 }
 
 /** 자동 감독 배정 실행. 같은 입력에는 항상 같은 결과를 돌려준다. */
+/**
+ * [4단계-4] 역할 맞추기: 같은 날·교시의 두 감독(정감독·부감독·복도)을 서로 바꿔
+ * 교사마다 정감독·부감독·복도 횟수가 비슷해지게 한다. 시간과 감독 횟수는 그대로이고 하드 조건을 지킬 때만 바꾼다.
+ */
+const BALANCED_ROLES = ['CHIEF', 'ASSISTANT', 'HALLWAY'] as const;
+function roleRebalance(ctx: Context, state: State, pinnedIds: Set<string>): void {
+  const roleCount = (teacherId: string, role: string) => state.assignmentsOf(teacherId).filter((a) => a.role === role).length;
+  for (let moves = 0; moves < 3000; moves++) {
+    const byTime = new Map<string, Assignment[]>();
+    for (const a of state.bySeat.values()) {
+      if (!(BALANCED_ROLES as readonly string[]).includes(a.role) || pinnedIds.has(a.seatId) || keepsPreferred(ctx, a)) continue;
+      const t = ctx.teacherById.get(a.teacherId)!;
+      if (t.temporary) continue;
+      const seat = ctx.seatById.get(a.seatId)!;
+      const k = `${seat.date}|${seat.periods.join(',')}`;
+      byTime.set(k, [...(byTime.get(k) ?? []), a]);
+    }
+    let swapped = false;
+    outer: for (const list of byTime.values()) {
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          const a = list[i]!;
+          const b = list[j]!;
+          if (a.role === b.role || a.teacherId === b.teacherId) continue;
+          // 제곱합이 줄어들 때만: (A의 r1 - B의 r1) + (B의 r2 - A의 r2) > 2
+          const gain = roleCount(a.teacherId, a.role) - roleCount(b.teacherId, a.role) + (roleCount(b.teacherId, b.role) - roleCount(a.teacherId, b.role));
+          if (gain <= 2) continue;
+          const ta = ctx.teacherById.get(a.teacherId)!;
+          const tb = ctx.teacherById.get(b.teacherId)!;
+          const sa = ctx.seatById.get(a.seatId)!;
+          const sb = ctx.seatById.get(b.seatId)!;
+          state.remove(sa.id);
+          state.remove(sb.id);
+          if (state.hardReason(ta, sb) === null && state.hardReason(tb, sa) === null) {
+            const bands = state.loadBands();
+            const scA = state.score(ta, sb, bands);
+            state.add(makeAssignment(sb, { teacher: ta, score: scA.score, reason: scA.reason, load: state.totalLoadOf(ta) }, 'AUTO'));
+            const scB = state.score(tb, sa, bands);
+            state.add(makeAssignment(sa, { teacher: tb, score: scB.score, reason: scB.reason, load: state.totalLoadOf(tb) }, 'AUTO'));
+            swapped = true;
+            break outer;
+          }
+          state.add(a);
+          state.add(b);
+        }
+      }
+    }
+    if (!swapped) return;
+  }
+}
+
 export function runAssignment(input: EngineInput): EngineResult {
   const ctx = buildContext(input);
   const state = new State(ctx);
@@ -360,6 +419,7 @@ export function runAssignment(input: EngineInput): EngineResult {
   ejectionChain(ctx, state, pinnedIds);
   countRebalance(ctx, state, pinnedIds);
   equityRebalance(ctx, state, pinnedIds);
+  roleRebalance(ctx, state, pinnedIds);
 
   const seats = [...ctx.seats].sort(compareSeats);
   const assignments = seats.flatMap((s) => state.bySeat.get(s.id) ?? []);

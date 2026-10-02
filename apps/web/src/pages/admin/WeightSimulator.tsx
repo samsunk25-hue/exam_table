@@ -47,7 +47,7 @@ const ROWS: { key: keyof Metrics; label: string; fmt: (m: Metrics) => string; be
   { key: 'assignedCount', label: '미배정', fmt: (m) => `${m.seatCount - m.assignedCount}석`, better: 'down' },
   { key: 'countGap', label: '감독 횟수 차 (최다-최소)', fmt: (m) => `${m.countGap}회`, better: 'down' },
   { key: 'stdDev', label: '업무점수 편차', fmt: (m) => `±${m.stdDev.toFixed(2)}`, better: 'down' },
-  { key: 'maxMinGap', label: '최고-최저 차', fmt: (m) => m.maxMinGap.toFixed(1), better: 'down' },
+  { key: 'maxMinGap', label: '업무 점수 최고-최저 차', fmt: (m) => m.maxMinGap.toFixed(1), better: 'down' },
   { key: 'consecutiveCount', label: '연속 감독', fmt: (m) => `${m.consecutiveCount}쌍`, better: 'down' },
   { key: 'subjectInRoom', label: '출제 교사 교실 감독', fmt: (m) => `${m.subjectInRoom}건`, better: 'down' },
 ];

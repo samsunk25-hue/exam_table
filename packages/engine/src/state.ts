@@ -15,6 +15,14 @@ const EPS = 1e-9;
 export const EXTENDED_PREFERRED = 300;
 /** 일부 시간만 배정 금지인 교사가 남은 시간의 정감독 자리를 먼저 맡도록 더하는 점수 */
 export const PARTLY_BLOCKED_CHIEF = 60;
+/** 바로 앞뒤 교시에 같은 역할(정감독끼리·부감독끼리)을 맡으면 빼는 점수 → 이어 맡으면 정·부를 섞는다 */
+export const SAME_ROLE_RUN = -15;
+
+/** 정·부 섞기 대상 역할 */
+export function mixKind(seat: Seat): 'CHIEF' | 'ASSISTANT' | null {
+  const k = seatKind(seat);
+  return k === 'CHIEF' || k === 'ASSISTANT' ? k : null;
+}
 
 /** 감독 종류: 별도시험장 자리는 정·부와 따로 센다 */
 export type SeatKind = DutyKind;
@@ -101,6 +109,28 @@ export class State {
     const set = this.teacherTimes.get(teacherId)?.get(timeKey(date, period));
     if (!set) return [];
     return [...set].filter((id) => id !== ignoreSeatId);
+  }
+
+  /** 이 교사가 이 자리 바로 앞뒤 교시에 같은 역할(kind)을 맡고 있는지 */
+  sameRoleNeighbor(teacherId: string, seat: Seat, kind: 'CHIEF' | 'ASSISTANT', ignoreSeatId?: string): boolean {
+    const near = [
+      ...this.seatsAt(teacherId, seat.date, seat.periods[0]! - 1, ignoreSeatId),
+      ...this.seatsAt(teacherId, seat.date, seat.periods[seat.periods.length - 1]! + 1, ignoreSeatId),
+    ];
+    return near.some((id) => mixKind(this.ctx.seatById.get(id)!) === kind);
+  }
+
+  /** 이 교사의 바로 이어지는 교시 중 같은 역할(정감독끼리·부감독끼리)인 쌍 수 */
+  sameRoleRuns(teacherId: string): number {
+    let n = 0;
+    for (const a of this.assignmentsOf(teacherId)) {
+      const seat = this.ctx.seatById.get(a.seatId)!;
+      const k = mixKind(seat);
+      if (!k) continue;
+      const next = this.seatsAt(teacherId, seat.date, seat.periods[seat.periods.length - 1]! + 1);
+      if (next.some((id) => mixKind(this.ctx.seatById.get(id)!) === k)) n++;
+    }
+    return n;
   }
 
   sessionLoadOf(teacherId: string): number {
@@ -232,6 +262,9 @@ export class State {
     // 일부 시간만 배정 금지인 교사는 남은 시간에 몰아서 맡을 수 있게 연속 감점을 주지 않는다
     // 별도시험장 우선 교사가 그 시험장 1·2교시를 이어 맡는 것도 감점하지 않는다
     if (adjacent && !this.ctx.partlyBlocked.has(teacher.id) && !preferredHere) add(w.consecutive, '바로 앞뒤 교시에도 감독');
+
+    const mk = mixKind(seat);
+    if (mk && this.sameRoleNeighbor(teacher.id, seat, mk, ignoreSeatId)) add(SAME_ROLE_RUN, '바로 앞뒤 교시와 같은 역할');
 
     add(softConstraintPenalty(this.ctx, teacher, seat), '예외 규칙');
     if (preferredHere) add(EXTENDED_PREFERRED, '별도시험장 우선 교사');

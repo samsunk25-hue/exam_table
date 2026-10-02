@@ -71,6 +71,13 @@ for (const period of [1, 2]) {
   });
   await page.getByRole('status').filter({ hasText: '입력했습니다' }).waitFor();
   check('대리 입력 (바로 승인)', true);
+  // 대리 입력한 교사(박영어 T003)에게 알림: 다음 시험에 감독이 늘 수 있다는 안내
+  let note;
+  for (let t = 0; t < 40 && !note; t++) {
+    note = (await db.collection('notifications').where('teacherId', '==', 'T003').get()).docs.find((d) => d.get('title') === '불가시간 대리 입력');
+    if (!note) await new Promise((r) => setTimeout(r, 500));
+  }
+  check('대리 입력 → 교사 알림 (다음 시험에 더 많이 배정될 수 있음)', Boolean(note?.get('body')?.includes('다음 시험에서 감독이 더 많이')), note?.get('body'));
   await page.getByRole('button', { name: /전체 2/ }).click();
   await page.screenshot({ path: `${OUT}/avail-admin.png`, fullPage: true });
   check('관리자 화면 콘솔 오류 없음', errors.length === 0, errors.join(' / '));

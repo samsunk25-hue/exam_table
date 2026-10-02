@@ -6,7 +6,7 @@ import {
   type Context,
   prefersSeat,
 } from './context';
-import { State, prefersChief, seatKind, type SeatKind } from './state';
+import { State, mixKind, prefersChief, seatKind, type SeatKind } from './state';
 import type {
   Assignment,
   EngineInput,
@@ -498,6 +498,77 @@ function roleRebalance(ctx: Context, state: State, pinnedIds: Set<string>): void
   }
 }
 
+/**
+ * [4단계-5] 정·부 섞기: 바로 이어지는 교시에 정감독끼리(부감독끼리) 맡은 교사가 있으면, 다른 교사와 두 시간대에서
+ * 정·부를 서로 맞바꿔(이 시간엔 내가 부감독·상대가 정감독, 다른 시간엔 반대로) 두 교사 모두 정·부 횟수는 그대로 두고
+ * 같은 역할 연속만 줄인다. 두 교사의 같은 역할 연속 쌍 수 합이 줄어들 때만 바꾸므로 반드시 끝난다.
+ * 일부 시간만 배정 금지인 교사(남은 시간 정감독 우선)는 건드리지 않는다.
+ */
+function mixRoles(ctx: Context, state: State, pinnedIds: Set<string>): void {
+  const ok = (t: Teacher) => isEligibleTeacher(t) && !t.temporary && !ctx.partlyBlocked.has(t.id);
+  const movable = (a: Assignment) => !pinnedIds.has(a.seatId) && !keepsPreferred(ctx, a);
+  const seatOf = (a: Assignment) => ctx.seatById.get(a.seatId)!;
+  const at = new Map<string, Seat[]>();
+  for (const seat of ctx.seats) {
+    if (!mixKind(seat)) continue;
+    const key = `${seat.date}|${seat.period}`;
+    at.set(key, [...(at.get(key) ?? []), seat]);
+  }
+  const timeOf = (seat: Seat) => `${seat.date}|${seat.period}`;
+  const place = (t: Teacher, seat: Seat) => {
+    const sc = state.score(t, seat, state.loadBands());
+    state.add(makeAssignment(seat, { teacher: t, score: sc.score, reason: sc.reason, load: state.totalLoadOf(t) }, 'AUTO'));
+  };
+  /** X↔Y로 [a(X)→Y, b(Y)→X, c(X)→Y, d(Y)→X]. 하드 조건을 지키고 같은 역할 연속이 줄면 true, 아니면 되돌린다 */
+  const tryMix = (x: Teacher, y: Teacher, a: Assignment, b: Assignment, c: Assignment, d: Assignment): boolean => {
+    const before = state.sameRoleRuns(x.id) + state.sameRoleRuns(y.id);
+    const orig = [a, b, c, d];
+    for (const o of orig) state.remove(o.seatId);
+    const plan: [Teacher, Seat][] = [[y, seatOf(a)], [x, seatOf(b)], [y, seatOf(c)], [x, seatOf(d)]];
+    const done: Seat[] = [];
+    for (const [t, seat] of plan) {
+      if (state.hardReason(t, seat) !== null) break;
+      place(t, seat);
+      done.push(seat);
+    }
+    if (done.length === 4 && state.sameRoleRuns(x.id) + state.sameRoleRuns(y.id) < before) return true;
+    for (const seat of done) state.remove(seat.id);
+    for (const o of orig) state.add(o);
+    return false;
+  };
+  for (let moves = 0; moves < 500; moves++) {
+    let changed = false;
+    outer: for (const x of ctx.teachers.filter(ok)) {
+      if (!state.sameRoleRuns(x.id)) continue;
+      for (const a of state.assignmentsOf(x.id).filter(movable)) {
+        const k = mixKind(seatOf(a));
+        if (!k || !state.sameRoleNeighbor(x.id, seatOf(a), k, a.seatId)) continue;
+        // 같은 시간 다른 역할을 맡은 교사 Y
+        for (const sb of at.get(timeOf(seatOf(a))) ?? []) {
+          const b = state.bySeat.get(sb.id);
+          if (!b || !movable(b) || mixKind(sb) === k || b.teacherId === x.id) continue;
+          const y = ctx.teacherById.get(b.teacherId)!;
+          if (!ok(y)) continue;
+          // 다른 시간에 X는 다른 역할, Y는 k를 맡은 곳에서 반대로 맞바꿔 횟수를 맞춘다
+          for (const c of state.assignmentsOf(x.id)) {
+            const sc = seatOf(c);
+            if (c.seatId === a.seatId || !movable(c) || mixKind(sc) !== mixKind(sb)) continue;
+            for (const sd of at.get(timeOf(sc)) ?? []) {
+              const d = state.bySeat.get(sd.id);
+              if (!d || d.teacherId !== y.id || !movable(d) || mixKind(sd) !== k) continue;
+              if (tryMix(x, y, a, b, c, d)) {
+                changed = true;
+                break outer;
+              }
+            }
+          }
+        }
+      }
+    }
+    if (!changed) return;
+  }
+}
+
 /** 자동 감독 배정 실행. 같은 입력에는 항상 같은 결과를 돌려준다. */
 export function runAssignment(input: EngineInput): EngineResult {
   const ctx = buildContext(input);
@@ -512,6 +583,7 @@ export function runAssignment(input: EngineInput): EngineResult {
   chiefPriority(ctx, state, pinnedIds);
   roleRebalance(ctx, state, pinnedIds);
   equityRebalance(ctx, state, pinnedIds, true);
+  mixRoles(ctx, state, pinnedIds);
 
   const seats = [...ctx.seats].sort(compareSeats);
   const assignments = seats.flatMap((s) => state.bySeat.get(s.id) ?? []);

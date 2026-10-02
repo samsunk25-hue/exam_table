@@ -207,4 +207,13 @@ describe('앞선 시험에서 배정 금지로 적게 맡은 교사는 다음 �
     const most = Math.max(...others.map(now));
     for (const id of blocked) expect(now(id)).toBeGreaterThanOrEqual(most + 2);
   });
+
+  it('모든 교시를 이어 맡을 때 정감독끼리·부감독끼리 잇지 않고 정·부를 섞는다', () => {
+    for (const id of blocked) {
+      const mine = second.result.assignments.filter((a) => a.teacherId === id && (a.role === 'CHIEF' || a.role === 'ASSISTANT'));
+      const at = (a: (typeof mine)[number]) => second.input.slots.find((x) => x.id === a.slotId)!;
+      const sameRun = mine.filter((a) => mine.some((b) => at(b).date === at(a).date && at(b).period === at(a).period + 1 && b.role === a.role));
+      expect(sameRun).toEqual([]);
+    }
+  });
 });

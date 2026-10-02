@@ -52,7 +52,32 @@ export async function notifyAdmins(note: Note & { key?: string; countLabel?: (n:
 }
 
 /**
- * 불가시간: 교사가 신청하면 관리자에게(교사별로 모아서), 관리자가 승인·반려하면 그 교사에게.
+ * 교사 알림 하나에 모으기 (key가 같으면): 아직 안 읽었으면 항목만 더하고, 읽은 뒤라면 새로 시작한다.
+ * body는 모인 항목 목록으로 만든다 (예: 관리자가 대리 입력한 불가시간 칸들).
+ */
+export async function notifyTeacherGrouped(teacherId: string, note: Omit<Note, 'body'> & { key: string; item: string; body: (items: string[]) => string }) {
+  const ref = db().collection('notifications').doc(`teacher_${note.key}`.replace(/\//g, '_'));
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const fresh = !snap.exists || snap.get('read') === true;
+    const items = fresh ? [note.item] : [...new Set([...((snap.get('items') as string[] | undefined) ?? []), note.item])];
+    tx.set(ref, {
+      audience: 'TEACHER',
+      teacherId,
+      sessionId: note.sessionId ?? null,
+      title: note.title,
+      body: note.body(items),
+      items,
+      link: note.link,
+      read: false,
+      createdAt: serverTimestamp(),
+    });
+  });
+}
+
+/**
+ * 불가시간: 교사가 신청하면 관리자에게(교사별로 모아서), 관리자가 승인·반려하면 그 교사에게,
+ * 관리자가 대리 입력하면 그 교사에게(다음 시험에 감독이 늘 수 있다는 안내와 함께, 칸들을 모아서).
  * 화면은 클라이언트가 직접 쓰므로 문서 변경을 보고 알린다.
  */
 export const notifyAvailability = onDocumentWritten('sessions/{sid}/availability/{id}', async (event) => {
@@ -78,6 +103,19 @@ export const notifyAvailability = onDocumentWritten('sessions/{sid}/availability
       body: `${name} 선생님이 불가시간을 신청했습니다.`,
       countLabel: (n) => `${name} 선생님이 불가시간 ${n}건을 ${auto ? '냈습니다 (바로 반영됨)' : '신청했습니다'} (${exam}).`,
       link: `/admin/sessions/${sid}/availability`,
+    });
+    return;
+  }
+  if (!before && after.source === 'ADMIN') {
+    await notifyTeacherGrouped(after.teacherId as string, {
+      key: `avail_${sid}_${after.teacherId as string}`,
+      sessionId: sid,
+      title: '불가시간 대리 입력',
+      item: when,
+      body: (items) =>
+        `관리자가 ${exam} 불가시간 ${items.length}칸(${items.join(', ')})을 대신 입력했습니다. ` +
+        '감독은 학년도 전체 횟수가 같아지도록 배정하므로, 이 때문에 이번 시험 감독이 적으면 다음 시험에서 감독이 더 많이(연속 감독 포함) 배정될 수 있습니다.',
+      link: '/me/availability',
     });
     return;
   }

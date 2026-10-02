@@ -150,11 +150,11 @@ export function Select({
   );
 }
 
-/** 데이터 표. 좁은 화면에서는 가로 스크롤 */
-export function Table({ head, children }: { head: ReactNode[]; children: ReactNode }) {
+/** 데이터 표. 좁은 화면에서는 가로 스크롤. wrap이면 긴 글은 줄바꿈해 화면 폭에 맞춘다 */
+export function Table({ head, children, wrap = false }: { head: ReactNode[]; children: ReactNode; wrap?: boolean }) {
   return (
     <div className="-mx-5 overflow-x-auto px-5">
-      <table className="data-table w-full min-w-max border-collapse text-left">
+      <table className={`data-table w-full border-collapse text-left ${wrap ? 'break-words' : 'min-w-max'}`}>
         <thead>
           <tr className="border-b-2 border-line text-sm text-muted">
             {head.map((h, i) => (

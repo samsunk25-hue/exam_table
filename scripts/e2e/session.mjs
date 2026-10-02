@@ -37,9 +37,12 @@ export async function go(page, path) {
   await page.locator('main h1').first().waitFor();
 }
 
-/** 자동 배정 화면 "고급"을 열고 "자동 배정 실행"(적용 없이 기본안·대안 비교)을 누른다 */
+/** 자동 배정하고 바로 적용(기본안·대안 함께 계산) 후 "고급"을 열어 비교표에서 다른 안을 고를 수 있게 한다 */
 export async function runCompare(page) {
+  // 자동 배정 버튼은 위 "자동 배정하고 바로 적용" 하나 (기본안·대안을 함께 계산해 가장 좋은 안을 적용)
+  await page.getByRole('button', { name: '자동 배정하고 바로 적용' }).click();
+  await page.getByRole('status').filter({ hasText: '추천안을 적용했습니다' }).first().waitFor({ timeout: 120000 });
+  // 고급을 열어 비교표에서 다른 안을 고를 수 있게
   const adv = page.locator('details', { hasText: '고급 — 안을 직접 비교해 고르기' });
   if (!(await adv.evaluate((d) => d.open))) await adv.locator('summary').click();
-  await adv.getByRole('button', { name: '자동 배정 실행', exact: true }).click();
 }

@@ -185,8 +185,8 @@ export function SessionAssignPage() {
   const slots = useCollection<SlotDoc>(`sessions/${sid}/slots`);
   const rooms = useCollection<RoomDoc>('rooms', termWhere(session));
   const teachers = useSessionTeachers(session);
-  // 수동 배정은 늘 유지하고, 대안 3개도 늘 함께 계산한다 (고를 것을 줄임)
-  const keepManual = true;
+  // 직접 정한(수동) 배정을 그대로 둘지 고른다 (기본: 둠). 대안 3개는 늘 함께 계산한다
+  const [keepManual, setKeepManual] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<'grid' | 'load'>('grid');
   const [busy, setBusy] = useState<'run' | 'apply' | null>(null);
@@ -207,24 +207,6 @@ export function SessionAssignPage() {
 
   const loading = runs.loading || assignments.loading || availability.loading || slots.loading || rooms.loading || teachers.loading;
   if (loading) return <Spinner />;
-
-  const execute = async () => {
-    setBusy('run');
-    setError(null);
-    try {
-      const { data } = await callRunAssignment({ sessionId: sid, keepManual, scenarios: true });
-      setSelectedId(data.runId);
-      toast(
-        data.runs.length > 1
-          ? `기본안과 대안 ${data.runs.length - 1}개를 만들었습니다. 비교한 뒤 하나를 골라 적용하세요.`
-          : `자동 배정을 실행했습니다. 성공률 ${pct(data.metrics.successRate)} (미배정 ${data.unassigned}석). 확인 후 적용하세요.`,
-      );
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(null);
-    }
-  };
 
   /** 한 번에: 기본안+대안을 계산해 가장 좋은 안(성공률 → 편차 → 연속 감독 순)을 바로 적용 */
   const quick = async () => {
@@ -268,13 +250,26 @@ export function SessionAssignPage() {
         <CardTitle icon="🪄">자동 배정 실행</CardTitle>
         <p className="mt-1 text-muted">
           하드 조건(동시간 중복, 불가시간, 배정 금지 규칙)을 지키면서 점수(기초시간표 일치, 부담 형평성, 연속 배정 등)가 높은 교사를 배정합니다.
-          기본안과 대안 3개를 함께 계산해 가장 좋은 안을 바로 적용하고, 시간표 편집에서 직접 정한 배정은 그대로 둡니다.
+          기본안과 대안 3개를 함께 계산해 가장 좋은 안을 바로 적용합니다.
         </p>
         <div className="mt-3 grid gap-2">
           {pendingCount > 0 && <Alert tone="info">승인 대기 중인 불가시간 {pendingCount}건도 "불가"로 보고 배정합니다.</Alert>}
           <p className="text-sm text-muted">
-            현재 적용된 배정: {assignments.data.length}석{manualCount ? ` (수동 ${manualCount}석은 유지)` : ''}
+            현재 적용된 배정: {assignments.data.length}석{manualCount ? ` (그중 직접 정한 배정 ${manualCount}석)` : ''}
           </p>
+          {manualCount > 0 && (
+            <fieldset className="grid gap-1" disabled={!editable || busy !== null}>
+              <legend className="sr-only">직접 정한 배정</legend>
+              <label className="flex min-h-11 cursor-pointer items-center gap-2">
+                <input type="radio" name="keepManual" className="size-5 accent-primary" checked={keepManual} onChange={() => setKeepManual(true)} />
+                직접 정한 배정 {manualCount}석은 그대로 두고 나머지만 다시 배정
+              </label>
+              <label className="flex min-h-11 cursor-pointer items-center gap-2">
+                <input type="radio" name="keepManual" className="size-5 accent-primary" checked={!keepManual} onChange={() => setKeepManual(false)} />
+                모두 다시 배정 (직접 정한 배정도 새로)
+              </label>
+            </fieldset>
+          )}
         </div>
         {!editable && <p className="mt-2 text-muted">교사 공개 이후에는 자동 배정을 다시 실행할 수 없습니다.</p>}
         {error && (
@@ -294,12 +289,7 @@ export function SessionAssignPage() {
       <details className="rounded-card border border-line bg-surface p-4 open:pb-6">
         <summary className="min-h-11 cursor-pointer content-center text-lg font-bold">고급 — 안을 직접 비교해 고르기 · 가중치 조정</summary>
         <div className="mt-4 grid gap-6">
-          <div>
-            <Button variant="secondary" onClick={() => void execute()} disabled={!editable || busy !== null || slots.data.length === 0}>
-              자동 배정 실행
-            </Button>
-            <span className="ml-2 text-sm text-muted">기본안·대안을 만든 뒤 아래 비교표에서 골라 "이 결과 적용"</span>
-          </div>
+          <p className="text-sm text-muted">위 "자동 배정하고 바로 적용"으로 함께 계산된 기본안·대안을 아래 비교표에서 골라 "이 결과 적용"할 수 있습니다.</p>
       <WeightSimulator
         session={session}
         keepManual={keepManual}

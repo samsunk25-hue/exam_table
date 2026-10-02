@@ -535,6 +535,10 @@ describe('별도시험장 우선 교사', () => {
     });
     const at = new Map(runAssignment(input).assignments.map((a) => [a.seatId, a.teacherId]));
     expect([at.get('G2_CHIEF_1'), at.get('G2_P2_CHIEF_1'), at.get('G2_ASSISTANT_1'), at.get('G2_P2_ASSISTANT_1')]).toEqual(['E', 'E', 'F', 'F']);
+    // "연속 배정 배제" 안처럼 연속 감점이 아주 커도 우선 교사가 이어 맡는다
+    input.settings.weights = { consecutive: -500 };
+    const at2 = new Map(runAssignment(input).assignments.map((a) => [a.seatId, a.teacherId]));
+    expect([at2.get('G2_CHIEF_1'), at2.get('G2_P2_CHIEF_1')]).toEqual(['E', 'E']);
   });
 
   it('정감독·부감독을 나눠 고르면 각 자리에 그 교사', () => {

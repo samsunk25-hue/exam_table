@@ -75,12 +75,11 @@ for (let i = 0; i < 40 && !approved; i++) {
 }
 check('3. 교사 불가시간 제출 → 바로 반영 (승인 단계 없음)', approved);
 
-// 4. 자동 배정(대안 포함) → 기본안 적용
+// 4. 자동 배정(대안 포함) → 가장 좋은 안 바로 적용
 await go(A.page, `/admin/sessions/${sid}/assign`);
 await runCompare(A.page);
 await A.page.getByText('다중 시나리오 비교').waitFor({ timeout: 90000 });
-await A.page.getByRole('button', { name: '이 결과 적용' }).click();
-await A.page.getByText('현재 적용됨').waitFor({ timeout: 60000 });
+await A.page.getByText('현재 적용됨').first().waitFor({ timeout: 60000 });
 const t01 = (await db.collection('teachers').where('email', '==', 't01@sample.school.kr').get()).docs[0].id;
 const firstDate = (await db.collection(`sessions/${sid}/slots`).orderBy('date').limit(1).get()).docs[0].get('date');
 const clash = await db.collection(`sessions/${sid}/assignments`).where('teacherId', '==', t01).where('date', '==', firstDate).where('period', '==', 1).get();

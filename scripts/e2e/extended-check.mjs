@@ -43,9 +43,7 @@ const saved = await until(async () => {
 });
 check('배정 설정: 정감독·부감독 우선 교사 따로 저장', saved, `정 ${chief.name}, 부 ${assistant.name}`);
 
-await runCompare(page);
-await page.locator('section', { hasText: '다중 시나리오 비교' }).first().getByRole('button', { name: '자세히' }).first().click();
-await page.getByRole('button', { name: '이 결과 적용' }).click();
+await runCompare(page); // 가장 좋은 안을 바로 적용한다
 // 새 배정이 적용될 때까지 (샘플 점검의 예전 배정이 남아 있으므로 새 점수 이유로 확인)
 const applied = await until(async () => (await db.collection(`sessions/${SID}/assignments`).get()).docs.some((d) => String(d.get('reason')).includes('별도시험장 우선')), 60000);
 const docs = (await db.collection(`sessions/${SID}/assignments`).get()).docs;

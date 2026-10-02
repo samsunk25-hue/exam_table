@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { DEFAULT_CLASS_WEIGHT, classLoadOf, classTimes } from '@sim/engine';
 import type { AssignmentDoc, AvailabilityDoc, BaseTimetableDoc, ConstraintDoc, RoomDoc, SlotDoc } from '@sim/shared';
-import { Alert, Card, Spinner, Table, Td } from '@/components/ui';
+import { Alert, Card, CardTitle, Spinner, Table, Td } from '@/components/ui';
 import { ExplainDutiesCard } from '@/components/AiCards';
 import { Fold } from '@/components/Fold';
 import { useCollection } from '@/lib/data';
@@ -130,6 +130,8 @@ export function SessionEquityPage() {
   return (
     <div className="grid gap-6">
       <Card>
+        <CardTitle icon="📊">이번 시험 감독 횟수</CardTitle>
+        <p className="mt-1 mb-3 text-muted">이번 시험에서 교사마다 맡은 감독 종류별 횟수와 업무 점수, 배정에서 빠지는 조건입니다.</p>
         {rows.length === 0 ? (
           <p className="text-muted">이 학교·학기 교사 명단이 없습니다.</p>
         ) : (

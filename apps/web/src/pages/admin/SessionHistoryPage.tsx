@@ -63,7 +63,8 @@ export function SessionHistoryPage() {
     ]);
 
   return (
-    <div className="grid gap-6">
+    // 긴 표가 다른 카드까지 넓히지 않게 (넘치면 그 카드 안에서만 가로 스크롤)
+    <div className="grid gap-6 [&>*]:min-w-0">
       <Card>
         <UndoHistory
           key={scope}
@@ -110,7 +111,7 @@ export function SessionHistoryPage() {
         {logs.error && <Alert>{logs.error}</Alert>}
         {!logs.loading && shown.length === 0 && <p className="text-muted">기록이 없습니다.</p>}
         {shown.length > 0 && (
-          <Table head={['시각', '누가', '무엇을', '어떻게', '사유']}>
+          <Table wrap head={['시각', '누가', '무엇을', '어떻게', '사유']}>
             {shown.map((l) => {
               const list = changes(l, names);
               return (

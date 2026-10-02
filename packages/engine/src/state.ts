@@ -191,7 +191,8 @@ export class State {
       this.seatsAt(teacher.id, seat.date, seat.periods[0]! - 1, ignoreSeatId).length > 0 ||
       this.seatsAt(teacher.id, seat.date, seat.periods[seat.periods.length - 1]! + 1, ignoreSeatId).length > 0;
     // 일부 시간만 배정 금지인 교사는 남은 시간에 몰아서 맡을 수 있게 연속 감점을 주지 않는다
-    if (adjacent && !this.ctx.partlyBlocked.has(teacher.id)) add(w.consecutive, '바로 앞뒤 교시에도 감독');
+    // 별도시험장 우선 교사가 그 시험장 1·2교시를 이어 맡는 것도 감점하지 않는다
+    if (adjacent && !this.ctx.partlyBlocked.has(teacher.id) && !preferredHere) add(w.consecutive, '바로 앞뒤 교시에도 감독');
 
     add(softConstraintPenalty(this.ctx, teacher, seat), '예외 규칙');
     if (preferredHere) add(EXTENDED_PREFERRED, '별도시험장 우선 교사');

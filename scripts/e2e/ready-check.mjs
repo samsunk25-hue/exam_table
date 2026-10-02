@@ -1,6 +1,6 @@
 // 준비가 덜 된 프로젝트: 교사·시험실·시험실 배치가 없으면 "다음 할 일"이 그것부터 안내하고, 자동 배정은 막는다
 import { createRequire } from 'node:module';
-import { go, openApp, runCompare } from './session.mjs';
+import { go, openApp } from './session.mjs';
 
 process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
 const require = createRequire(import.meta.url);
@@ -50,7 +50,8 @@ await page.getByText('아직 감독 자리가 없습니다.').waitFor();
 check('시간표 편집: 무엇을 먼저 할지 링크', await page.getByRole('link', { name: '시험 일정에서 시험실 배치하기 →' }).isVisible());
 
 await go(page, `/admin/sessions/${SID}/assign`);
-await runCompare(page);
+// 자리가 없으면 거부되므로 버튼만 누르고 안내를 본다
+await page.getByRole('button', { name: '자동 배정하고 바로 적용' }).click();
 const msg = await page.getByText('감독 자리가 없습니다').first().waitFor({ timeout: 30000 }).then(() => true).catch(() => false);
 check('자리 없으면 자동 배정 거부 안내', msg);
 

@@ -7,6 +7,8 @@ const check = (label, ok, detail = '') => {
   if (!ok) failures++;
 };
 const A = await openApp();
+// 학교 PC처럼 Windows 애니메이션 효과가 꺼진(움직임 줄이기) 상태에서도 동물은 움직여야 한다
+await A.page.emulateMedia({ reducedMotion: 'reduce' });
 await go(A.page, '/admin');
 const dog = A.page.locator('.animal-walker').first();
 const x1 = (await dog.boundingBox()).x;

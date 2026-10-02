@@ -156,9 +156,12 @@ table,
   box-shadow: var(--shadow-lift);
 }
 
-/* 움직임 줄이기를 켠 사용자에게는 움직임을 끈다 */
+/*
+ * 움직임 줄이기를 켠 사용자에게는 움직임을 끈다.
+ * 동물 장식은 예외: 학교 PC는 Windows "애니메이션 효과"가 꺼진 채라 이 설정이 켜진 것으로 보이는 경우가 많다.
+ */
 @media (prefers-reduced-motion: reduce) {
-  *,
+  *:not(.animal-walker, .animal-hop, .animal-bounce),
   *::before,
   *::after {
     animation-duration: 0.01ms !important;

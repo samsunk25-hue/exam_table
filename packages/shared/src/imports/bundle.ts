@@ -17,6 +17,7 @@ import { PLACEMENT_FIELDS, SLOT_FIELDS, parsePlacements, parseSlots, type Placem
 import { TEACHER_FIELDS, parseTeachers, type HomeroomTakeover, type TeacherImport } from './teachers';
 import type { TimetableImport, TimetableTeacher } from './timetable';
 import { isGridSheet, parseTimetableGrid } from './timetableGrid';
+import { TIMETABLE_TABLE_SHEET, isTimetableTable, parseTimetableTable } from './timetableTable';
 
 export const BUNDLE_SHEETS = {
   guide: '안내',
@@ -24,6 +25,7 @@ export const BUNDLE_SHEETS = {
   rooms: '시험실',
   slots: '시험일정',
   placements: '시험실배치',
+  timetable: TIMETABLE_TABLE_SHEET,
 } as const;
 
 export type BundleKey = 'teachers' | 'rooms' | 'slots' | 'placements' | 'timetable';
@@ -156,17 +158,21 @@ export function analyzeBundle(sheets: SheetRows[], ctx: BundleContext): BundleRe
     add('placements', '시험실 배치', r);
   } else add('placements', '시험실 배치', null);
 
-  // 5. 기초시간표 (교사별 격자 시트, 전체 교체)
+  // 5. 기초시간표 (전체 교체). "기초시간표" 한 장(행 = 교사, 열 = 요일·교시)이 기본이고, 예전 교사별 격자 시트도 읽는다
   const tableNames = new Set<string>(Object.values(BUNDLE_SHEETS));
-  const gridSheets = sheets.filter((s) => !tableNames.has(s.name.trim()) && isGridSheet(s.rows));
-  const hasEntries = gridSheets.some((s) => s.rows.slice(1).some((row) => row.slice(1).some((c: Cell) => c !== null && String(c).trim() !== '')));
+  const table = sheets.find((s) => s.name.trim() === TIMETABLE_TABLE_SHEET && isTimetableTable(s.rows)) ?? sheets.find((s) => isTimetableTable(s.rows));
+  const gridSheets = table ? [] : sheets.filter((s) => !tableNames.has(s.name.trim()) && isGridSheet(s.rows));
+  const filled = (rows: Cell[][]) => rows.slice(1).some((row) => row.slice(1).some((c: Cell) => c !== null && String(c).trim() !== ''));
+  const hasEntries = table ? filled(table.rows) : gridSheets.some((s) => filled(s.rows));
   if (hasEntries) {
     if (!ctx.useBaseTimetable) {
       add('timetable', '기초시간표', null, ['이 프로젝트는 기초시간표를 반영하지 않으므로 시간표 시트는 무시합니다.']);
     } else {
       const r = !ctx.scheduleEditable
         ? blocked('교사 공개 이후에는 기초시간표를 바꿀 수 없습니다.')
-        : parseTimetableGrid(gridSheets, teacherList);
+        : table
+          ? parseTimetableTable(table.rows, teacherList)
+          : parseTimetableGrid(gridSheets, teacherList);
       plan.timetable = values(r);
       add('timetable', '기초시간표', r);
     }

@@ -13,7 +13,7 @@ import {
   mergePlacements,
   type Placement,
   teacherRoleCells,
-  timetableGridRows,
+  timetableTableRows,
   timetableSheetNames,
   type BaseTimetableDoc,
   type BundlePlan,
@@ -35,22 +35,19 @@ type Slot = WithId<SlotDoc>;
 const byName = <T extends { name: string }>(a: T, b: T) => a.name.localeCompare(b.name, 'ko');
 
 export const TIMETABLE_GUIDE = [
-  '* 교사 1명당 시트 1장입니다. 시트 이름 = 교사 이름 (동명이인은 "이름(교사ID)").',
+  '* 한 장에 모든 교사의 시간표를 적습니다. 행 = 교사, 열 = 요일·교시 (월1 = 월요일 1교시).',
   '* 수업이 있는 칸에 학년-반을 적습니다. 예: 1-3 또는 1-3 국어 (과목은 선택).',
-  '* 새 교사를 추가하려면 시트를 복사해 이름을 바꾸세요. 빈 시트는 무시합니다.',
-  '* 토·일요일 칸은 비워 두세요.',
+  '* 교사 칸은 교사 명단의 이름과 같아야 합니다 (동명이인은 "이름(교사ID)"). 교사를 더하려면 행을 추가하세요.',
+  '* 8교시 이후가 있으면 "월8"처럼 열을 추가하세요. 예전 교사별 시트 양식도 그대로 올릴 수 있습니다.',
 ];
 
-/** 교사별 기초시간표 시트 (학교 양식: 교시 × 요일) */
+/** 전체 기초시간표 시트 한 장 (행 = 교사, 열 = 요일·교시) */
 export function timetableSheets(teachers: Teacher[], timetable: WithId<BaseTimetableDoc>[]): OutSheet[] {
   const active = teachers.filter((t) => t.active).sort(byName);
   const names = timetableSheetNames(active);
   const entries = new Map(timetable.map((d) => [d.id, d.entries]));
-  return active.map((t) => ({
-    name: names.get(t.id)!,
-    rows: timetableGridRows(entries.get(t.id) ?? []),
-    widths: [8, 14, 14, 14, 14, 14, 10, 10],
-  }));
+  const rows = timetableTableRows(active.map((t) => ({ name: names.get(t.id)!, entries: entries.get(t.id) ?? [] })));
+  return [{ name: BUNDLE_SHEETS.timetable, rows, widths: [12, ...rows[0]!.slice(1).map(() => 9)] }];
 }
 
 /** 기초 자료 통합 양식: 현재 데이터가 채워진 상태로 만든다 (비어 있으면 예시 행) */
@@ -115,7 +112,7 @@ export function bundleSheets(opts: {
         '   · 별도시험장 등 특별실만 적으면 자동 배치에 그 특별실이 더해집니다.',
         '   · 교실·복도까지 적은 시험은 적은 그대로 배치됩니다 (합반, 일부 반만 응시 등).',
         useBaseTimetable
-          ? '6. 교사별 시간표 시트: 학교 기초시간표 양식과 같습니다. 이 프로젝트의 기초시간표 전체를 교체합니다.'
+          ? `6. ${BUNDLE_SHEETS.timetable} 시트: 전체 교사 시간표 한 장(행 = 교사, 열 = 요일·교시). 이 프로젝트의 기초시간표 전체를 교체합니다.`
           : '6. 이 프로젝트는 기초시간표를 반영하지 않아 시간표 시트가 없습니다.',
       ],
     },
@@ -123,7 +120,7 @@ export function bundleSheets(opts: {
     { title: `${BUNDLE_SHEETS.rooms} 시트`, fields: ROOM_FIELDS },
     { title: `${BUNDLE_SHEETS.slots} 시트`, fields: SLOT_FIELDS },
     { title: `${BUNDLE_SHEETS.placements} 시트`, fields: PLACEMENT_FIELDS },
-    ...(useBaseTimetable ? [{ title: '교사별 시간표 시트', lines: TIMETABLE_GUIDE }] : []),
+    ...(useBaseTimetable ? [{ title: `${BUNDLE_SHEETS.timetable} 시트`, lines: TIMETABLE_GUIDE }] : []),
   ]);
 
   return [

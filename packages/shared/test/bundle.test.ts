@@ -3,6 +3,9 @@ import {
   BUNDLE_SHEETS,
   analyzeBundle,
   isGridSheet,
+  isTimetableTable,
+  parseTimetableTable,
+  timetableTableRows,
   parseClassCell,
   parseTimetableGrid,
   timetableGridRows,
@@ -152,5 +155,64 @@ describe('기초 자료 통합 양식', () => {
     expect(r.errorCount).toBe(0);
     expect(r.plan.timetable).toBeNull();
     expect(r.sections.find((s) => s.key === 'timetable')!.notes[0]).toContain('무시');
+  });
+});
+
+describe('전체 기초시간표 한 장 (행 = 교사, 열 = 요일·교시)', () => {
+  it('양식 생성: 교사 | 월1 … 금7, 칸은 학년-반 과목', () => {
+    const rows = timetableTableRows([
+      { name: '김국어', entries: [{ weekday: 2, period: 3, grade: 1, classNo: 2, subject: '국어' }] },
+      { name: '박영어', entries: [] },
+    ]);
+    expect(rows[0]!.slice(0, 3)).toEqual(['교사', '월1', '월2']);
+    expect(rows[0]!.length).toBe(1 + 5 * 7);
+    expect(rows[0]![1 + 7 + 2]).toBe('화3');
+    expect(rows[1]![1 + 7 + 2]).toBe('1-2 국어');
+    expect(isTimetableTable(rows)).toBe(true);
+    expect(isTimetableTable([HEADER])).toBe(false);
+  });
+
+  it('행마다 교사를 찾아 칸마다 수업을 만들고, 오류를 알려 준다', () => {
+    const r = parseTimetableTable(
+      [
+        ['교사', '월1', '월2', '화 1교시', '토1'],
+        ['김국어', '1-3 국어', '', '2학년 1반', ''],
+        ['박영어(T003)', '', '3-2', '', ''],
+        ['없는사람', '1-1', '', '', ''],
+        ['박영어', '1-1', '', '', ''],
+        ['김국어', '', '', '', '1-1'],
+        ['', '', '', '', ''],
+      ],
+      teachers,
+    );
+    const ok = r.rows.filter((x) => x.value).map((x) => x.value!);
+    expect(ok.map((v) => [v.teacherId, v.weekday, v.period, v.grade, v.classNo, v.subject])).toEqual([
+      ['T001', 1, 1, 1, 3, '국어'],
+      ['T001', 2, 1, 2, 1, null],
+      ['T003', 1, 2, 3, 2, null],
+    ]);
+    const errors = r.rows.flatMap((x) => x.errors);
+    expect(errors.some((e) => e.includes('없는사람'))).toBe(true);
+    expect(errors.some((e) => e.includes('동명이인'))).toBe(true);
+    expect(errors.some((e) => e.includes('토·일요일'))).toBe(true);
+  });
+
+  it('통합 양식: 기초시간표 한 장을 읽고, 예전 교사별 시트도 계속 읽는다', () => {
+    const ctx: BundleContext = {
+      teachers: [{ id: 'T001', name: '김국어', email: 'kim@s.kr', subject: '국어', homeroom: null, defaultRole: 'NORMAL', active: true, cumulativeLoad: 0 }],
+      rooms: [],
+      slots: [],
+      useBaseTimetable: true,
+      scheduleEditable: true,
+    };
+    const table = { name: BUNDLE_SHEETS.timetable, rows: [['교사', '월1', '월2'], ['김국어', '1-1 국어', '1-2']] as Cell[][] };
+    const r1 = analyzeBundle([table], ctx);
+    expect(r1.errorCount).toBe(0);
+    expect(r1.plan.timetable?.map((e) => `${e.weekday}-${e.period} ${e.grade}-${e.classNo}`)).toEqual(['1-1 1-1', '1-2 1-2']);
+    const r2 = analyzeBundle([grid('김국어', { '1-1': '1-1 국어' })], ctx);
+    expect(r2.plan.timetable?.length).toBe(1);
+    // 수업이 하나도 없는 표는 변경 없음
+    const r3 = analyzeBundle([{ name: BUNDLE_SHEETS.timetable, rows: [['교사', '월1'], ['김국어', '']] }], ctx);
+    expect(r3.plan.timetable).toBeNull();
   });
 });

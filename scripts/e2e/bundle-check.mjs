@@ -52,7 +52,7 @@ const [download] = await Promise.all([
 const file = `${OUT}/${download.suggestedFilename()}`;
 await download.saveAs(file);
 const wb = XLSX.readFile(file);
-check('통합 양식 시트 구성', ['안내', '교사', '시험실', '시험일정', '시험실배치', '김국어'].every((n) => wb.SheetNames.includes(n)), wb.SheetNames.join(','));
+check('통합 양식 시트 구성', ['안내', '교사', '시험실', '시험일정', '시험실배치', '기초시간표'].every((n) => wb.SheetNames.includes(n)), wb.SheetNames.join(','));
 
 // 3. 시험 일정 2건 + 김국어 시간표 채우기 (2026-10-12는 월요일)
 wb.Sheets['시험일정'] = XLSX.utils.aoa_to_sheet([
@@ -60,10 +60,12 @@ wb.Sheets['시험일정'] = XLSX.utils.aoa_to_sheet([
   ['2026-10-12', 1, '09:00', '09:45', 1, '국어', '시험'],
   ['2026-10-12', 2, '10:00', '10:45', 1, '수학', '시험'],
 ]);
-const grid = XLSX.utils.sheet_to_json(wb.Sheets['김국어'], { header: 1, defval: null });
-grid[1][1] = '1-1 국어'; // 월 1교시
-grid[2][3] = '국어 1-2'; // 수 2교시
-wb.Sheets['김국어'] = XLSX.utils.aoa_to_sheet(grid);
+// 기초시간표 한 장: 행 = 교사, 열 = 요일·교시
+const table = XLSX.utils.sheet_to_json(wb.Sheets['기초시간표'], { header: 1, defval: null });
+const kimRow = table.find((r) => r[0] === '김국어');
+kimRow[table[0].indexOf('월1')] = '1-1 국어';
+kimRow[table[0].indexOf('수2')] = '국어 1-2';
+wb.Sheets['기초시간표'] = XLSX.utils.aoa_to_sheet(table);
 const filled = `${OUT}/통합양식_작성.xlsx`;
 XLSX.writeFile(wb, filled);
 

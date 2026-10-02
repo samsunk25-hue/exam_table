@@ -35,7 +35,9 @@ const file = `${OUT}/${download.suggestedFilename()}`;
 await download.saveAs(file);
 const wb = XLSX.readFile(file);
 const slotRows = XLSX.utils.sheet_to_json(wb.Sheets['시험일정'], { header: 1 }).slice(1);
-check('샘플 시트 구성', wb.SheetNames.length === 5 + 25 && slotRows.length === 27, `시트 ${wb.SheetNames.length}장, 시험 ${slotRows.length}행`);
+const ttRows = XLSX.utils.sheet_to_json(wb.Sheets['기초시간표'] ?? {}, { header: 1 });
+check('샘플 시트 구성 (안내·교사·시험실·시험일정·시험실배치·기초시간표)', wb.SheetNames.length === 6 && slotRows.length === 27, `시트 ${wb.SheetNames.join(',')}, 시험 ${slotRows.length}행`);
+check('기초시간표 한 장: 교사 25명 행, 월1~금7 열', ttRows.length === 26 && ttRows[0][0] === '교사' && ttRows[0][1] === '월1' && ttRows[0].length === 36, `${ttRows.length}행 ${ttRows[0]?.length}열`);
 // 열: 날짜, 교시, 시작, 종료, 학년, 과목, 유형 — 첫날 1학년의 세 교시
 const day1g1 = slotRows.filter((r) => r[0] === slotRows[0][0] && r[4] === 1).map((r) => [r[1], r[2], r[3], r[6]]);
 check('45분 시험 + 15분 휴식, 3교시 자습', JSON.stringify(day1g1) === JSON.stringify([[1, '09:00', '09:45', '시험'], [2, '10:00', '10:45', '시험'], [3, '11:00', '11:45', '자습']]), JSON.stringify(day1g1));

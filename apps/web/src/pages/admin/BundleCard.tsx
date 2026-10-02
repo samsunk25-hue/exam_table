@@ -6,12 +6,11 @@ import {
   analyzeBundle,
   buildSampleSchool,
   isSetupEditable,
-  safeSheetName,
   sessionTerm,
   termKey,
   termLabel,
   termFields,
-  timetableGridRows,
+  timetableTableRows,
   type BaseTimetableDoc,
   type BundleKey,
   type RoomDoc,
@@ -43,7 +42,7 @@ const SHEET_OF: Record<BundleKey, string> = {
   rooms: BUNDLE_SHEETS.rooms,
   slots: BUNDLE_SHEETS.slots,
   placements: BUNDLE_SHEETS.placements,
-  timetable: '교사별 시간표',
+  timetable: BUNDLE_SHEETS.timetable,
 };
 
 function BundleImportDialog({
@@ -276,7 +275,7 @@ function parseLesson(text: string) {
   return { weekday: '월화수목금'.indexOf(m[1]!) + 1, period: Number(m[2]), grade: Number(m[3]), classNo: Number(m[4]), subject: m[5]?.trim() || null };
 }
 
-/** AI가 읽은 표 → 통합 양식 시트 (기존 검증·저장 과정을 그대로 쓴다). 기초시간표는 교사별 격자 시트 */
+/** AI가 읽은 표 → 통합 양식 시트 (기존 검증·저장 과정을 그대로 쓴다). 기초시간표는 전체 시간표 한 장 */
 function toSheets(slots: AiSlotRow[], teachers: AiTeacherRow[], timetable: AiTimetableRow[]): { sheets: SheetData[]; ttTeachers: number; lessons: number; skipped: string[] } {
   const sheets: SheetData[] = [];
   const skipped: string[] = [];
@@ -307,17 +306,19 @@ function toSheets(slots: AiSlotRow[], teachers: AiTeacherRow[], timetable: AiTim
       ],
     });
   }
-  for (const t of timetable) {
+  const tt = timetable.flatMap((t) => {
     const entries = t.lessons.flatMap((l) => {
       const e = parseLesson(l);
       if (!e) skipped.push(`${t.teacher} "${l}"`);
       return e ? [e] : [];
     });
-    if (!entries.length) continue;
-    lessons += entries.length;
+    return entries.length ? [{ name: t.teacher.trim(), entries }] : [];
+  });
+  for (const t of tt) {
+    lessons += t.entries.length;
     ttTeachers++;
-    sheets.push({ name: safeSheetName(t.teacher.trim()), rows: timetableGridRows(entries) });
   }
+  if (tt.length) sheets.push({ name: BUNDLE_SHEETS.timetable, rows: timetableTableRows(tt) });
   return { sheets, ttTeachers, lessons, skipped };
 }
 
@@ -543,7 +544,7 @@ export function BundleCard(props: Props) {
     <Card>
       <CardTitle icon="📦">기초 자료 한 번에 입력</CardTitle>
       <p className="mt-1 text-muted">
-        교사 · 시험실 · 시험 일정 · 시험실 배치{session.settings.useBaseTimetable ? ' · 교사별 기초시간표' : ''}를 엑셀 파일 하나에 작성해 한 번에 올립니다.
+        교사 · 시험실 · 시험 일정 · 시험실 배치{session.settings.useBaseTimetable ? ' · 전체 기초시간표' : ''}를 엑셀 파일 하나에 작성해 한 번에 올립니다.
         현재 등록된 자료가 채워진 양식이 내려받아집니다.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
@@ -598,10 +599,10 @@ export function TimetableUpload({ session }: { session: ExamSession }) {
       <span className="text-sm">
         기초시간표: {timetable.data.length ? <b>교사 {timetable.data.length}명 · 수업 {total}건</b> : <b className="text-alert">아직 없음</b>}
       </span>
-      {/* 양식은 교사별 시트라 교사 명단이 있을 때만 보인다 */}
+      {/* 양식은 교사 이름이 행이라 교사 명단이 있을 때만 보인다 */}
       {teachers.length > 0 && (
         <DownloadButton onDownload={() => downloadWorkbook(`기초시간표_${session.examName.replace(/\s+/g, '')}.xlsx`, timetableSheets(teachers, timetable.data))}>
-          양식 받기 (교사별 시트)
+          양식 받기 (전체 시간표)
         </DownloadButton>
       )}
       <Button variant="secondary" onClick={() => setOpen(true)} disabled={!editable}>

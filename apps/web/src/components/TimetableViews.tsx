@@ -1,6 +1,6 @@
 import { SEAT_ROLE_LABEL, examTimes, groupByDate } from '@sim/shared';
 import { dateLabel } from '@/components/AvailabilityGrid';
-import { ownTimeOf, shownPeriods, timeText, type Duty, type TimetableData } from '@/lib/timetable';
+import { ownTimeOf, roleRank, shownPeriods, timeText, type Duty, type TimetableData } from '@/lib/timetable';
 
 /**
  * 최종(전체) 시간표. 컴퓨터: 날짜별 표(행 = 시험실, 열 = 교시) / 휴대폰: 교시별 카드.
@@ -19,8 +19,10 @@ export function FullTimetable({ data, highlight }: { data: TimetableData; highli
         // 칸마다 그 시험실의 과목 (자습은 "자습", 여러 학년이 쓰는 복도 등은 여러 과목)
         const subjectAt = (period: number, roomId: string) =>
           [...new Set(data.slots.filter((s) => s.date === date && s.period === period && s.rooms.some((p) => p.roomId === roomId)).map((s) => (s.type === 'STUDY' ? '자습' : s.subject)))].join('·');
-        const cell = (period: number, roomId: string) => dayAssign.filter((a) => a.roomId === roomId && shownPeriods(data.slots, a).includes(period));
-        const label = (teacherId: string, role: string) => `${name.get(teacherId) ?? '?'}${role === 'CHIEF' ? '' : `(${SEAT_ROLE_LABEL[role as keyof typeof SEAT_ROLE_LABEL]})`}`;
+        // 칸 안에서는 정감독부터
+        const cell = (period: number, roomId: string) =>
+          dayAssign.filter((a) => a.roomId === roomId && shownPeriods(data.slots, a).includes(period)).sort((a, b) => roleRank(a.role) - roleRank(b.role));
+        const label = (teacherId: string, role: string) => `${name.get(teacherId) ?? '?'}(${SEAT_ROLE_LABEL[role as keyof typeof SEAT_ROLE_LABEL]})`;
         return (
           <section key={date} className="print-break-inside-avoid">
             <h3 className="mb-2 text-lg font-bold">{dateLabel(date)}</h3>

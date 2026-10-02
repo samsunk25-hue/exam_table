@@ -13,6 +13,13 @@ import { dateLabel } from '@/components/AvailabilityGrid';
 import { toast } from '@/components/Toast';
 import { downloadWorkbook, type OutCell, type OutSheet } from './xlsx';
 
+/** 한 칸 안의 감독 순서: 정감독 → 부감독 → 연장 → 복도 → 자습 */
+const ROLE_ORDER = ['CHIEF', 'ASSISTANT', 'EXTENDED', 'HALLWAY', 'STUDY'];
+export const roleRank = (role: string) => {
+  const i = ROLE_ORDER.indexOf(role);
+  return i < 0 ? ROLE_ORDER.length : i;
+};
+
 export interface TimetableData {
   slots: WithId<SlotDoc>[];
   rooms: WithId<RoomDoc>[];
@@ -101,9 +108,10 @@ export function fullTimetableSheets(d: TimetableData): OutSheet[] {
           const subject = [...new Set(d.slots.filter((s) => s.date === date && s.period === p.period && s.rooms.some((x) => x.roomId === r.id)).map((s) => (s.type === 'STUDY' ? '자습' : s.subject)))].join('·');
           const names = d.assignments
             .filter((a) => a.date === date && a.roomId === r.id && shownPeriods(d.slots, a).includes(p.period))
+            .sort((a, b) => roleRank(a.role) - roleRank(b.role))
             .map((a) => {
               const own = ownTimeOf(d.slots, a);
-              return `${name.get(a.teacherId) ?? '?'}${a.role === 'CHIEF' ? '' : `(${SEAT_ROLE_LABEL[a.role]})`}${own ? ` [${own}]` : ''}`;
+              return `${name.get(a.teacherId) ?? '?'}(${SEAT_ROLE_LABEL[a.role]})${own ? ` [${own}]` : ''}`;
             })
             .join(', ');
           return subject && names ? `[${subject}] ${names}` : names;

@@ -14,16 +14,19 @@ const check = (label, ok, detail = '') => {
   console.log(`${ok ? '✓' : '✗'} ${label}${detail ? ` — ${detail}` : ''}`);
   if (!ok) failures++;
 };
-const KEY = 'sk-ant-test-abcdefghijklmnopqrstuvwxyz9876';
+const KEY = 'sk-ant-test-abcdefghijklmnopqrstuvwxyz' + '0123456789'.repeat(8) + '9876'; // 실제 키처럼 100자 정도
 const A = await openApp();
 await go(A.page, '/admin/admins');
 const ui = A.page.getByRole('heading', { name: '내 AI 키 (Claude)' }).locator('..');
 if (await ui.getByRole('button', { name: '삭제' }).isVisible().catch(() => false)) await ui.getByRole('button', { name: '삭제' }).click();
-check('잘못된 형식은 거절', await (async () => {
-  await ui.getByLabel('Claude API 키').fill('abc');
+const rejected = async (value, message) => {
+  await ui.getByLabel('Claude API 키').fill(value);
   await ui.getByRole('button', { name: '등록' }).click();
-  return ui.getByText(/키 형식이 아닙니다/).waitFor({ timeout: 10000 }).then(() => true).catch(() => false);
-})());
+  return ui.getByText(message).waitFor({ timeout: 10000 }).then(() => true).catch(() => false);
+};
+check('잘못된 형식은 거절', await rejected('abc', /sk-ant-로 시작하는 키 전체/));
+check('짧은 키(일부만 복사)는 글자 수 안내', await rejected('sk-ant-api03-abcdefghi', /지금 22자인데/));
+check('가려진 키(…)는 새로 만들라고 안내', await rejected('sk-ant-api03-abc...wxyz', /가려진 키/));
 await ui.getByLabel('Claude API 키').fill(KEY);
 await ui.getByRole('button', { name: '등록' }).click();
 await ui.getByText('등록됨 · sk-ant-…9876').waitFor({ timeout: 15000 });

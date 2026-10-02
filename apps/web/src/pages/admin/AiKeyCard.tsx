@@ -5,6 +5,14 @@ import { toast } from '@/components/Toast';
 import { Alert, Button, Card, CardTitle } from '@/components/ui';
 import { callClearMyAiKey, callSetMyAiKey, db, errorMessage } from '@/lib/firebase';
 
+/** 붙여 넣은 키의 흔한 실수를 서버에 보내기 전에 알려 준다 (없으면 null) */
+function keyProblem(k: string): string | null {
+  if (/\.\.\.|…|\*/.test(k)) return '가려진 키(… 또는 *가 들어간 것)를 복사하셨습니다. 키 전체는 만들 때 한 번만 보이므로, 콘솔에서 키를 새로 만들어 바로 복사해 주세요.';
+  if (!k.startsWith('sk-ant-')) return `sk-ant-로 시작하는 키 전체를 붙여 넣어 주세요. (지금 붙여 넣은 글은 "${k.slice(0, 8)}…"로 시작합니다)`;
+  if (k.length < 60) return `키 전체가 아닌 것 같습니다. 지금 ${k.length}자인데 Claude 키는 보통 100자 정도입니다. 콘솔에서 키를 새로 만들어 복사 버튼으로 복사해 주세요.`;
+  return null;
+}
+
 /**
  * 관리자 본인의 Claude API 키. 서버의 비공개 저장소에만 두고(브라우저로는 다시 읽을 수 없음) 끝 4자리만 보여 준다.
  * 관리자마다 자기 키를 넣고, 교사용 설명은 그 시험 프로젝트를 만든 관리자의 키를 쓴다.
@@ -28,6 +36,11 @@ export function AiKeyCard() {
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
+    const problem = keyProblem(key.trim());
+    if (problem) {
+      setError(problem);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -85,7 +98,7 @@ export function AiKeyCard() {
                 value={key}
                 onChange={(e) => setKey(e.target.value)}
               />
-              <span className="text-sm text-muted">console.anthropic.com → API Keys에서 만든 키. 등록할 때 실제로 쓸 수 있는 키인지 확인합니다.</span>
+              <span className="text-sm text-muted">platform.claude.com → API 키 받기에서 만든 키 (sk-ant-로 시작, 100자 정도). 크레딧이 충전되어 있어야 하고, 등록할 때 실제로 쓸 수 있는 키인지 확인합니다.</span>
             </label>
             {error && <Alert>{error}</Alert>}
             <div className="flex gap-2">

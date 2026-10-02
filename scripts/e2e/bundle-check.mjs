@@ -5,6 +5,11 @@ import { createRequire } from 'node:module';
 import { go, openApp } from './session.mjs';
 
 const XLSX = createRequire(import.meta.url)('xlsx');
+process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
+const { initializeApp } = createRequire(import.meta.url)('firebase-admin/app');
+const { getFirestore } = createRequire(import.meta.url)('firebase-admin/firestore');
+initializeApp({ projectId: 'smart-invigilation' });
+const db = getFirestore();
 const OUT = 'scripts/e2e/out';
 mkdirSync(OUT, { recursive: true });
 let failures = 0;
@@ -98,8 +103,11 @@ const sid = page.url().split('/sessions/')[1].split('/')[0];
   check('시험실 자동 배치됨', slots.every((x) => x.rooms?.length > 0));
 }
 await go(page, `/admin/sessions/${sid}/assign`);
-await page.getByText(/기초시간표: /).waitFor();
-check('기초시간표 반영 (자동 배정 > 배정 설정에 표시)', await page.getByText(/교사 1명 · 수업 2건/).waitFor({ timeout: 15000 }).then(() => true).catch(() => false), (await page.getByText(/기초시간표: /).innerText()).replace(/s+/g, ' '));
+await page.getByRole('heading', { name: '배정 설정' }).waitFor();
+const tt = (await db.collection(`sessions/${sid}/baseTimetable`).get()).docs.flatMap((d) => d.get('entries'));
+// 기초시간표가 있으면 배정 설정에 "올려 주세요" 안내가 나오지 않는다
+await page.waitForTimeout(1500);
+check('기초시간표 반영 (수업 2건, 배정 설정에 입력 안내 없음)', tt.length === 2 && (await page.getByText('누가 수업하는지 알려면 기초시간표가 필요합니다.').count()) === 0, `${tt.length}건`);
 await page.screenshot({ path: `${OUT}/bundle-after.png`, fullPage: true });
 
 check('콘솔 오류 없음', errors.length === 0, errors.join(' / '));

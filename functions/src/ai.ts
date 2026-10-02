@@ -3,7 +3,7 @@
 // AI 기능은 모두 관리자만 쓴다. 에뮬레이터에서 키가 없으면 가짜 응답으로 흐름만 점검한다.
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { DEFAULT_ROLE_WEIGHTS, buildEngineInput, buildSeats, type Seat } from '@sim/engine';
-import { SEAT_ROLE_LABEL, type SessionStatus } from '@sim/shared';
+import { SEAT_ROLE_LABEL, makePseudonyms, type SessionStatus } from '@sim/shared';
 import { db, requireAdmin, serverTimestamp } from './common';
 import { loadData } from './runs';
 
@@ -303,7 +303,8 @@ export const aiExplainDuties = onCall(AI_OPTIONS, async (req) => {
     .map((a) => `- ${L.seats.get(a.id) ? seatLabel(L.seats.get(a.id)!) : a.id}: 점수 이유 ${a.reason || '(수동 배정)'}`);
   const unavailable = L.data.availability.filter((a) => a.teacherId === teacherId && a.status !== 'REJECTED').map((a) => `${a.date} ${a.period}교시`);
 
-  const facts = `교사: ${me.name} (${me.subject ?? '교과 미상'}${me.homeroom ? `, ${me.homeroom.grade}-${me.homeroom.classNo} 담임` : ''})
+  // 이름은 AI로 보내지 않는다 ("선생님"으로만 부르게 함)
+  const facts = `교사: (이름 생략) (${me.subject ?? '교과 미상'}${me.homeroom ? `, ${me.homeroom.grade}-${me.homeroom.classNo} 담임` : ''})
 이번 시험 감독 ${mine?.count ?? 0}회, 이번 업무 점수 ${mine?.load ?? 0}, 학년도 누적 ${mine?.total ?? 0}
 학교 전체 학년도 누적: 평균 ${mean}, 최저 ${loads[0] ?? 0}, 최고 ${loads[loads.length - 1] ?? 0} (교사 ${loads.length}명 중 높은 순 ${rank}위)
 연속 감독 ${mine?.consecutive ?? 0}쌍, 하루 최다 ${mine?.maxDay ?? 0}회
@@ -317,7 +318,7 @@ ${duties.join('\n') || '- 없음'}
     ? `(에뮬레이터 가짜 응답) ${me.name} 선생님은 이번 시험에서 감독 ${mine?.count ?? 0}회를 맡았습니다. 학년도 누적 ${mine?.total ?? 0}점으로 학교 평균 ${mean}점과 비교됩니다.`
     : ((await claude(key, {
         system:
-          '당신은 학교 시험 감독 배정 결과를 교사에게 친절하게 설명하는 도우미입니다. 주어진 사실만 쓰고 지어내지 마세요. 다른 교사의 이름이나 개인 사정은 언급하지 마세요. 한국어 존댓말로, 5~8문장, 필요하면 "- "로 시작하는 짧은 목록을 쓰고 마크다운 제목·굵은 글씨는 쓰지 마세요.',
+          '당신은 학교 시험 감독 배정 결과를 교사에게 친절하게 설명하는 도우미입니다. 교사는 이름 없이 "선생님"이라고만 부르세요. 주어진 사실만 쓰고 지어내지 마세요. 다른 교사의 이름이나 개인 사정은 언급하지 마세요. 한국어 존댓말로, 5~8문장, 필요하면 "- "로 시작하는 짧은 목록을 쓰고 마크다운 제목·굵은 글씨는 쓰지 마세요.',
         content: [{ type: 'text', text: `${facts}\n\n이 교사가 "왜 이렇게 배정됐나요?"라고 물었습니다. 감독 횟수와 시간이 정해진 이유, 다른 교사와 비교한 형평성, 바꾸고 싶을 때 할 수 있는 일(교환 요청)을 설명해 주세요.` }],
       })) as string);
   return { text };
@@ -388,7 +389,9 @@ export const aiRules = onCall(AI_OPTIONS, async (req) => {
   const subjects = [...new Set(L.data.slots.map((s) => s.subject))];
   const roomIds = new Set(L.data.rooms.map((r) => r.id));
 
-  const raw: { rules: RawRule[]; notes: string[] } = !key
+  // 교사 이름은 가명(교사1…)으로 보내고, 돌아온 설명에서 원래 이름으로 되돌린다
+  const ps = makePseudonyms(teachers.map((t) => t.name));
+  const masked: { rules: RawRule[]; notes: string[] } = !key
     ? fakeRules(text, teachers, dates)
     : ((await claude(key, {
         system:
@@ -397,18 +400,22 @@ export const aiRules = onCall(AI_OPTIONS, async (req) => {
           {
             type: 'text',
             text: `교사 (id: 이름, 과목, 담임):
-${teachers.map((t) => `${t.id}: ${t.name}, ${t.subject ?? '-'}, ${t.homeroom ? `${t.homeroom.grade}-${t.homeroom.classNo}` : '-'}`).join('\n')}
+${teachers.map((t) => `${t.id}: ${ps.mask(t.name)}, ${t.subject ?? '-'}, ${t.homeroom ? `${t.homeroom.grade}-${t.homeroom.classNo}` : '-'}`).join('\n')}
 시험 일정 (날짜 교시 학년 과목):
 ${L.data.slots.map((s) => `${s.date} ${s.period}교시 ${s.grade}학년 ${s.subject}`).join('\n')}
 시험실 (id: 이름): ${L.data.rooms.map((r) => `${r.id}: ${r.name}`).join(', ')}
 감독 자리 종류: CHIEF=정감독, ASSISTANT=부감독, STUDY=자습감독, EXTENDED=연장감독, HALLWAY=복도
 
 관리자 고려사항:
-${text}`,
+${ps.mask(text)}`,
           },
         ],
         tool: RULES_TOOL,
       })) as { rules: RawRule[]; notes: string[] });
+  const raw = {
+    rules: (masked.rules ?? []).map((r) => ({ ...r, label: ps.unmask(String(r.label ?? '')) })),
+    notes: (masked.notes ?? []).map((n) => ps.unmask(String(n))),
+  };
 
   // 받은 규칙을 검사하고 교사별 문서로 펼친다
   const ids = new Set(teachers.map((t) => t.id));

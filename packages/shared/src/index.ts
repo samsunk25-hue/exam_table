@@ -6,3 +6,4 @@ export * from './classrooms';
 export * from './sample';
 export * from './imports';
 export * from './xlsxValidation';
+export * from './pseudonym';

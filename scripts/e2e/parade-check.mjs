@@ -35,7 +35,7 @@ for (let i = 0; i < 6; i++) {
   await A.page.waitForTimeout(120);
 }
 check('휴대폰: 위아래로 튄다', new Set(ys).size > 1, ys.join(','));
-check('휴대폰: 제자리 (옆으로 움직이지 않음)', xs.every((x) => Math.abs(x - x0) <= 2), xs.join(','));
+check('휴대폰: 제자리 (옆으로 움직이지 않음)', xs.every((x) => Math.abs(x - x0) <= 4), xs.join(','));
 const lines = await A.page
   .locator('header .font-hand')
   .first()

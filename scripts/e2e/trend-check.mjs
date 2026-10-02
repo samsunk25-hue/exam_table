@@ -50,12 +50,14 @@ const A = await openApp();
 await go(A.page, '/admin/sessions/E2E_TREND2/equity');
 await A.page.getByRole('heading', { name: '학년도 추이와 피로도 예측' }).waitFor();
 const card = A.page.getByRole('heading', { name: '학년도 추이와 피로도 예측' }).locator('..');
+// 명단은 처음에 접혀 있다
+await card.getByText(/교사별 피로도 명단/).click();
 const kim = card.locator('tr', { hasText: '김국어' });
 const kimText = await kim.innerText();
 check('지난 시험 열 (1학기 기말)', (await card.innerText()).includes('1학기 추이 1학기 기말'));
 check('김국어: 1학기 5 + 이번 3 = 학년도 8', /5\s+3\s+8/.test(kimText.replace(/\s+/g, ' ')), kimText.replace(/\s+/g, ' '));
 check('김국어 피로도 높음 (연속 감독)', kimText.includes('높음') && kimText.includes('연속 감독 2쌍'));
-const park = (await card.locator('tr', { hasText: '박영어' }).innerText()).replace(/s+/g, ' ');
+const park = (await card.locator('tr', { hasText: '박영어' }).innerText()).replace(/\s+/g, ' ');
 check('박영어 피로도 낮음', park.includes('낮음'), park + ' / 행 ' + (await card.locator('tbody tr').count()));
 check('피로도 높음 안내', (await card.innerText()).includes('피로도 높음 1명'));
 await A.page.screenshot({ path: 'scripts/e2e/out/trend.png', fullPage: true });

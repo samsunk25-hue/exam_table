@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * 과목 고르기: 누를 때마다 목록이 열리고(이미 고른 칸도 다시 고를 수 있음), 같은 학년에서 이미 쓴 과목은 목록에서 뺀다.
@@ -25,10 +26,31 @@ export function SubjectCombo({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  // 목록은 화면 맨 위층(body)에 띄워 표·창의 스크롤 영역에 잘리지 않게 한다
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = ref.current?.getBoundingClientRect();
+      if (!r) return;
+      const width = Math.max(160, Math.min(r.width, 240));
+      // 아래 공간이 모자라면(목록 최대 256px) 위로 펼친다
+      if (window.innerHeight - r.bottom < 270 && r.top > 270) setPos({ bottom: window.innerHeight - r.top + 4, left: r.left, width });
+      else setPos({ top: r.bottom + 4, left: r.left, width });
+    };
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && !listRef.current?.contains(e.target as Node) && setOpen(false);
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
@@ -59,7 +81,11 @@ export function SubjectCombo({
           onChange(e.target.value);
           setOpen(true);
         }}
-        onBlur={() => setQuery(null)}
+        onBlur={() => {
+          // 다른 칸으로 넘어가면 닫는다 (목록 항목은 mousedown을 막아 포커스가 남으므로 고를 때는 닫히지 않음)
+          setQuery(null);
+          setOpen(false);
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Escape' || e.key === 'Tab') setOpen(false);
           if (e.key === 'Enter' && open && list[0] && q) {
@@ -68,8 +94,16 @@ export function SubjectCombo({
           }
         }}
       />
-      {open && (
-        <ul role="listbox" aria-label={`${label} 목록`} className="absolute top-full left-0 z-30 mt-1 max-h-64 w-40 overflow-auto rounded-xl border border-line bg-surface py-1 shadow-xl">
+      {open &&
+        pos &&
+        createPortal(
+        <ul
+          ref={listRef}
+          role="listbox"
+          aria-label={`${label} 목록`}
+          style={{ position: 'fixed', top: pos.top, bottom: pos.bottom, left: pos.left, width: pos.width }}
+          className="z-[60] max-h-64 overflow-auto rounded-xl border border-line bg-surface py-1 shadow-xl"
+        >
           {list.map((o) => (
             <li
               key={o}
@@ -88,8 +122,9 @@ export function SubjectCombo({
               비우기
             </li>
           )}
-        </ul>
-      )}
+        </ul>,
+          document.body,
+        )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import {
   analyzeBundle,
   buildSampleSchool,
   isSetupEditable,
+  makePseudonyms,
   sessionTerm,
   termKey,
   termLabel,
@@ -323,7 +324,18 @@ function toSheets(slots: AiSlotRow[], teachers: AiTeacherRow[], timetable: AiTim
 }
 
 /** 학교 문서(PDF·사진·글)를 AI로 읽어 시험 일정·교사 명단·기초시간표 자료로 만든다 */
-function AiExtractDialog({ year, onClose, onRead }: { year: number; onClose: () => void; onRead: (r: { sheets: SheetData[]; notes: string[] }) => void }) {
+function AiExtractDialog({
+  year,
+  knownNames,
+  onClose,
+  onRead,
+}: {
+  year: number;
+  /** 이미 명단에 있는 교사 이름: 글·엑셀 속 이름은 가명으로 바꿔 보낸다 */
+  knownNames: string[];
+  onClose: () => void;
+  onRead: (r: { sheets: SheetData[]; notes: string[] }) => void;
+}) {
   const [parts, setParts] = useState<Set<AiPart>>(new Set(['schedule', 'teachers', 'timetable']));
   const [files, setFiles] = useState<File[]>([]);
   const [text, setText] = useState('');
@@ -356,9 +368,17 @@ function AiExtractDialog({ year, onClose, onRead }: { year: number; onClose: () 
       const payload = await Promise.all(
         files.filter((f) => !isExcel(f)).map(async (f) => ({ name: f.name, mediaType: TYPE_OF[ext(f)]!, data: await toBase64(f) })),
       );
-      const allText = [excelText, text.trim()].filter(Boolean).join('\n\n');
-      const { data } = await callAiExtract({ parts: [...parts], files: payload, text: allText || undefined, year });
-      const timetable = data.timetable ?? [];
+      // 글·엑셀 속 명단 이름은 가명(교사1…)으로 보내고 결과에서 되돌린다
+      const ps = makePseudonyms(knownNames);
+      const allText = ps.mask([excelText, text.trim()].filter(Boolean).join('\n\n'));
+      const { data: raw } = await callAiExtract({ parts: [...parts], files: payload, text: allText || undefined, year });
+      const data = {
+        ...raw,
+        teachers: raw.teachers.map((t) => ({ ...t, name: ps.unmask(t.name) })),
+        timetable: (raw.timetable ?? []).map((t) => ({ ...t, teacher: ps.unmask(t.teacher) })),
+        notes: raw.notes.map(ps.unmask),
+      };
+      const timetable = data.timetable;
       if (!data.slots.length && !data.teachers.length && !timetable.length) {
         setError(`읽어 낸 자료가 없습니다.${data.notes.length ? ` (${data.notes.join(' / ')})` : ''}`);
         setBusy(false);
@@ -393,7 +413,7 @@ function AiExtractDialog({ year, onClose, onRead }: { year: number; onClose: () 
           통합 양식처럼 채워 줍니다. 저장 전에 검증 결과를 확인할 수 있습니다.
         </p>
         <Alert tone="info">
-          문서 내용은 AI 회사(Anthropic) 서버로 보내집니다 (AI 학습에는 쓰이지 않음). 교사 이름 등 개인정보가 들어간 문서는 AI 대신 통합 양식으로 올리세요.
+          문서 내용은 AI 회사(Anthropic) 서버로 보내집니다 (AI 학습에는 쓰이지 않음). 붙여 넣은 글·엑셀 속 교사 명단 이름은 가명(교사1, 교사2…)으로 바꿔 보내고 결과에서 되돌립니다. PDF·사진 속 이름과 명단에 아직 없는 이름은 가릴 수 없으니, 교사 이름 등 개인정보가 들어간 문서는 AI 대신 통합 양식으로 올리세요.
         </Alert>
         <fieldset>
           <legend className="mb-2 font-semibold">
@@ -579,6 +599,7 @@ export function BundleCard(props: Props) {
       {aiOpen && (
         <AiExtractDialog
           year={session.year}
+          knownNames={teachers.map((t) => t.name)}
           onClose={() => setAiOpen(false)}
           onRead={(r) => {
             setAiOpen(false);
